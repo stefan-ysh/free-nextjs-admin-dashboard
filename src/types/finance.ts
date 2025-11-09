@@ -71,6 +71,9 @@ export interface FinanceRecord {
   createdBy?: string;              // 创建人
 }
 
+// 表单提交/创建记录时使用的输入类型
+export type FinanceRecordInput = Omit<FinanceRecord, 'id' | 'createdAt' | 'updatedAt' | 'totalAmount'>;
+
 // 分类接口
 export interface Category {
   id: string;

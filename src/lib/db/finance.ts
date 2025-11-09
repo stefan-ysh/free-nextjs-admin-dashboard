@@ -114,7 +114,7 @@ export async function createRecord(
     const kv = await getKV();
     
     // 保存记录
-    await kv.set(KEYS.RECORD(id), JSON.stringify(newRecord));
+  await kv.set(KEYS.RECORD(id), newRecord);
     
     // 添加到排序列表 (按日期排序)
     const timestamp = new Date(record.date).getTime();
@@ -142,8 +142,20 @@ export async function getRecord(id: string): Promise<FinanceRecord | null> {
   
   try {
     const kv = await getKV();
-    const data = (await kv.get(KEYS.RECORD(id))) as string | null;
-    return data ? JSON.parse(data) : null;
+    const data = await kv.get<FinanceRecord | string | null>(KEYS.RECORD(id));
+
+    if (!data) return null;
+
+    if (typeof data === 'string') {
+      try {
+        return JSON.parse(data) as FinanceRecord;
+      } catch (parseError) {
+        console.error('KV记录解析失败, 返回null:', parseError);
+        return null;
+      }
+    }
+
+    return data;
   } catch (error) {
     console.error('KV获取记录失败,fallback到Mock模式:', error);
     return mockStorage.find(r => r.id === id) || null;
@@ -183,7 +195,7 @@ export async function updateRecord(
   }
 
   const kv = await getKV();
-  await kv.set(KEYS.RECORD(id), JSON.stringify(updated));
+  await kv.set(KEYS.RECORD(id), updated);
 
   // 如果日期改变，更新排序
   if (updates.date && updates.date !== existing.date) {
@@ -402,9 +414,20 @@ export async function getCategories(type: TransactionType): Promise<string[]> {
   try {
     const key = KEYS.CATEGORIES(type);
     const kv = await getKV();
-    const categories = (await kv.get(key)) as string[] | null;
-    
-    if (categories) return categories;
+    const categoriesData = await kv.get<string[] | string | null>(key);
+
+    if (categoriesData) {
+      if (Array.isArray(categoriesData)) {
+        return categoriesData;
+      }
+
+      try {
+        const parsed = JSON.parse(categoriesData) as string[];
+        if (Array.isArray(parsed)) return parsed;
+      } catch (parseError) {
+        console.error('KV分类解析失败,改用默认分类:', parseError);
+      }
+    }
 
     await kv.set(key, defaultCategories);
     return defaultCategories;
