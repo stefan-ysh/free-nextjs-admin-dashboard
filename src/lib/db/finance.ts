@@ -3,10 +3,10 @@ import {
   TransactionType, 
   FinanceStats, 
   CategoryStat,
-  PaymentType,
-  InvoiceType,
-  InvoiceStatus,
-  MonthlyStat
+//   PaymentType,
+//   InvoiceType,
+//   InvoiceStatus,
+//   MonthlyStat
 } from '@/types/finance';
 import { mockRecords } from './mockData';
 

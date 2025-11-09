@@ -3,9 +3,9 @@ import {
   createRecord, 
   getRecords, 
   getRecordsCount,
-  getRecord,
-  updateRecord,
-  deleteRecord 
+//   getRecord,
+//   updateRecord,
+//   deleteRecord 
 } from '@/lib/db/finance';
 import { FinanceRecord, TransactionType, FinanceApiResponse } from '@/types/finance';
 
