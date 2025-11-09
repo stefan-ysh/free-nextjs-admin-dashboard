@@ -250,14 +250,16 @@ export async function getRecords(
   limit = 50,
   offset = 0
 ): Promise<FinanceRecord[]> {
-  const start = startDate ? new Date(startDate).getTime() : 0;
-  const end = endDate ? new Date(endDate).getTime() : Date.now();
+  const rawStart = startDate ? new Date(startDate).getTime() : 0;
+  const rawEnd = endDate ? new Date(endDate).getTime() : Date.now();
+  const minScore = Math.min(rawStart, rawEnd);
+  const maxScore = Math.max(rawStart, rawEnd);
   
   if (USE_MOCK) {
     return mockStorage
       .filter(r => {
         const time = new Date(r.date).getTime();
-        return time >= start && time <= end;
+        return time >= minScore && time <= maxScore;
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(offset, offset + limit);
@@ -266,11 +268,12 @@ export async function getRecords(
   try {
     const kv = await getKV();
     // 从排序集合获取ID列表 (降序，最新的在前)
+    // Upstash 在 rev 模式下要求先传入最大分数再传最小分数
     const ids = await kv.zrange(
       KEYS.RECORDS_LIST,
-      start,
-      end,
-      { 
+      maxScore,
+      minScore,
+      {
         byScore: true,
         rev: true,
         offset,
@@ -292,7 +295,7 @@ export async function getRecords(
     return mockStorage
       .filter(r => {
         const time = new Date(r.date).getTime();
-        return time >= start && time <= end;
+        return time >= minScore && time <= maxScore;
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(offset, offset + limit);
@@ -306,25 +309,27 @@ export async function getRecordsCount(
   startDate?: string,
   endDate?: string
 ): Promise<number> {
-  const start = startDate ? new Date(startDate).getTime() : 0;
-  const end = endDate ? new Date(endDate).getTime() : Date.now();
+  const rawStart = startDate ? new Date(startDate).getTime() : 0;
+  const rawEnd = endDate ? new Date(endDate).getTime() : Date.now();
+  const minScore = Math.min(rawStart, rawEnd);
+  const maxScore = Math.max(rawStart, rawEnd);
   
   if (USE_MOCK) {
     return mockStorage.filter(r => {
       const time = new Date(r.date).getTime();
-      return time >= start && time <= end;
+      return time >= minScore && time <= maxScore;
     }).length;
   }
 
   try {
     const kv = await getKV();
-    const count = await kv.zcount(KEYS.RECORDS_LIST, start, end);
+    const count = await kv.zcount(KEYS.RECORDS_LIST, minScore, maxScore);
     return count || 0;
   } catch (error) {
     console.error('KV获取记录数失败,fallback到Mock模式:', error);
     return mockStorage.filter(r => {
       const time = new Date(r.date).getTime();
-      return time >= start && time <= end;
+      return time >= minScore && time <= maxScore;
     }).length;
   }
 }
