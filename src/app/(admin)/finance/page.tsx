@@ -153,15 +153,6 @@ export default function FinancePage() {
     setShowForm(false);
   };
 
-  const currentCategories =
-    (showForm || editingRecord
-      ? showForm
-        ? categories.expense
-        : editingRecord?.type === TransactionType.INCOME
-        ? categories.income
-        : categories.expense
-      : categories.expense);
-
   return (
     <>
       <PageBreadCrumb pageTitle="财务管理" />
@@ -183,7 +174,8 @@ export default function FinancePage() {
                 setShowForm(false);
                 setEditingRecord(null);
               }}
-              categories={currentCategories}
+              incomeCategories={categories.income}
+              expenseCategories={categories.expense}
             />
           </div>
         )}

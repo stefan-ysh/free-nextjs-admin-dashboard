@@ -9,14 +9,16 @@ interface FinanceFormProps {
   initialData?: Partial<FinanceRecord>;
   onSubmit: (data: any) => Promise<void>;
   onCancel?: () => void;
-  categories: string[];
+  incomeCategories: string[];
+  expenseCategories: string[];
 }
 
 export default function FinanceForm({
   initialData,
   onSubmit,
   onCancel,
-  categories,
+  incomeCategories,
+  expenseCategories,
 }: FinanceFormProps) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -36,6 +38,11 @@ export default function FinanceForm({
       attachments: initialData?.invoice?.attachments || [],
     },
   });
+
+  // 根据类型获取当前分类列表
+  const currentCategories = formData.type === TransactionType.INCOME 
+    ? incomeCategories 
+    : expenseCategories;
 
   // 计算总金额
   const totalAmount = formData.contractAmount + formData.fee;
@@ -91,7 +98,11 @@ export default function FinanceForm({
                 type="radio"
                 value={TransactionType.INCOME}
                 checked={formData.type === TransactionType.INCOME}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value as TransactionType })}
+                onChange={(e) => setFormData({ 
+                  ...formData, 
+                  type: e.target.value as TransactionType,
+                  category: '' // 切换类型时重置分类
+                })}
                 className="mr-2"
               />
               <span className="text-green-600 dark:text-green-400">收入</span>
@@ -101,7 +112,11 @@ export default function FinanceForm({
                 type="radio"
                 value={TransactionType.EXPENSE}
                 checked={formData.type === TransactionType.EXPENSE}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value as TransactionType })}
+                onChange={(e) => setFormData({ 
+                  ...formData, 
+                  type: e.target.value as TransactionType,
+                  category: '' // 切换类型时重置分类
+                })}
                 className="mr-2"
               />
               <span className="text-red-600 dark:text-red-400">支出</span>
@@ -121,7 +136,7 @@ export default function FinanceForm({
             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
           >
             <option value="">请选择分类</option>
-            {categories.map((cat) => (
+            {currentCategories.map((cat) => (
               <option key={cat} value={cat}>{cat}</option>
             ))}
           </select>

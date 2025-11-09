@@ -7,10 +7,11 @@ import { FinanceApiResponse, FinanceRecord } from '@/types/finance';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const record = await getRecord(params.id);
+    const { id } = await params;
+    const record = await getRecord(id);
 
     if (!record) {
       return NextResponse.json(
@@ -39,12 +40,13 @@ export async function GET(
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     
-    const record = await updateRecord(params.id, body);
+    const record = await updateRecord(id, body);
 
     if (!record) {
       return NextResponse.json(
@@ -73,10 +75,11 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const success = await deleteRecord(params.id);
+    const { id } = await params;
+    const success = await deleteRecord(id);
 
     if (!success) {
       return NextResponse.json(

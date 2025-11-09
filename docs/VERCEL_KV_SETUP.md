@@ -11,7 +11,7 @@
 3. 点击 "Storage" 标签
 4. 点击 "Create Database"
 5. 选择 "KV" (Redis)
-6. 命名数据库 (如: `finance-records`)
+6. 命名数据库 (如: `cosmorigin-admin-records`)
 7. 选择区域 (建议选择离你最近的区域)
 8. 点击 "Create"
 

@@ -1,4 +1,3 @@
-import { kv } from '@vercel/kv';
 import { 
   FinanceRecord, 
   TransactionType, 
@@ -9,11 +8,62 @@ import {
   InvoiceStatus,
   MonthlyStat
 } from '@/types/finance';
+import { mockRecords } from './mockData';
 
 /**
  * 财务记录数据访问层
  * 使用 Vercel KV (Redis) 存储数据
+ * 开发环境:如果未配置KV环境变量或KV连接失败,自动使用Mock数据
  */
+
+// 检查是否应该使用Mock模式
+const shouldUseMock = () => {
+  // 如果环境变量未设置,使用Mock
+  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+    return true;
+  }
+  // 如果环境变量设置了但值为空,使用Mock
+  if (process.env.KV_REST_API_URL.trim() === '' || process.env.KV_REST_API_TOKEN.trim() === '') {
+    return true;
+  }
+  return false;
+};
+
+const USE_MOCK = shouldUseMock();
+
+// 懒加载KV连接 - 只在非Mock模式下才导入和初始化
+let kvInstance: any = null;
+const getKV = async () => {
+  if (USE_MOCK) {
+    throw new Error('Mock模式下不应调用KV');
+  }
+  
+  if (!kvInstance) {
+    try {
+      const { kv } = await import('@vercel/kv');
+      kvInstance = kv;
+      console.log('✅ KV连接初始化成功');
+    } catch (error) {
+      console.error('❌ KV连接初始化失败:', error);
+      throw error;
+    }
+  }
+  
+  return kvInstance;
+};
+
+if (USE_MOCK) {
+  console.log('⚠️  财务模块运行在Mock模式 - 未检测到有效的Vercel KV配置');
+  console.log('💡 数据存储在内存中,服务器重启后会丢失');
+  console.log('📚 生产部署请参考: docs/VERCEL_KV_SETUP.md');
+} else {
+  console.log('🔄 KV模式已启用');
+  console.log(`📍 KV URL: ${process.env.KV_REST_API_URL}`);
+}
+
+// 内存存储(Mock模式)
+let mockStorage: FinanceRecord[] = [...mockRecords];
+let mockCounter = mockRecords.length;
 
 // Redis Key 前缀
 const KEYS = {
@@ -29,6 +79,11 @@ const KEYS = {
  * 生成唯一ID
  */
 async function generateId(): Promise<string> {
+  if (USE_MOCK) {
+    mockCounter++;
+    return `mock-${Date.now()}-${mockCounter}`;
+  }
+  const kv = await getKV();
   const counter = await kv.incr(KEYS.COUNTER);
   return `${Date.now()}-${counter}`;
 }
@@ -53,26 +108,49 @@ export async function createRecord(
     updatedAt: now,
   };
 
-  // 保存记录
-  await kv.set(KEYS.RECORD(id), JSON.stringify(newRecord));
-  
-  // 添加到排序列表 (按日期排序)
-  const timestamp = new Date(record.date).getTime();
-  await kv.zadd(KEYS.RECORDS_LIST, { score: timestamp, member: id });
+  if (USE_MOCK) {
+    mockStorage.push(newRecord);
+    return newRecord;
+  }
 
-  // 清除统计缓存
-  const month = record.date.substring(0, 7); // YYYY-MM
-  await kv.del(KEYS.STATS_CACHE(month));
+  try {
+    const kv = await getKV();
+    
+    // 保存记录
+    await kv.set(KEYS.RECORD(id), JSON.stringify(newRecord));
+    
+    // 添加到排序列表 (按日期排序)
+    const timestamp = new Date(record.date).getTime();
+    await kv.zadd(KEYS.RECORDS_LIST, { score: timestamp, member: id });
 
-  return newRecord;
+    // 清除统计缓存
+    const month = record.date.substring(0, 7); // YYYY-MM
+    await kv.del(KEYS.STATS_CACHE(month));
+
+    return newRecord;
+  } catch (error) {
+    console.error('KV创建记录失败,fallback到Mock模式:', error);
+    mockStorage.push(newRecord);
+    return newRecord;
+  }
 }
 
 /**
  * 获取单条记录
  */
 export async function getRecord(id: string): Promise<FinanceRecord | null> {
-  const data = await kv.get<string>(KEYS.RECORD(id));
-  return data ? JSON.parse(data) : null;
+  if (USE_MOCK) {
+    return mockStorage.find(r => r.id === id) || null;
+  }
+  
+  try {
+    const kv = await getKV();
+    const data = (await kv.get(KEYS.RECORD(id))) as string | null;
+    return data ? JSON.parse(data) : null;
+  } catch (error) {
+    console.error('KV获取记录失败,fallback到Mock模式:', error);
+    return mockStorage.find(r => r.id === id) || null;
+  }
 }
 
 /**
@@ -99,6 +177,15 @@ export async function updateRecord(
     updatedAt: new Date().toISOString(),
   };
 
+  if (USE_MOCK) {
+    const index = mockStorage.findIndex(r => r.id === id);
+    if (index !== -1) {
+      mockStorage[index] = updated;
+    }
+    return updated;
+  }
+
+  const kv = await getKV();
   await kv.set(KEYS.RECORD(id), JSON.stringify(updated));
 
   // 如果日期改变，更新排序
@@ -127,6 +214,16 @@ export async function deleteRecord(id: string): Promise<boolean> {
   const record = await getRecord(id);
   if (!record) return false;
 
+  if (USE_MOCK) {
+    const index = mockStorage.findIndex(r => r.id === id);
+    if (index !== -1) {
+      mockStorage.splice(index, 1);
+      return true;
+    }
+    return false;
+  }
+
+  const kv = await getKV();
   await kv.del(KEYS.RECORD(id));
   await kv.zrem(KEYS.RECORDS_LIST, id);
 
@@ -148,30 +245,52 @@ export async function getRecords(
 ): Promise<FinanceRecord[]> {
   const start = startDate ? new Date(startDate).getTime() : 0;
   const end = endDate ? new Date(endDate).getTime() : Date.now();
-
-  // 从排序集合获取ID列表 (降序，最新的在前)
-  const ids = await kv.zrange(
-    KEYS.RECORDS_LIST,
-    start,
-    end,
-    { 
-      byScore: true,
-      rev: true,
-      offset,
-      count: limit,
-    }
-  );
-
-  if (!ids || ids.length === 0) return [];
-
-  // 批量获取记录
-  const records: FinanceRecord[] = [];
-  for (const id of ids) {
-    const record = await getRecord(id as string);
-    if (record) records.push(record);
+  
+  if (USE_MOCK) {
+    return mockStorage
+      .filter(r => {
+        const time = new Date(r.date).getTime();
+        return time >= start && time <= end;
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(offset, offset + limit);
   }
 
-  return records;
+  try {
+    const kv = await getKV();
+    // 从排序集合获取ID列表 (降序，最新的在前)
+    const ids = await kv.zrange(
+      KEYS.RECORDS_LIST,
+      start,
+      end,
+      { 
+        byScore: true,
+        rev: true,
+        offset,
+        count: limit,
+      }
+    );
+
+    if (!ids || ids.length === 0) return [];
+
+    // 批量获取记录
+    const records: FinanceRecord[] = [];
+    for (const id of ids) {
+      const record = await getRecord(id as string);
+      if (record) records.push(record);
+    }
+
+    return records;
+  } catch (error) {
+    console.error('KV获取记录列表失败,fallback到Mock模式:', error);
+    return mockStorage
+      .filter(r => {
+        const time = new Date(r.date).getTime();
+        return time >= start && time <= end;
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(offset, offset + limit);
+  }
 }
 
 /**
@@ -183,9 +302,25 @@ export async function getRecordsCount(
 ): Promise<number> {
   const start = startDate ? new Date(startDate).getTime() : 0;
   const end = endDate ? new Date(endDate).getTime() : Date.now();
+  
+  if (USE_MOCK) {
+    return mockStorage.filter(r => {
+      const time = new Date(r.date).getTime();
+      return time >= start && time <= end;
+    }).length;
+  }
 
-  const count = await kv.zcount(KEYS.RECORDS_LIST, start, end);
-  return count || 0;
+  try {
+    const kv = await getKV();
+    const count = await kv.zcount(KEYS.RECORDS_LIST, start, end);
+    return count || 0;
+  } catch (error) {
+    console.error('KV获取记录数失败,fallback到Mock模式:', error);
+    return mockStorage.filter(r => {
+      const time = new Date(r.date).getTime();
+      return time >= start && time <= end;
+    }).length;
+  }
 }
 
 /**
@@ -245,11 +380,6 @@ export async function getStats(
  * 获取默认分类
  */
 export async function getCategories(type: TransactionType): Promise<string[]> {
-  const key = KEYS.CATEGORIES(type);
-  const categories = await kv.get<string[]>(key);
-  
-  if (categories) return categories;
-
   // 默认分类 - 根据实际业务场景
   const defaultCategories = type === TransactionType.INCOME
     ? ['收入', '资金注入', '银行公户办理相关', '其他收入']
@@ -268,17 +398,38 @@ export async function getCategories(type: TransactionType): Promise<string[]> {
         '其他支出'
       ];
 
-  await kv.set(key, defaultCategories);
-  return defaultCategories;
+  if (USE_MOCK) {
+    return defaultCategories;
+  }
+
+  try {
+    const key = KEYS.CATEGORIES(type);
+    const kv = await getKV();
+    const categories = (await kv.get(key)) as string[] | null;
+    
+    if (categories) return categories;
+
+    await kv.set(key, defaultCategories);
+    return defaultCategories;
+  } catch (error) {
+    console.error('KV操作失败,使用默认分类:', error);
+    return defaultCategories;
+  }
 }
 
 /**
  * 添加自定义分类
  */
 export async function addCategory(type: TransactionType, category: string): Promise<void> {
+  if (USE_MOCK) {
+    // Mock模式下不持久化自定义分类
+    return;
+  }
+  
   const categories = await getCategories(type);
   if (!categories.includes(category)) {
     categories.push(category);
+    const kv = await getKV();
     await kv.set(KEYS.CATEGORIES(type), categories);
   }
 }
