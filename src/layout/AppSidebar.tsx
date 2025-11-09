@@ -42,7 +42,11 @@ const navItems: NavItem[] = [
     name: "User Profile",
     path: "/profile",
   },
-
+  {
+    icon: <PieChartIcon />,
+    name: "财务管理",
+    path: "/finance",
+  },
   {
     name: "Forms",
     icon: <ListIcon />,
