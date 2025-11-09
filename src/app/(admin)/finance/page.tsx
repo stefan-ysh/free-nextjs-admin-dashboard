@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FinanceRecord, TransactionType, FinanceStats } from '@/types/finance';
 import FinanceForm from '@/components/finance/FinanceForm';
+import type { FinanceFormSubmitPayload } from '@/components/finance/FinanceForm';
 import FinanceTable from '@/components/finance/FinanceTable';
 import FinanceStatsCards from '@/components/finance/FinanceStatsCards';
 import PageBreadCrumb from '@/components/common/PageBreadCrumb';
@@ -82,7 +83,7 @@ export default function FinancePage() {
   }, []);
 
   // 创建记录
-  const handleCreate = async (data: Omit<FinanceRecord, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const handleCreate = async (data: FinanceFormSubmitPayload) => {
     try {
       const res = await fetch('/api/finance/records', {
         method: 'POST',
@@ -105,7 +106,7 @@ export default function FinancePage() {
   };
 
   // 更新记录
-  const handleUpdate = async (data: Omit<FinanceRecord, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const handleUpdate = async (data: FinanceFormSubmitPayload) => {
     if (!editingRecord) return;
 
     try {

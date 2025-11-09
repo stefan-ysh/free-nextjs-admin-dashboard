@@ -1,12 +1,9 @@
-import { 
-  FinanceRecord, 
-  TransactionType, 
-  FinanceStats, 
+import type { VercelKV } from '@vercel/kv';
+import {
+  FinanceRecord,
+  TransactionType,
+  FinanceStats,
   CategoryStat,
-//   PaymentType,
-//   InvoiceType,
-//   InvoiceStatus,
-//   MonthlyStat
 } from '@/types/finance';
 import { mockRecords } from './mockData';
 
@@ -32,8 +29,8 @@ const shouldUseMock = () => {
 const USE_MOCK = shouldUseMock();
 
 // 懒加载KV连接 - 只在非Mock模式下才导入和初始化
-let kvInstance: any = null;
-const getKV = async () => {
+let kvInstance: VercelKV | null = null;
+const getKV = async (): Promise<VercelKV> => {
   if (USE_MOCK) {
     throw new Error('Mock模式下不应调用KV');
   }
@@ -62,7 +59,7 @@ if (USE_MOCK) {
 }
 
 // 内存存储(Mock模式)
-let mockStorage: FinanceRecord[] = [...mockRecords];
+const mockStorage: FinanceRecord[] = [...mockRecords];
 let mockCounter = mockRecords.length;
 
 // Redis Key 前缀

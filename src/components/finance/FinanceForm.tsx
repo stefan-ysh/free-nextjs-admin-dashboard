@@ -1,17 +1,37 @@
 'use client';
 
 import { useState } from 'react';
-import { FinanceRecord, TransactionType, PaymentType, InvoiceType, InvoiceStatus } from '@/types/finance';
+import {
+  FinanceRecord,
+  TransactionType,
+  PaymentType,
+  InvoiceType,
+  InvoiceStatus,
+} from '@/types/finance';
 import FileUpload from './FileUpload';
 import DatePicker from '../ui/DatePicker';
 
 interface FinanceFormProps {
   initialData?: Partial<FinanceRecord>;
-  onSubmit: (data: any) => Promise<void>;
+  onSubmit: (data: FinanceFormSubmitPayload) => Promise<void>;
   onCancel?: () => void;
   incomeCategories: string[];
   expenseCategories: string[];
 }
+
+export type FinanceFormSubmitPayload = Omit<FinanceRecord, 'id' | 'createdAt' | 'updatedAt' | 'totalAmount'>;
+
+type FormInvoiceState = {
+  type: InvoiceType;
+  status: InvoiceStatus;
+  number: string;
+  issueDate: string;
+  attachments: string[];
+};
+
+type FinanceFormState = Omit<FinanceFormSubmitPayload, 'invoice'> & {
+  invoice: FormInvoiceState;
+};
 
 export default function FinanceForm({
   initialData,
@@ -21,21 +41,22 @@ export default function FinanceForm({
   expenseCategories,
 }: FinanceFormProps) {
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    name: initialData?.name || '',
-    type: initialData?.type || TransactionType.EXPENSE,
-    contractAmount: initialData?.contractAmount || 0,
-    fee: initialData?.fee || 0,
-    category: initialData?.category || '',
-    paymentType: initialData?.paymentType || PaymentType.FULL_PAYMENT,
-    date: initialData?.date?.split('T')[0] || new Date().toISOString().split('T')[0],
-    description: initialData?.description || '',
+  const [formData, setFormData] = useState<FinanceFormState>({
+    name: initialData?.name ?? '',
+    type: initialData?.type ?? TransactionType.EXPENSE,
+    contractAmount: initialData?.contractAmount ?? 0,
+    fee: initialData?.fee ?? 0,
+    category: initialData?.category ?? '',
+    paymentType: initialData?.paymentType ?? PaymentType.FULL_PAYMENT,
+    date: initialData?.date?.split('T')[0] ?? new Date().toISOString().split('T')[0],
+    description: initialData?.description ?? '',
+    tags: initialData?.tags ?? [],
     invoice: {
-      type: initialData?.invoice?.type || InvoiceType.NONE,
-      status: initialData?.invoice?.status || InvoiceStatus.NOT_REQUIRED,
-      number: initialData?.invoice?.number || '',
-      issueDate: initialData?.invoice?.issueDate?.split('T')[0] || '',
-      attachments: initialData?.invoice?.attachments || [],
+      type: initialData?.invoice?.type ?? InvoiceType.NONE,
+      status: initialData?.invoice?.status ?? InvoiceStatus.NOT_REQUIRED,
+      number: initialData?.invoice?.number ?? '',
+      issueDate: initialData?.invoice?.issueDate?.split('T')[0] ?? '',
+      attachments: initialData?.invoice?.attachments ?? [],
     },
   });
 
@@ -52,14 +73,24 @@ export default function FinanceForm({
     setLoading(true);
 
     try {
-      await onSubmit({
+      const payload: FinanceFormSubmitPayload = {
         ...formData,
         date: new Date(formData.date).toISOString(),
-        invoice: formData.invoice.type === InvoiceType.NONE ? undefined : {
-          ...formData.invoice,
-          issueDate: formData.invoice.issueDate ? new Date(formData.invoice.issueDate).toISOString() : undefined,
-        },
-      });
+        invoice:
+          formData.invoice.type === InvoiceType.NONE
+            ? undefined
+            : {
+                ...formData.invoice,
+                attachments: formData.invoice.attachments.length
+                  ? formData.invoice.attachments
+                  : undefined,
+                issueDate: formData.invoice.issueDate
+                  ? new Date(formData.invoice.issueDate).toISOString()
+                  : undefined,
+              },
+      };
+
+      await onSubmit(payload);
     } catch (error) {
       console.error('Error submitting form:', error);
       alert('提交失败,请重试');
