@@ -18,10 +18,10 @@ const shouldUseMock = () => {
   // 如果环境变量未设置,使用Mock
   if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
     return true;
-  }
-  // 如果环境变量设置了但值为空,使用Mock
-  if (process.env.KV_REST_API_URL.trim() === '' || process.env.KV_REST_API_TOKEN.trim() === '') {
-    return true;
+      const kv = await getKV();
+
+      // 从排序集合获取ID列表 (降序，最新的在前)
+      const ids = await kv.zrange(
   }
   return false;
 };
@@ -35,14 +35,24 @@ const getKV = async (): Promise<VercelKV> => {
     throw new Error('Mock模式下不应调用KV');
   }
   
-  if (!kvInstance) {
-    try {
-      const { kv } = await import('@vercel/kv');
-      kvInstance = kv;
-      console.log('✅ KV连接初始化成功');
-    } catch (error) {
-      console.error('❌ KV连接初始化失败:', error);
-      throw error;
+      // 批量获取记录
+      const recordKeys = (ids as (string | number)[]).map((id) => KEYS.RECORD(String(id)));
+      const result = await kv.mget<FinanceRecord | string | null>(...recordKeys);
+
+      return result
+        .map((entry) => {
+          if (!entry) return null;
+          if (typeof entry === 'string') {
+            try {
+              return JSON.parse(entry) as FinanceRecord;
+            } catch (parseError) {
+              console.error('KV记录解析失败,跳过该条记录:', parseError);
+              return null;
+            }
+          }
+          return entry;
+        })
+        .filter((record): record is FinanceRecord => Boolean(record));
     }
   }
   
