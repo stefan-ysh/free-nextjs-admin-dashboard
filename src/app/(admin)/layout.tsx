@@ -1,39 +1,28 @@
-"use client";
+import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 
-import { useSidebar } from "@/context/SidebarContext";
-import AppHeader from "@/layout/AppHeader";
-import AppSidebar from "@/layout/AppSidebar";
-import Backdrop from "@/layout/Backdrop";
-import React from "react";
+import { SESSION_COOKIE_NAME } from '@/lib/auth/constants';
+import { findActiveSession } from '@/lib/auth/session';
+import { findUserById } from '@/lib/auth/user';
+import AdminLayoutClient from '@/layout/AdminLayoutClient';
 
-export default function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const { isExpanded, isHovered, isMobileOpen } = useSidebar();
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
-  // Dynamic class for main content margin based on sidebar state
-  const mainContentMargin = isMobileOpen
-    ? "ml-0"
-    : isExpanded || isHovered
-    ? "lg:ml-[290px]"
-    : "lg:ml-[90px]";
+  if (!token) {
+    redirect('/signin');
+  }
 
-  return (
-    <div className="min-h-screen xl:flex">
-      {/* Sidebar and Backdrop */}
-      <AppSidebar />
-      <Backdrop />
-      {/* Main Content Area */}
-      <div
-        className={`flex-1 transition-all  duration-300 ease-in-out ${mainContentMargin}`}
-      >
-        {/* Header */}
-        <AppHeader />
-        {/* Page Content */}
-        <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">{children}</div>
-      </div>
-    </div>
-  );
+  const session = await findActiveSession(token);
+  if (!session) {
+    redirect('/signin');
+  }
+
+  const user = await findUserById(session.user_id);
+  if (!user) {
+    redirect('/signin');
+  }
+
+  return <AdminLayoutClient>{children}</AdminLayoutClient>;
 }

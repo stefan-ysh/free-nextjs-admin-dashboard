@@ -29,17 +29,17 @@ type NavItem = {
 const navItems: NavItem[] = [
   {
     icon: <GridIcon />,
-    name: "Dashboard",
-    subItems: [{ name: "Ecommerce", path: "/", pro: false }],
+    name: "仪表盘",
+    subItems: [{ name: "电子商务", path: "/", pro: false }],
   },
   {
     icon: <CalenderIcon />,
-    name: "Calendar",
+    name: "日历",
     path: "/calendar",
   },
   {
     icon: <UserCircleIcon />,
-    name: "User Profile",
+    name: "个人中心",
     path: "/profile",
   },
   {
@@ -48,21 +48,21 @@ const navItems: NavItem[] = [
     path: "/finance",
   },
   {
-    name: "Forms",
+    name: "表单",
     icon: <ListIcon />,
-    subItems: [{ name: "Form Elements", path: "/form-elements", pro: false }],
+    subItems: [{ name: "表单元素", path: "/form-elements", pro: false }],
   },
   {
-    name: "Tables",
+    name: "表格",
     icon: <TableIcon />,
-    subItems: [{ name: "Basic Tables", path: "/basic-tables", pro: false }],
+    subItems: [{ name: "基础表格", path: "/basic-tables", pro: false }],
   },
   {
-    name: "Pages",
+    name: "页面",
     icon: <PageIcon />,
     subItems: [
-      { name: "Blank Page", path: "/blank", pro: false },
-      { name: "404 Error", path: "/error-404", pro: false },
+      { name: "空白页面", path: "/blank", pro: false },
+      { name: "404 错误", path: "/error-404", pro: false },
     ],
   },
 ];
@@ -70,30 +70,30 @@ const navItems: NavItem[] = [
 const othersItems: NavItem[] = [
   {
     icon: <PieChartIcon />,
-    name: "Charts",
+    name: "图表",
     subItems: [
-      { name: "Line Chart", path: "/line-chart", pro: false },
-      { name: "Bar Chart", path: "/bar-chart", pro: false },
+      { name: "折线图", path: "/line-chart", pro: false },
+      { name: "柱状图", path: "/bar-chart", pro: false },
     ],
   },
   {
     icon: <BoxCubeIcon />,
-    name: "UI Elements",
+    name: "UI 元素",
     subItems: [
-      { name: "Alerts", path: "/alerts", pro: false },
-      { name: "Avatar", path: "/avatars", pro: false },
-      { name: "Badge", path: "/badge", pro: false },
-      { name: "Buttons", path: "/buttons", pro: false },
-      { name: "Images", path: "/images", pro: false },
-      { name: "Videos", path: "/videos", pro: false },
+      { name: "警告", path: "/alerts", pro: false },
+      { name: "头像", path: "/avatars", pro: false },
+      { name: "徽章", path: "/badge", pro: false },
+      { name: "按钮", path: "/buttons", pro: false },
+      { name: "图片", path: "/images", pro: false },
+      { name: "视频", path: "/videos", pro: false },
     ],
   },
   {
     icon: <PlugInIcon />,
-    name: "Authentication",
+    name: "认证",
     subItems: [
-      { name: "Sign In", path: "/signin", pro: false },
-      { name: "Sign Up", path: "/signup", pro: false },
+      { name: "登录", path: "/signin", pro: false },
+      { name: "注册", path: "/signup", pro: false },
     ],
   },
 ];
