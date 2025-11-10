@@ -1,10 +1,3 @@
-import type { Metadata } from "next";
-
-export const metadata: Metadata = {
-	title: "Employees",
-	description: "Employee management dashboard",
-};
-
 export default function EmployeesPage() {
 	return (
 		<section className="space-y-4">
