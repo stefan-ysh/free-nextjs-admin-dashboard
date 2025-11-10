@@ -45,8 +45,9 @@ export default function SignInForm() {
         return;
       }
 
-      await refresh();
-      router.push("/");
+  await refresh();
+  router.replace("/");
+  router.refresh();
     } catch (err) {
       console.error("登录请求失败", err);
       setError("服务器异常，请稍后重试");
@@ -59,6 +60,7 @@ export default function SignInForm() {
       <div className="w-full max-w-md mx-auto mb-5 sm:pt-10">
         <Link
           href="/"
+          prefetch={false}
           className="inline-flex items-center text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
         >
           <ChevronLeftIcon />
@@ -123,6 +125,7 @@ export default function SignInForm() {
                 </label>
                 <Link
                   href="/reset-password"
+                  prefetch={false}
                   className="text-sm text-brand-500 hover:text-brand-600 dark:text-brand-400"
                 >
                   忘记密码?

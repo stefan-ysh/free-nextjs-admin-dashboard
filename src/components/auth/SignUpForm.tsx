@@ -14,6 +14,7 @@ export default function SignUpForm() {
       <div className="w-full max-w-md sm:pt-10 mx-auto mb-5">
         <Link
           href="/"
+          prefetch={false}
           className="inline-flex items-center text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
         >
           <ChevronLeftIcon />

@@ -39,6 +39,7 @@ export async function POST(request: Request) {
       userId: user.id,
       deviceType,
       userAgentHash,
+      userAgent,
       rememberMe,
     });
 
@@ -48,6 +49,8 @@ export async function POST(request: Request) {
         id: user.id,
         email: user.email,
         role: user.role,
+        displayName: user.display_name,
+        avatarUrl: user.avatar_url,
       },
     });
 

@@ -55,7 +55,10 @@ const navItems: NavItem[] = [
   {
     name: "表格",
     icon: <TableIcon />,
-    subItems: [{ name: "基础表格", path: "/basic-tables", pro: false }],
+    subItems: [
+      { name: "基础表格", path: "/basic-tables", pro: false },
+      { name: "员工管理", path: "/employees", pro: false },
+    ],
   },
   {
     name: "页面",
@@ -93,7 +96,7 @@ const othersItems: NavItem[] = [
     name: "认证",
     subItems: [
       { name: "登录", path: "/signin", pro: false },
-      { name: "注册", path: "/signup", pro: false },
+      // { name: "注册", path: "/signup", pro: false },
     ],
   },
 ];

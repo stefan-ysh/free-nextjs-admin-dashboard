@@ -21,7 +21,7 @@ export default function AuthLayout({
               {/* <!-- ===== Common Grid Shape Start ===== --> */}
               <GridShape />
               <div className="flex flex-col items-center max-w-xs">
-                <Link href="/" className="block mb-4">
+                <Link href="/" prefetch={false} className="block mb-4">
                   <Image
                     width={231}
                     height={48}
