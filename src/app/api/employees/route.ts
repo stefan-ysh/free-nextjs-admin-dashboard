@@ -68,7 +68,7 @@ export async function GET(request: Request) {
       sortOrder,
     });
 
-  return NextResponse.json({ success: true, data: result });
+    return NextResponse.json({ success: true, data: result });
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHENTICATED') {
       return unauthorizedResponse();

@@ -24,14 +24,18 @@ function badRequestResponse(message: string) {
   return NextResponse.json({ success: false, error: message }, { status: 400 });
 }
 
-export async function GET(_: Request, { params }: { params: { employeeId: string } }) {
+export async function GET(
+  _: Request,
+  { params }: { params: Promise<{ employeeId: string }> }
+) {
   try {
     const context = await requireCurrentUser();
     if (context.user.role !== 'finance_admin') {
       return forbiddenResponse();
     }
 
-    const record = await getEmployeeById(params.employeeId);
+    const { employeeId } = await params;
+    const record = await getEmployeeById(employeeId);
     if (!record) {
       return notFoundResponse();
     }
@@ -46,13 +50,17 @@ export async function GET(_: Request, { params }: { params: { employeeId: string
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { employeeId: string } }) {
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ employeeId: string }> }
+) {
   try {
     const context = await requireCurrentUser();
     if (context.user.role !== 'finance_admin') {
       return forbiddenResponse();
     }
 
+    const { employeeId } = await params;
     const body = await request.json();
     if (!body || typeof body !== 'object') {
       return badRequestResponse('请求体格式错误');
@@ -75,7 +83,7 @@ export async function PUT(request: Request, { params }: { params: { employeeId: 
       customFields: body.customFields,
     };
 
-    const updated = await updateEmployee(params.employeeId, payload);
+  const updated = await updateEmployee(employeeId, payload);
     if (!updated) {
       return notFoundResponse();
     }
@@ -101,19 +109,23 @@ export async function PUT(request: Request, { params }: { params: { employeeId: 
   }
 }
 
-export async function DELETE(_: Request, { params }: { params: { employeeId: string } }) {
+export async function DELETE(
+  _: Request,
+  { params }: { params: Promise<{ employeeId: string }> }
+) {
   try {
     const context = await requireCurrentUser();
     if (context.user.role !== 'finance_admin') {
       return forbiddenResponse();
     }
 
-    const record = await getEmployeeById(params.employeeId);
+    const { employeeId } = await params;
+    const record = await getEmployeeById(employeeId);
     if (!record) {
       return notFoundResponse();
     }
 
-    await deleteEmployee(params.employeeId);
+  await deleteEmployee(employeeId);
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHENTICATED') {

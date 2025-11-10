@@ -115,7 +115,6 @@ export type ListEmployeesResult = {
   total: number;
   page: number;
   pageSize: number;
-  availableDepartments: string[];
 };
 
 const SORT_COLUMN_MAP: Record<NonNullable<ListEmployeesParams['sortBy']>, string> = {
@@ -187,12 +186,9 @@ export async function listEmployees(params: ListEmployeesParams = {}): Promise<L
   const dataQuery = `${baseSelect} ${whereClause} ${orderClause} ${limitClause} ${offsetClause}`;
   const countQuery = `SELECT COUNT(*)::int AS total FROM hr_employees ${whereClause}`;
 
-  const [dataResult, countResult, departmentsResult] = await Promise.all([
+  const [dataResult, countResult] = await Promise.all([
     pool.query<RawEmployeeRow>(dataQuery, dataValues),
     pool.query<{ total: number }>(countQuery, values),
-    pool.query<{ department: string }>(
-      `SELECT DISTINCT department FROM hr_employees WHERE department IS NOT NULL ORDER BY department ASC`
-    ),
   ]);
 
   return {
@@ -200,9 +196,6 @@ export async function listEmployees(params: ListEmployeesParams = {}): Promise<L
     total: countResult.rows[0]?.total ?? 0,
     page,
     pageSize,
-    availableDepartments: departmentsResult.rows
-      .map((row) => row.department)
-      .filter((department): department is string => Boolean(department)),
   };
 }
 

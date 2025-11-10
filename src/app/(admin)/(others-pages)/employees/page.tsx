@@ -1,17 +1,24 @@
-import PageBreadcrumb from "@/components/common/PageBreadCrumb";
-import EmployeeClient from "@/components/employees/EmployeeClient";
-import { Metadata } from "next";
+import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "员工管理 | Cosmorigin Admin",
-  description: "管理员可在此管理员工信息，包括新增、编辑与删除。",
+	title: "Employees",
+	description: "Employee management dashboard",
 };
 
 export default function EmployeesPage() {
-  return (
-    <div className="space-y-6">
-      <PageBreadcrumb pageTitle="员工管理" />
-      <EmployeeClient />
-    </div>
-  );
+	return (
+		<section className="space-y-4">
+			<header>
+				<h1 className="text-2xl font-semibold tracking-tight">Employees</h1>
+				<p className="text-sm text-muted-foreground">
+					Employee management tools are coming soon.
+				</p>
+			</header>
+			<div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+				This page is currently a placeholder to keep the build green. Replace it
+				with the production-ready employee management experience when the
+				feature is implemented.
+			</div>
+		</section>
+	);
 }

@@ -55,10 +55,7 @@ const navItems: NavItem[] = [
   {
     name: "表格",
     icon: <TableIcon />,
-    subItems: [
-      { name: "基础表格", path: "/basic-tables", pro: false },
-      { name: "员工管理", path: "/employees", pro: false },
-    ],
+    subItems: [{ name: "基础表格", path: "/basic-tables", pro: false }],
   },
   {
     name: "页面",
