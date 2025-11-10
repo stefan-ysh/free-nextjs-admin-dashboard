@@ -1,0 +1,4 @@
+# Ignore all uploaded avatar files
+*
+# But keep this .gitignore file
+!.gitignore

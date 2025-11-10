@@ -377,3 +377,14 @@ export async function getEmployeeById(id: string): Promise<EmployeeRecord | null
 export async function setEmployeeStatus(id: string, status: EmploymentStatus): Promise<EmployeeRecord | null> {
   return updateEmployee(id, { employmentStatus: status });
 }
+
+export async function getAvailableDepartments(): Promise<string[]> {
+	await ensureHrSchema();
+	const result = await sql<{ department: string }>`
+    SELECT DISTINCT department
+    FROM hr_employees
+    WHERE department IS NOT NULL AND TRIM(department) != ''
+    ORDER BY department ASC
+  `;
+	return result.rows.map((row) => row.department);
+}

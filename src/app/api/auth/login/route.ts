@@ -49,8 +49,12 @@ export async function POST(request: Request) {
         id: user.id,
         email: user.email,
         role: user.role,
+        firstName: user.first_name,
+        lastName: user.last_name,
         displayName: user.display_name,
+        jobTitle: user.job_title,
         avatarUrl: user.avatar_url,
+        expiresAt,
       },
     });
 

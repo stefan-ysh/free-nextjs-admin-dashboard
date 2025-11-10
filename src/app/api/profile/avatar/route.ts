@@ -2,8 +2,14 @@ import { NextResponse } from 'next/server';
 
 import { getCurrentUser } from '@/lib/auth/current-user';
 import { updateUserAvatar, UserRecord } from '@/lib/auth/user';
+import {
+  deleteAvatarFromBlob,
+  deleteLocalAvatarIfExists,
+  isBase64DataUri,
+  uploadAvatarToBlob,
+} from '@/lib/storage/avatar';
 
-const MAX_AVATAR_CHAR_LENGTH = 1_200_000; // ~900KB binary payload in base64
+const MAX_AVATAR_SIZE = 5 * 1024 * 1024; // 5MB in bytes
 
 function buildUserShape(user: UserRecord) {
   return {
@@ -46,8 +52,34 @@ export async function PUT(request: Request) {
       avatarInput = null;
     }
 
-    if (avatarInput && avatarInput.length > MAX_AVATAR_CHAR_LENGTH) {
-      return NextResponse.json({ success: false, error: '头像大小超出限制，请选择更小的图片' }, { status: 400 });
+    // Validate base64 size (approximate check)
+    if (avatarInput && isBase64DataUri(avatarInput)) {
+      const base64Length = avatarInput.replace(/^data:image\/\w+;base64,/, '').length;
+      const approximateSize = (base64Length * 3) / 4; // Convert base64 length to bytes
+      
+      if (approximateSize > MAX_AVATAR_SIZE) {
+        return NextResponse.json(
+          { success: false, error: '头像大小超出限制（最大 5MB），请选择更小的图片' },
+          { status: 400 }
+        );
+      }
+
+      const oldAvatar = context.user.avatar_url;
+      if (oldAvatar) {
+        if (oldAvatar.startsWith('http')) {
+          await deleteAvatarFromBlob(oldAvatar);
+        } else {
+          await deleteLocalAvatarIfExists(oldAvatar);
+        }
+      }
+
+      avatarInput = await uploadAvatarToBlob(avatarInput);
+    } else if (avatarInput === null && context.user.avatar_url) {
+      if (context.user.avatar_url.startsWith('http')) {
+        await deleteAvatarFromBlob(context.user.avatar_url);
+      } else {
+        await deleteLocalAvatarIfExists(context.user.avatar_url);
+      }
     }
 
     const updated = await updateUserAvatar(context.user.id, avatarInput);
@@ -55,6 +87,9 @@ export async function PUT(request: Request) {
     return NextResponse.json({ success: true, data: buildUserShape(updated) });
   } catch (error) {
     console.error('更新头像失败', error);
+    if (error instanceof Error && error.message.includes('BLOB_READ_WRITE_TOKEN')) {
+      return NextResponse.json({ success: false, error: '存储服务未配置，请联系管理员' }, { status: 500 });
+    }
     return NextResponse.json({ success: false, error: '服务器错误' }, { status: 500 });
   }
 }
