@@ -1,4 +1,4 @@
-import { Pool, QueryResult } from 'pg';
+import { Pool, QueryResult, QueryResultRow } from 'pg';
 
 const connectionString =
 	process.env.POSTGRES_URL_NON_POOLING ||
@@ -35,7 +35,7 @@ function buildQueryText(strings: TemplateStringsArray, valuesLength: number): st
 	return query;
 }
 
-export async function sql<T = unknown>(
+export async function sql<T extends QueryResultRow = QueryResultRow>(
 	strings: TemplateStringsArray,
 	...values: unknown[]
 ): Promise<QueryResult<T>> {
