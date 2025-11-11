@@ -3,9 +3,9 @@ import { Metadata } from "next";
 import React from "react";
 
 export const metadata: Metadata = {
-  title: "Next.js Profile | Cosmorigin Admin - Next.js Dashboard Template",
+  title: "宇元新材管理后台 - 个人资料",
   description:
-    "This is Next.js Profile page for Cosmorigin Admin - Next.js Tailwind CSS Admin Dashboard Template",
+    "管理后台个人资料页面，展示用户的个人信息和编辑功能。",
 };
 
 export default function Profile() {

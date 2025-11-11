@@ -5,9 +5,9 @@ import { Metadata } from "next";
 import React from "react";
 
 export const metadata: Metadata = {
-  title: "Next.js Basic Table | Cosmorigin Admin - Next.js Dashboard Template",
+  title: "宇元新材管理后台 - 基础表格",
   description:
-    "This is Next.js Basic Table  page for Cosmorigin Admin  Tailwind CSS Admin Dashboard Template",
+    "管理后台基础表格页面，展示基本的数据表格布局和样式。",
   // other metadata
 };
 

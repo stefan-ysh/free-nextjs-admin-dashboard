@@ -3,8 +3,8 @@ import { Metadata } from "next";
 import React from "react";
 
 export const metadata: Metadata = {
-  title: "Next.js Blank Page | Cosmorigin Admin - Next.js Dashboard Template",
-  description: "This is Next.js Blank Page Cosmorigin Admin Dashboard Template",
+  title: "宇元新材管理后台 - 空白页面",
+  description: "管理后台空白页面，提供一个空白的布局模板，方便自定义内容。",
 };
 
 export default function BlankPage() {

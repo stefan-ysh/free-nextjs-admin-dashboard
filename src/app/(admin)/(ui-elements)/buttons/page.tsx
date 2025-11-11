@@ -6,9 +6,9 @@ import { Metadata } from "next";
 import React from "react";
 
 export const metadata: Metadata = {
-  title: "Next.js Buttons | Cosmorigin Admin - Next.js Dashboard Template",
+  title: "宇元新材管理后台 - 按钮",
   description:
-    "This is Next.js Buttons page for Cosmorigin Admin - Next.js Tailwind CSS Admin Dashboard Template",
+    "管理后台按钮页面，展示不同样式和尺寸的按钮组件。",
 };
 
 export default function Buttons() {

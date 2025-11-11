@@ -4,9 +4,9 @@ import { Metadata } from "next";
 import React from "react";
 
 export const metadata: Metadata = {
-  title: "Next.js Calender | Cosmorigin Admin - Next.js Dashboard Template",
+  title: "宇元新材管理后台 - 日历",
   description:
-    "This is Next.js Calender page for Cosmorigin Admin  Tailwind CSS Admin Dashboard Template",
+    "管理后台日历页面，展示日历的使用和样式。",
   // other metadata
 };
 export default function page() {

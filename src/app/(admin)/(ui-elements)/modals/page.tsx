@@ -8,9 +8,9 @@ import { Metadata } from "next";
 import React from "react";
 
 export const metadata: Metadata = {
-  title: "Next.js Modals | Cosmorigin Admin - Next.js Dashboard Template",
+  title: "宇元新材管理后台 - 模态框",
   description:
-    "This is Next.js Modals page for Cosmorigin Admin - Next.js Tailwind CSS Admin Dashboard Template",
+    "管理后台模态框页面，展示不同类型和样式的模态框组件及其使用方法。",
   // other metadata
 };
 

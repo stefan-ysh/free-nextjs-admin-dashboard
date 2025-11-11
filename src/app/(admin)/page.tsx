@@ -9,8 +9,8 @@ import DemographicCard from "@/components/ecommerce/DemographicCard";
 
 export const metadata: Metadata = {
   title:
-    "Next.js E-commerce Dashboard | Cosmorigin Admin - Next.js Dashboard Template",
-  description: "This is Next.js Home for Cosmorigin Admin Dashboard Template",
+    "宇元新材管理后台 - 电子商务仪表盘",
+  description: "管理后台电子商务仪表盘页面，展示关键指标和图表。",
 };
 
 export default function Ecommerce() {

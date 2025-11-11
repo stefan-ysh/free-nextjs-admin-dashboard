@@ -4,9 +4,9 @@ import { Metadata } from "next";
 import React from "react";
 
 export const metadata: Metadata = {
-  title: "Next.js Videos | Cosmorigin Admin - Next.js Dashboard Template",
+  title: "宇元新材管理后台 - 视频",
   description:
-    "This is Next.js Videos page for Cosmorigin Admin - Next.js Tailwind CSS Admin Dashboard Template",
+    "管理后台视频页面，展示不同类型和样式的视频组件及其使用方法。",
 };
 
 export default function VideoPage() {

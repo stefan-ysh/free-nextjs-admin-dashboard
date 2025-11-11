@@ -5,9 +5,9 @@ import { Metadata } from "next";
 import React from "react";
 
 export const metadata: Metadata = {
-  title: "Next.js Avatars | Cosmorigin Admin - Next.js Dashboard Template",
+  title: "宇元新材管理后台 - 头像",
   description:
-    "This is Next.js Avatars page for Cosmorigin Admin - Next.js Tailwind CSS Admin Dashboard Template",
+    "管理后台头像页面，展示不同尺寸和状态的头像组件。",
 };
 
 export default function AvatarPage() {

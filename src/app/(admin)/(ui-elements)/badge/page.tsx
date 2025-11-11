@@ -5,9 +5,9 @@ import { Metadata } from "next";
 import React from "react";
 
 export const metadata: Metadata = {
-  title: "Next.js Badge | Cosmorigin Admin - Next.js Dashboard Template",
+  title: "宇元新材管理后台 - 徽章",
   description:
-    "This is Next.js Badge page for Cosmorigin Admin - Next.js Tailwind CSS Admin Dashboard Template",
+    "管理后台徽章页面，展示不同样式和颜色的徽章组件。",
   // other metadata
 };
 

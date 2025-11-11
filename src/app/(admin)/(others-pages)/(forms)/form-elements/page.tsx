@@ -13,9 +13,9 @@ import { Metadata } from "next";
 import React from "react";
 
 export const metadata: Metadata = {
-  title: "Next.js Form Elements | Cosmorigin Admin - Next.js Dashboard Template",
+  title: "宇元新材管理后台 - 表单元素",
   description:
-    "This is Next.js Form Elements page for Cosmorigin Admin - Next.js Tailwind CSS Admin Dashboard Template",
+    "管理后台表单元素页面，展示各种表单控件的使用和样式。",
 };
 
 export default function FormElements() {

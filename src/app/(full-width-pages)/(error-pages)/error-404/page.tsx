@@ -5,9 +5,9 @@ import Link from "next/link";
 import React from "react";
 
 export const metadata: Metadata = {
-  title: "Next.js Error 404 | Cosmorigin Admin - Next.js Dashboard Template",
+  title: "宇元新材管理后台 - 404错误页面",
   description:
-    "This is Next.js Error 404 page for Cosmorigin Admin - Next.js Tailwind CSS Admin Dashboard Template",
+    "管理后台404错误页面，提示用户所请求的页面不存在。",
 };
 
 export default function Error404() {

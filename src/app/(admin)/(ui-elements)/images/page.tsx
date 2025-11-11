@@ -7,9 +7,9 @@ import { Metadata } from "next";
 import React from "react";
 
 export const metadata: Metadata = {
-  title: "Next.js Images | Cosmorigin Admin - Next.js Dashboard Template",
+  title: "宇元新材管理后台 - 图片",
   description:
-    "This is Next.js Images page for Cosmorigin Admin - Next.js Tailwind CSS Admin Dashboard Template",
+    "管理后台图片页面，展示响应式图片和不同网格布局的图片组件。",
   // other metadata
 };
 
