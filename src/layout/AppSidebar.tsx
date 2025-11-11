@@ -48,9 +48,9 @@ const navItems: NavItem[] = [
     path: "/finance",
   },
   {
-    name: "表单",
+    name: "组织架构",
     icon: <ListIcon />,
-    subItems: [{ name: "表单元素", path: "/form-elements", pro: false }],
+    subItems: [{ name: "员工管理", path: "/employees", pro: false }],
   },
   {
     name: "表格",
