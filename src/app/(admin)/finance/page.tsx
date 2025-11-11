@@ -50,7 +50,7 @@ export default function FinancePage() {
   const fetchRecords = async (page = 1) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/finance/records?page=${page}&limit=20`);
+      const res = await fetch(`/api/finance/records?page=${page}&limit=10`);
       if (res.ok) {
         const data = await res.json();
         setRecords(data.data || []);
