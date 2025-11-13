@@ -26,9 +26,10 @@ export default function NewPurchasePage() {
         alert('创建成功！');
         router.push('/purchases');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('创建采购失败', error);
-      alert(error.message || '创建失败，请重试');
+      const message = error instanceof Error ? error.message : '创建失败，请重试';
+      alert(message);
       throw error;
     }
   };

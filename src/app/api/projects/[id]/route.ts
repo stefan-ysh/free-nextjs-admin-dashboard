@@ -7,6 +7,7 @@ import {
 import { checkPermission, Permissions, canEditProject } from '@/lib/permissions';
 import { getCurrentUser } from '@/lib/auth/current-user';
 import type { UpdateProjectInput } from '@/types/project';
+import type { UserProfile } from '@/types/user';
 
 /**
  * GET /api/projects/[id]
@@ -28,7 +29,9 @@ export async function GET(
     const { id } = await params;
 
     // Check permission
-    const canViewAll = await checkPermission(context.user as any, Permissions.PROJECT_VIEW_ALL);
+  const userForPermission = context.user as unknown as UserProfile;
+  const permissionResult = await checkPermission(userForPermission, Permissions.PROJECT_VIEW_ALL);
+  const canViewAll = permissionResult.allowed;
     
     const project = await findProjectById(id);
     if (!project) {
@@ -39,7 +42,7 @@ export async function GET(
     }
 
     // If user can't view all, check if they're the project manager
-    if (!canViewAll && project.projectManagerId !== context.user.id) {
+  if (!canViewAll && project.projectManagerId !== context.user.id) {
       return NextResponse.json(
         { success: false, error: 'Forbidden: No permission to view this project' },
         { status: 403 }
@@ -87,7 +90,8 @@ export async function PATCH(
     }
 
     // Check permission
-    const canEdit = await canEditProject(context.user as any, project.projectManagerId);
+  const userForPermission = context.user as unknown as UserProfile;
+  const canEdit = await canEditProject(userForPermission, project.projectManagerId);
     if (!canEdit) {
       return NextResponse.json(
         { success: false, error: 'Forbidden: No permission to edit this project' },
@@ -119,10 +123,10 @@ export async function PATCH(
       success: true,
       data: updatedProject,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('PATCH /api/projects/[id] error:', error);
     
-    if (error.message?.includes('not found')) {
+    if (error instanceof Error && error.message.includes('not found')) {
       return NextResponse.json(
         { success: false, error: 'Project not found' },
         { status: 404 }
@@ -164,8 +168,9 @@ export async function DELETE(
     }
 
     // Check permission
-    const canDelete = await checkPermission(context.user as any, Permissions.PROJECT_DELETE);
-    if (!canDelete) {
+    const userForPermission = context.user as unknown as UserProfile;
+    const canDelete = await checkPermission(userForPermission, Permissions.PROJECT_DELETE);
+    if (!canDelete.allowed) {
       return NextResponse.json(
         { success: false, error: 'Forbidden: No permission to delete projects' },
         { status: 403 }
@@ -179,10 +184,10 @@ export async function DELETE(
       success: true,
       message: 'Project deleted successfully',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('DELETE /api/projects/[id] error:', error);
     
-    if (error.message?.includes('not found')) {
+    if (error instanceof Error && error.message.includes('not found')) {
       return NextResponse.json(
         { success: false, error: 'Project not found' },
         { status: 404 }

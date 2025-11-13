@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import Image from 'next/image';
 import {
   FinanceRecord,
   InvoiceStatus,
@@ -60,11 +61,16 @@ export default function InvoicePreviewModal({ record, onClose }: InvoicePreviewM
     if (isImage) {
       return (
         <div key={index} className="space-y-2">
-          <img
-            src={file}
-            alt={`发票附件 ${index + 1}`}
-            className="w-full rounded-lg border border-gray-200 object-contain dark:border-gray-700"
-          />
+          <div className="relative h-48 w-full overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+            <Image
+              src={file}
+              alt={`发票附件 ${index + 1}`}
+              fill
+              className="object-contain"
+              sizes="(max-width: 768px) 100vw, 50vw"
+              unoptimized
+            />
+          </div>
           <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-300">
             <span>图片附件 {index + 1}</span>
             <a

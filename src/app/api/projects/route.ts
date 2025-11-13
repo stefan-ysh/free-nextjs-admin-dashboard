@@ -6,7 +6,19 @@ import {
 } from '@/lib/db/projects';
 import { checkPermission, Permissions } from '@/lib/permissions';
 import { getCurrentUser } from '@/lib/auth/current-user';
-import type { CreateProjectInput } from '@/types/project';
+import type { CreateProjectInput, ListProjectsParams, ProjectPriority, ProjectStatus } from '@/types/project';
+import type { UserProfile } from '@/types/user';
+
+const PROJECT_STATUSES: ProjectStatus[] = ['planning', 'active', 'on_hold', 'completed', 'archived', 'cancelled'];
+const PROJECT_PRIORITIES: ProjectPriority[] = ['low', 'medium', 'high', 'urgent'];
+
+function isProjectStatus(value: string): value is ProjectStatus {
+  return PROJECT_STATUSES.includes(value as ProjectStatus);
+}
+
+function isProjectPriority(value: string): value is ProjectPriority {
+  return PROJECT_PRIORITIES.includes(value as ProjectPriority);
+}
 
 /**
  * GET /api/projects
@@ -23,14 +35,16 @@ export async function GET(request: NextRequest) {
     }
 
     // Check permission
-    const canViewAll = await checkPermission(context.user as any, Permissions.PROJECT_VIEW_ALL);
+    const userForPermission = context.user as unknown as UserProfile;
+    const permissionResult = await checkPermission(userForPermission, Permissions.PROJECT_VIEW_ALL);
+    const canViewAll = permissionResult.allowed;
 
     // Parse query params
     const searchParams = request.nextUrl.searchParams;
-    const page = parseInt(searchParams.get('page') || '1');
-    const pageSize = parseInt(searchParams.get('pageSize') || '20');
-    const status = searchParams.get('status') || undefined;
-    const priority = searchParams.get('priority') || undefined;
+    const page = Number.parseInt(searchParams.get('page') || '1', 10);
+    const pageSize = Number.parseInt(searchParams.get('pageSize') || '20', 10);
+    const statusParam = searchParams.get('status');
+    const priorityParam = searchParams.get('priority');
     const search = searchParams.get('search') || undefined;
     const managerId = searchParams.get('managerId') || undefined;
     const includeDeleted = searchParams.get('includeDeleted') === 'true';
@@ -45,15 +59,25 @@ export async function GET(request: NextRequest) {
     }
 
     // List projects - if user can't view all, only show their managed projects
-    const result = await listProjects({
-      page,
-      pageSize,
-      status: status as any,
-      priority: priority as any,
+    const params: ListProjectsParams = {
+      page: Number.isNaN(page) ? 1 : page,
+      pageSize: Number.isNaN(pageSize) ? 20 : pageSize,
       search,
-      projectManagerId: managerId || (canViewAll ? undefined : context.user.id),
       includeDeleted,
-    });
+      projectManagerId: managerId || (canViewAll ? undefined : context.user.id),
+    };
+
+    if (statusParam === 'all') {
+      params.status = 'all';
+    } else if (statusParam && isProjectStatus(statusParam)) {
+      params.status = statusParam;
+    }
+
+    if (priorityParam && isProjectPriority(priorityParam)) {
+      params.priority = priorityParam;
+    }
+
+    const result = await listProjects(params);
 
     return NextResponse.json({
       success: true,
@@ -88,8 +112,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Check permission
-    const canCreate = await checkPermission(context.user as any, Permissions.PROJECT_CREATE);
-    if (!canCreate) {
+    const userForPermission = context.user as unknown as UserProfile;
+    const canCreate = await checkPermission(userForPermission, Permissions.PROJECT_CREATE);
+    if (!canCreate.allowed) {
       return NextResponse.json(
         { success: false, error: 'Forbidden: No permission to create projects' },
         { status: 403 }
@@ -136,10 +161,10 @@ export async function POST(request: NextRequest) {
       success: true,
       data: project,
     }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('POST /api/projects error:', error);
-    
-    if (error.message?.includes('already exists')) {
+
+    if (error instanceof Error && error.message.includes('already exists')) {
       return NextResponse.json(
         { success: false, error: error.message },
         { status: 409 }

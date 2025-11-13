@@ -100,6 +100,7 @@ function mapUser(row: RawUserRow | undefined): UserRecord | null {
  */
 function toProfile(user: UserRecord): UserProfile {
   const { passwordHash, ...profile } = user;
+  void passwordHash;
   return profile;
 }
 

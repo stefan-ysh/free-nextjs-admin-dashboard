@@ -69,25 +69,6 @@ function mapProject(row: RawProjectRow | undefined): ProjectRecord | null {
 }
 
 /**
- * 生成项目编号
- */
-async function generateProjectCode(): Promise<string> {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  
-  // 查询当月已有的项目数量
-  const result = await sql<{ count: number }>`
-    SELECT COUNT(*)::int as count
-    FROM projects
-    WHERE project_code LIKE ${'PRJ' + year + month + '%'}
-  `;
-  
-  const sequence = (result.rows[0]?.count || 0) + 1;
-  return `PRJ${year}${month}${String(sequence).padStart(3, '0')}`;
-}
-
-/**
  * 创建项目
  */
 export async function createProject(

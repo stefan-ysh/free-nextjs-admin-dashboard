@@ -2,6 +2,7 @@ import { requireCurrentUser } from '@/lib/auth/current-user';
 import { deletePurchase, findPurchaseById, getPurchaseDetail, updatePurchase } from '@/lib/db/purchases';
 import { canDeletePurchase, canEditPurchase, checkPermission, Permissions } from '@/lib/permissions';
 import { NextResponse } from 'next/server';
+import type { UserProfile } from '@/types/user';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -19,10 +20,13 @@ function badRequestResponse(message: string) {
   return NextResponse.json({ success: false, error: message }, { status: 400 });
 }
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const context = await requireCurrentUser();
-    const id = params.id;
+    const { id } = await params;
     
     // Check if requesting detailed view
     const url = new URL(request.url);
@@ -32,7 +36,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
       const purchaseDetail = await getPurchaseDetail(id);
       if (!purchaseDetail) return notFoundResponse();
 
-      const viewAll = await checkPermission(context.user as any, Permissions.PURCHASE_VIEW_ALL);
+  const userForPermission = context.user as unknown as UserProfile;
+  const viewAll = await checkPermission(userForPermission, Permissions.PURCHASE_VIEW_ALL);
       if (!viewAll.allowed && context.user.id !== purchaseDetail.createdBy) {
         return forbiddenResponse();
       }
@@ -44,7 +49,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
     const purchase = await findPurchaseById(id);
     if (!purchase) return notFoundResponse();
 
-    const viewAll = await checkPermission(context.user as any, Permissions.PURCHASE_VIEW_ALL);
+  const userForPermission = context.user as unknown as UserProfile;
+  const viewAll = await checkPermission(userForPermission, Permissions.PURCHASE_VIEW_ALL);
     if (!viewAll.allowed && context.user.id !== purchase.createdBy) {
       return forbiddenResponse();
     }
@@ -57,15 +63,19 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const context = await requireCurrentUser();
-    const id = params.id;
+    const { id } = await params;
     const purchase = await findPurchaseById(id);
     if (!purchase) return notFoundResponse();
 
     // check editable
-    if (!canEditPurchase(context.user as any, { createdBy: purchase.createdBy, status: purchase.status })) {
+  const userForPermission = context.user as unknown as UserProfile;
+  if (!canEditPurchase(userForPermission, { createdBy: purchase.createdBy, status: purchase.status })) {
       return forbiddenResponse();
     }
 
@@ -85,14 +95,18 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const context = await requireCurrentUser();
-    const id = params.id;
+    const { id } = await params;
     const purchase = await findPurchaseById(id);
     if (!purchase) return notFoundResponse();
 
-    if (!canDeletePurchase(context.user as any, { createdBy: purchase.createdBy, status: purchase.status })) {
+  const userForPermission = context.user as unknown as UserProfile;
+  if (!canDeletePurchase(userForPermission, { createdBy: purchase.createdBy, status: purchase.status })) {
       // admins might delete non-paid but permission check already in canDeletePurchase
       return forbiddenResponse();
     }

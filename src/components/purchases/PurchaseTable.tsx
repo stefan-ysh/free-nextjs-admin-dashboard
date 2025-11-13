@@ -1,30 +1,25 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
 import PurchaseStatusBadge from './PurchaseStatusBadge';
 import PurchaseDetailModal from './PurchaseDetailModal';
 import { PurchaseRecord } from '@/types/purchase';
-import { 
-  getPurchaseStatusText, 
-  getPaymentMethodText, 
-  getInvoiceTypeText,
-  isPurchaseEditable,
-  isPurchaseDeletable 
-} from '@/types/purchase';
+import { isPurchaseEditable, isPurchaseDeletable } from '@/types/purchase';
 
 type PurchaseTableProps = {
   purchases: PurchaseRecord[];
   loading?: boolean;
-  onView: (purchase: PurchaseRecord) => void;
   onEdit: (purchase: PurchaseRecord) => void;
   onDelete: (purchase: PurchaseRecord) => void;
   onSubmit?: (purchase: PurchaseRecord) => void;
   onApprove?: (purchase: PurchaseRecord) => void;
   onReject?: (purchase: PurchaseRecord) => void;
+  onWithdraw?: (purchase: PurchaseRecord) => void;
   currentUserId?: string;
   canApprove?: boolean;
 };
+
+type DetailAction = 'submit' | 'approve' | 'reject' | 'withdraw' | 'pay';
 
 function formatDate(value: string | null) {
   if (!value) return '—';
@@ -42,12 +37,12 @@ function formatAmount(amount: number) {
 export default function PurchaseTable({
   purchases,
   loading,
-  onView,
   onEdit,
   onDelete,
   onSubmit,
   onApprove,
   onReject,
+  onWithdraw,
   currentUserId,
   canApprove = false,
 }: PurchaseTableProps) {
@@ -59,7 +54,7 @@ export default function PurchaseTable({
     setIsModalOpen(true);
   };
 
-  const handleModalAction = async (action: string, data?: any) => {
+  const handleModalAction = (action: DetailAction) => {
     // Close modal and trigger parent callbacks
     setIsModalOpen(false);
     
@@ -72,6 +67,8 @@ export default function PurchaseTable({
       onApprove(purchase);
     } else if (action === 'reject' && onReject) {
       onReject(purchase);
+    } else if (action === 'withdraw' && onWithdraw) {
+      onWithdraw(purchase);
     }
   };
 
@@ -104,7 +101,7 @@ export default function PurchaseTable({
         </svg>
         <div className="text-sm font-medium text-gray-600 dark:text-gray-300">暂无采购记录</div>
         <div className="text-xs text-gray-400 dark:text-gray-500">
-          点击右上方"新增采购"按钮创建采购记录
+          点击右上方&nbsp;&quot;新增采购&quot;&nbsp;按钮创建采购记录
         </div>
       </div>
     );

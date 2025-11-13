@@ -6,6 +6,11 @@ import PageBreadCrumb from '@/components/common/PageBreadCrumb';
 import PurchaseTable from '@/components/purchases/PurchaseTable';
 import { PurchaseRecord, ListPurchasesResult, PurchaseStatus } from '@/types/purchase';
 
+type CurrentUserSummary = {
+  id: string;
+  roles: string[];
+};
+
 export default function PurchasesPage() {
   const router = useRouter();
   const [purchases, setPurchases] = useState<PurchaseRecord[]>([]);
@@ -15,7 +20,7 @@ export default function PurchasesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<PurchaseStatus | 'all'>('all');
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<CurrentUserSummary | null>(null);
 
   const fetchPurchases = useCallback(async () => {
     setLoading(true);
@@ -29,8 +34,8 @@ export default function PurchasesPage() {
 
       const response = await fetch(`/api/purchases?${params.toString()}`);
       if (!response.ok) throw new Error('Failed to fetch');
-      
-      const result = await response.json();
+
+      const result: { success: boolean; data: ListPurchasesResult } = await response.json();
       if (result.success) {
         setPurchases(result.data.items);
         setTotal(result.data.total);
@@ -48,24 +53,52 @@ export default function PurchasesPage() {
   }, [fetchPurchases]);
 
   useEffect(() => {
-    // Fetch current user info
-    fetch('/api/auth/me')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          setCurrentUser(data.data);
-        }
-      })
-      .catch(console.error);
-  }, []);
+    let isMounted = true;
 
-  const handleView = (purchase: PurchaseRecord) => {
-    // TODO: Open detail modal
-    alert(`查看采购: ${purchase.purchaseNumber}`);
-  };
+    const loadCurrentUser = async () => {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (!res.ok) return;
+        const result: { success: boolean; data: CurrentUserSummary } = await res.json();
+        if (result.success && isMounted) {
+          setCurrentUser(result.data);
+        }
+      } catch (error) {
+        console.error('加载用户信息失败', error);
+      }
+    };
+
+    void loadCurrentUser();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleEdit = (purchase: PurchaseRecord) => {
     router.push(`/purchases/${purchase.id}/edit`);
+  };
+
+  const handleWithdraw = async (purchase: PurchaseRecord) => {
+    if (!confirm(`确定要撤回采购 ${purchase.purchaseNumber} 吗？`)) return;
+
+    try {
+      const response = await fetch(`/api/purchases/${purchase.id}/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'withdraw' }),
+      });
+      if (!response.ok) throw new Error('Failed to withdraw');
+
+      const result = await response.json();
+      if (result.success) {
+        alert('撤回成功');
+        fetchPurchases();
+      }
+    } catch (error) {
+      console.error('撤回失败', error);
+      alert('撤回失败，请重试');
+    }
   };
 
   const handleDelete = async (purchase: PurchaseRecord) => {
@@ -249,12 +282,12 @@ export default function PurchasesPage() {
           <PurchaseTable
             purchases={purchases}
             loading={loading}
-            onView={handleView}
             onEdit={handleEdit}
             onDelete={handleDelete}
             onSubmit={handleSubmit}
             onApprove={canApprove ? handleApprove : undefined}
             onReject={canApprove ? handleReject : undefined}
+            onWithdraw={handleWithdraw}
             currentUserId={currentUser?.id}
             canApprove={canApprove}
           />

@@ -35,31 +35,66 @@ export default function ProjectSelector({
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Fetch projects when dropdown opens
-  useEffect(() => {
-    if (isOpen && projects.length === 0) {
-      fetchProjects();
+  const fetchProjects = useCallback(async (query: string) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: '1',
+        pageSize: '100',
+        status: 'active', // Only show active projects
+      });
+
+      if (query.trim()) {
+        params.append('search', query.trim());
+      }
+
+      const response = await fetch(`/api/projects?${params.toString()}`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setProjects(result.data || []);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch projects', error);
+    } finally {
+      setLoading(false);
     }
-  }, [isOpen]);
+  }, []);
 
   // Fetch projects with search
   useEffect(() => {
-    if (isOpen) {
-      const timer = setTimeout(() => {
-        fetchProjects();
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [search]);
+    if (!isOpen) return;
+    const timer = setTimeout(() => {
+      fetchProjects(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [isOpen, search, fetchProjects]);
 
   // Fetch selected project details
+  const fetchProjectById = useCallback(async (projectId: string) => {
+    try {
+      const response = await fetch(`/api/projects/${projectId}`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setSelectedProject(result.data);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch project', error);
+    }
+  }, []);
+
   useEffect(() => {
-    if (value && !selectedProject) {
-      fetchProjectById(value);
-    } else if (!value && selectedProject) {
+    if (value) {
+      if (!selectedProject || selectedProject.id !== value) {
+        fetchProjectById(value);
+      }
+    } else if (selectedProject) {
       setSelectedProject(null);
     }
-  }, [value]);
+  }, [value, selectedProject, fetchProjectById]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -75,46 +110,7 @@ export default function ProjectSelector({
     }
   }, [isOpen]);
 
-  const fetchProjects = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page: '1',
-        pageSize: '100',
-        status: 'active', // Only show active projects
-      });
-      
-      if (search.trim()) {
-        params.append('search', search.trim());
-      }
-
-      const response = await fetch(`/api/projects?${params.toString()}`);
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          setProjects(result.data || []);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch projects', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchProjectById = async (projectId: string) => {
-    try {
-      const response = await fetch(`/api/projects/${projectId}`);
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          setSelectedProject(result.data);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch project', error);
-    }
-  };
+  
 
   const handleSelect = useCallback(
     (project: Project) => {

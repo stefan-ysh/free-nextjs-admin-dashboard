@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import DatePicker from '@/components/form/date-picker';
 import Select from '@/components/form/Select';
 import Label from '@/components/form/Label';
@@ -13,8 +13,6 @@ import {
   PurchaseChannel,
   PaymentMethod,
   InvoiceType,
-  getPaymentMethodText,
-  getInvoiceTypeText,
 } from '@/types/purchase';
 
 type PurchaseFormProps = {
@@ -64,8 +62,6 @@ export default function PurchaseForm({ initialData, onSubmit, onCancel }: Purcha
 
   const [invoiceImages, setInvoiceImages] = useState<string[]>(initialData?.invoiceImages ?? []);
   const [receiptImages, setReceiptImages] = useState<string[]>(initialData?.receiptImages ?? []);
-  const [attachments, setAttachments] = useState<string[]>(initialData?.attachments ?? []);
-
   const totalAmount = (() => {
     const q = parseFloat(formState.quantity) || 0;
     const u = parseFloat(formState.unitPrice) || 0;
@@ -131,7 +127,6 @@ export default function PurchaseForm({ initialData, onSubmit, onCancel }: Purcha
         hasProject: formState.hasProject,
         projectId: formState.projectId || undefined,
         notes: formState.notes.trim() || undefined,
-        attachments: attachments.length > 0 ? attachments : undefined,
       };
 
       await onSubmit(payload);

@@ -24,7 +24,7 @@ export default function EditPurchasePage() {
         if (result.success) {
           setPurchase(result.data);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('加载采购失败', error);
         alert('加载失败');
         router.push('/purchases');
@@ -54,9 +54,10 @@ export default function EditPurchasePage() {
         alert('更新成功！');
         router.push('/purchases');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('更新采购失败', error);
-      alert(error.message || '更新失败，请重试');
+      const message = error instanceof Error ? error.message : '更新失败，请重试';
+      alert(message);
       throw error;
     }
   };

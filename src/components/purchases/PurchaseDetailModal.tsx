@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Image from 'next/image';
 import PurchaseStatusBadge from './PurchaseStatusBadge';
 import { 
@@ -8,13 +8,29 @@ import {
   getInvoiceTypeText,
   isPurchaseSubmittable,
   isPurchaseWithdrawable,
+  PurchaseStatus,
+  PaymentMethod,
+  InvoiceType,
+  PurchaseChannel,
+  ReimbursementLog,
+  ReimbursementAction,
 } from '@/types/purchase';
+
+type PurchaseDetailAction = 'submit' | 'withdraw' | 'approve' | 'reject' | 'pay';
+
+type PurchaseSummaryUser = {
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+  employeeCode?: string | null;
+  department?: string | null;
+};
 
 type PurchaseDetailModalProps = {
   purchaseId: string;
   isOpen: boolean;
   onClose: () => void;
-  onAction?: (action: string, data?: any) => void;
+  onAction?: (action: PurchaseDetailAction, data?: unknown) => void;
   currentUserId?: string;
   canApprove?: boolean;
 };
@@ -28,16 +44,16 @@ type PurchaseDetail = {
   quantity: number;
   unitPrice: number;
   totalAmount: number;
-  purchaseChannel: string;
+  purchaseChannel: PurchaseChannel;
   purchaseLocation: string | null;
   purchaseLink: string | null;
   purpose: string;
-  paymentMethod: string;
-  invoiceType: string;
+  paymentMethod: PaymentMethod;
+  invoiceType: InvoiceType;
   invoiceImages: string[];
   receiptImages: string[];
   hasProject: boolean;
-  status: string;
+  status: PurchaseStatus;
   submittedAt: string | null;
   approvedAt: string | null;
   rejectedAt: string | null;
@@ -48,13 +64,7 @@ type PurchaseDetail = {
   createdAt: string;
   updatedAt: string;
   createdBy: string;
-  purchaser: {
-    id: string;
-    displayName: string;
-    avatarUrl: string | null;
-    employeeCode: string | null;
-    department: string | null;
-  } | null;
+  purchaser: PurchaseSummaryUser | null;
   project: {
     id: string;
     projectCode: string;
@@ -72,15 +82,7 @@ type PurchaseDetail = {
     id: string;
     displayName: string;
   } | null;
-  logs: {
-    id: string;
-    action: string;
-    fromStatus: string;
-    toStatus: string;
-    operatorId: string;
-    comment: string | null;
-    createdAt: string;
-  }[];
+  logs: ReimbursementLog[];
 };
 
 function formatDate(value: string | null) {
@@ -100,7 +102,7 @@ function formatAmount(amount: number) {
   return `¥${amount.toFixed(2)}`;
 }
 
-const ACTION_LABELS: Record<string, string> = {
+const ACTION_LABELS: Record<ReimbursementAction, string> = {
   submit: '提交审批',
   approve: '批准',
   reject: '驳回',
@@ -120,13 +122,7 @@ export default function PurchaseDetailModal({
   const [detail, setDetail] = useState<PurchaseDetail | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && purchaseId) {
-      fetchDetail();
-    }
-  }, [isOpen, purchaseId]);
-
-  const fetchDetail = async () => {
+  const fetchDetail = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch(`/api/purchases/${purchaseId}?detailed=true`);
@@ -141,13 +137,19 @@ export default function PurchaseDetailModal({
     } finally {
       setLoading(false);
     }
-  };
+  }, [purchaseId]);
+
+  useEffect(() => {
+    if (isOpen && purchaseId) {
+      void fetchDetail();
+    }
+  }, [isOpen, purchaseId, fetchDetail]);
 
   if (!isOpen) return null;
 
   const isOwner = currentUserId === detail?.createdBy;
-  const canSubmit = isOwner && detail && isPurchaseSubmittable(detail.status as any);
-  const canWithdraw = isOwner && detail && isPurchaseWithdrawable(detail.status as any);
+  const canSubmit = Boolean(isOwner && detail && isPurchaseSubmittable(detail.status));
+  const canWithdraw = Boolean(isOwner && detail && isPurchaseWithdrawable(detail.status));
   const canDoApproval = canApprove && detail?.status === 'pending_approval';
 
   return (
@@ -187,7 +189,7 @@ export default function PurchaseDetailModal({
             <div className="space-y-6">
               {/* Status and Actions */}
               <div className="flex items-center justify-between">
-                <PurchaseStatusBadge status={detail.status as any} />
+                <PurchaseStatusBadge status={detail.status} />
                 <div className="flex gap-2">
                   {canSubmit && onAction && (
                     <button
@@ -285,13 +287,13 @@ export default function PurchaseDetailModal({
                 <div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">付款方式</div>
                   <div className="mt-1 text-gray-900 dark:text-white">
-                    {getPaymentMethodText(detail.paymentMethod as any)}
+                    {getPaymentMethodText(detail.paymentMethod)}
                   </div>
                 </div>
                 <div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">发票类型</div>
                   <div className="mt-1 text-gray-900 dark:text-white">
-                    {getInvoiceTypeText(detail.invoiceType as any)}
+                    {getInvoiceTypeText(detail.invoiceType)}
                   </div>
                 </div>
                 {detail.purchaser && (

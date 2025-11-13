@@ -11,6 +11,7 @@ import {
   getPurchaseLogs,
 } from '@/lib/db/purchases';
 import { checkPermission, Permissions } from '@/lib/permissions';
+import type { UserProfile } from '@/types/user';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -28,10 +29,13 @@ function badRequestResponse(message: string) {
   return NextResponse.json({ success: false, error: message }, { status: 400 });
 }
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const context = await requireCurrentUser();
-    const id = params.id;
+    const { id } = await params;
     const purchase = await findPurchaseById(id);
     if (!purchase) return notFoundResponse();
 
@@ -39,6 +43,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     if (!body || typeof body !== 'object') return badRequestResponse('请求体格式错误');
     const action = body.action as string | undefined;
     if (!action) return badRequestResponse('缺少 action 字段');
+  const userForPermission = context.user as unknown as UserProfile;
 
     switch (action) {
       case 'submit': {
@@ -48,20 +53,20 @@ export async function POST(request: Request, { params }: { params: { id: string 
         return NextResponse.json({ success: true, data: res });
       }
       case 'approve': {
-        const perm = await checkPermission(context.user as any, Permissions.PURCHASE_APPROVE);
+        const perm = await checkPermission(userForPermission, Permissions.PURCHASE_APPROVE);
         if (!perm.allowed) return forbiddenResponse();
         const res = await approvePurchase(id, context.user.id);
         return NextResponse.json({ success: true, data: res });
       }
       case 'reject': {
-        const perm = await checkPermission(context.user as any, Permissions.PURCHASE_REJECT);
+        const perm = await checkPermission(userForPermission, Permissions.PURCHASE_REJECT);
         if (!perm.allowed) return forbiddenResponse();
         const reason = typeof body.reason === 'string' ? body.reason : '';
         const res = await rejectPurchase(id, context.user.id, reason);
         return NextResponse.json({ success: true, data: res });
       }
       case 'pay': {
-        const perm = await checkPermission(context.user as any, Permissions.PURCHASE_PAY);
+        const perm = await checkPermission(userForPermission, Permissions.PURCHASE_PAY);
         if (!perm.allowed) return forbiddenResponse();
         const res = await markAsPaid(id, context.user.id);
         return NextResponse.json({ success: true, data: res });
@@ -73,7 +78,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
         return NextResponse.json({ success: true, data: res });
       }
       case 'logs': {
-        const viewAll = await checkPermission(context.user as any, Permissions.PURCHASE_VIEW_ALL);
+        const viewAll = await checkPermission(userForPermission, Permissions.PURCHASE_VIEW_ALL);
         if (!viewAll.allowed && context.user.id !== purchase.createdBy) return forbiddenResponse();
         const logs = await getPurchaseLogs(id);
         return NextResponse.json({ success: true, data: logs });

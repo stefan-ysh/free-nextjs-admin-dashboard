@@ -3,7 +3,49 @@ import { NextResponse } from 'next/server';
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { listPurchases, createPurchase } from '@/lib/db/purchases';
 import { checkPermission, Permissions } from '@/lib/permissions';
-import { ListPurchasesParams } from '@/types/purchase';
+import type {
+  ListPurchasesParams,
+  PurchaseStatus,
+  PurchaseChannel,
+  PaymentMethod,
+} from '@/types/purchase';
+import type { UserProfile } from '@/types/user';
+
+const PURCHASE_STATUSES: PurchaseStatus[] = ['draft', 'pending_approval', 'approved', 'rejected', 'paid', 'cancelled'];
+const PURCHASE_CHANNELS: PurchaseChannel[] = ['online', 'offline'];
+const PAYMENT_METHODS: PaymentMethod[] = ['wechat', 'alipay', 'bank_transfer', 'corporate_transfer', 'cash'];
+const SORTABLE_FIELDS: NonNullable<ListPurchasesParams['sortBy']>[] = ['createdAt', 'updatedAt', 'purchaseDate', 'totalAmount', 'status'];
+const SORT_ORDERS: NonNullable<ListPurchasesParams['sortOrder']>[] = ['asc', 'desc'];
+
+function parseStatus(value: string | null): ListPurchasesParams['status'] {
+  if (!value) return undefined;
+  if (value === 'all') return 'all';
+  return PURCHASE_STATUSES.includes(value as PurchaseStatus) ? (value as PurchaseStatus) : undefined;
+}
+
+function parsePurchaseChannel(value: string | null): PurchaseChannel | undefined {
+  if (!value) return undefined;
+  return PURCHASE_CHANNELS.includes(value as PurchaseChannel) ? (value as PurchaseChannel) : undefined;
+}
+
+function parsePaymentMethod(value: string | null): PaymentMethod | undefined {
+  if (!value) return undefined;
+  return PAYMENT_METHODS.includes(value as PaymentMethod) ? (value as PaymentMethod) : undefined;
+}
+
+function parseSortBy(value: string | null): ListPurchasesParams['sortBy'] {
+  if (!value) return undefined;
+  return SORTABLE_FIELDS.includes(value as NonNullable<ListPurchasesParams['sortBy']>)
+    ? (value as NonNullable<ListPurchasesParams['sortBy']>)
+    : undefined;
+}
+
+function parseSortOrder(value: string | null): ListPurchasesParams['sortOrder'] {
+  if (!value) return undefined;
+  return SORT_ORDERS.includes(value as NonNullable<ListPurchasesParams['sortOrder']>)
+    ? (value as NonNullable<ListPurchasesParams['sortOrder']>)
+    : undefined;
+}
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -22,15 +64,16 @@ export async function GET(request: Request) {
     const context = await requireCurrentUser();
 
     // allow full listing for users with viewAll permission, otherwise restrict to own purchases
-  const viewAll = await checkPermission(context.user as any, Permissions.PURCHASE_VIEW_ALL);
+    const userForPermission = context.user as unknown as UserProfile;
+    const viewAll = await checkPermission(userForPermission, Permissions.PURCHASE_VIEW_ALL);
 
     const { searchParams } = new URL(request.url);
     const params: ListPurchasesParams = {};
     params.search = searchParams.get('search') ?? undefined;
-    params.status = (searchParams.get('status') as any) ?? undefined;
+  params.status = parseStatus(searchParams.get('status'));
     params.projectId = searchParams.get('projectId') ?? undefined;
-    params.purchaseChannel = (searchParams.get('purchaseChannel') as any) ?? undefined;
-    params.paymentMethod = (searchParams.get('paymentMethod') as any) ?? undefined;
+  params.purchaseChannel = parsePurchaseChannel(searchParams.get('purchaseChannel'));
+  params.paymentMethod = parsePaymentMethod(searchParams.get('paymentMethod'));
     params.startDate = searchParams.get('startDate') ?? undefined;
     params.endDate = searchParams.get('endDate') ?? undefined;
 
@@ -39,10 +82,8 @@ export async function GET(request: Request) {
     params.page = Number.isNaN(page) ? undefined : page;
     params.pageSize = Number.isNaN(pageSize) ? undefined : pageSize;
 
-    const sortBy = searchParams.get('sortBy') ?? undefined;
-    const sortOrder = searchParams.get('sortOrder') ?? undefined;
-    if (sortBy) params.sortBy = sortBy as any;
-    if (sortOrder) params.sortOrder = sortOrder as any;
+  params.sortBy = parseSortBy(searchParams.get('sortBy'));
+  params.sortOrder = parseSortOrder(searchParams.get('sortOrder'));
 
     // purchaserId handling: if caller is not allowed to view all, force to current user
     const purchaserIdParam = searchParams.get('purchaserId') ?? undefined;
@@ -68,7 +109,8 @@ export async function POST(request: Request) {
     const context = await requireCurrentUser();
 
     // check create permission (business-layer will do deeper checks)
-  const perm = await checkPermission(context.user as any, Permissions.PURCHASE_CREATE);
+    const userForPermission = context.user as unknown as UserProfile;
+    const perm = await checkPermission(userForPermission, Permissions.PURCHASE_CREATE);
     if (!perm.allowed) return forbiddenResponse();
 
     const body = await request.json();
