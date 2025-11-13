@@ -19,6 +19,7 @@ export async function ensureHrSchema() {
       phone TEXT,
       department TEXT,
       job_title TEXT,
+      avatar_url TEXT,
       employment_status TEXT NOT NULL DEFAULT 'active',
       hire_date DATE,
       termination_date DATE,
@@ -64,6 +65,8 @@ export async function ensureHrSchema() {
     ALTER TABLE hr_employees
     ALTER COLUMN custom_fields SET DEFAULT '{}'::jsonb
   `;
+
+  await sql`ALTER TABLE hr_employees ADD COLUMN IF NOT EXISTS avatar_url TEXT`;
 
   initialized = true;
 }

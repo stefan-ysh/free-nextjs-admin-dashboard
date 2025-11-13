@@ -48,6 +48,11 @@ const navItems: NavItem[] = [
     path: "/finance",
   },
   {
+    icon: <ListIcon />,
+    name: "采购管理",
+    path: "/purchases",
+  },
+  {
     name: "组织架构",
     icon: <ListIcon />,
     subItems: [{ name: "员工管理", path: "/employees", pro: false }],

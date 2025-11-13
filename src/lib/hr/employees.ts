@@ -12,6 +12,7 @@ export type EmployeeRecord = {
   firstName: string;
   lastName: string;
   displayName: string | null;
+  avatarUrl: string | null;
   email: string | null;
   phone: string | null;
   department: string | null;
@@ -32,6 +33,7 @@ type RawEmployeeRow = {
   first_name: string;
   last_name: string;
   display_name: string | null;
+  avatar_url: string | null;
   email: string | null;
   phone: string | null;
   department: string | null;
@@ -61,6 +63,7 @@ function mapEmployee(row: RawEmployeeRow | undefined): EmployeeRecord | null {
     firstName: row.first_name,
     lastName: row.last_name,
     displayName: row.display_name,
+  avatarUrl: row.avatar_url,
     email: row.email,
     phone: row.phone,
     department: row.department,
@@ -168,6 +171,7 @@ export async function listEmployees(params: ListEmployeesParams = {}): Promise<L
       first_name,
       last_name,
       display_name,
+  avatar_url,
       email,
       phone,
       department,
@@ -204,6 +208,7 @@ export type CreateEmployeeInput = {
   firstName: string;
   lastName: string;
   displayName?: string | null;
+  avatarUrl?: string | null;
   email?: string | null;
   phone?: string | null;
   department?: string | null;
@@ -233,6 +238,7 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
     firstName: requireText(input.firstName, 'first_name'),
     lastName: requireText(input.lastName, 'last_name'),
     displayName: sanitizeNullableText(input.displayName ?? null),
+  avatarUrl: sanitizeNullableText(input.avatarUrl ?? null),
     email: sanitizeNullableText(input.email ?? null),
     phone: sanitizeNullableText(input.phone ?? null),
     department: sanitizeNullableText(input.department ?? null),
@@ -252,6 +258,7 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
       first_name,
       last_name,
       display_name,
+  avatar_url,
       email,
       phone,
       department,
@@ -269,6 +276,7 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
       ${payload.firstName},
       ${payload.lastName},
       ${payload.displayName},
+  ${payload.avatarUrl},
       ${payload.email},
       ${payload.phone},
       ${payload.department},
@@ -313,6 +321,9 @@ export async function updateEmployee(id: string, input: UpdateEmployeeInput): Pr
   }
   if (input.displayName !== undefined) {
     pushField('display_name', sanitizeNullableText(input.displayName ?? null));
+  }
+  if (input.avatarUrl !== undefined) {
+    pushField('avatar_url', sanitizeNullableText(input.avatarUrl ?? null));
   }
   if (input.email !== undefined) {
     pushField('email', sanitizeNullableText(input.email ?? null));

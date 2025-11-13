@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import Image from 'next/image';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
 	EmploymentStatus,
 	Employee,
@@ -20,6 +21,7 @@ type CustomFieldRow = {
 };
 
 const STATUS_OPTIONS: EmploymentStatus[] = ['active', 'on_leave', 'terminated'];
+const MAX_AVATAR_SIZE = 1_572_864; // 1.5MB
 
 const sanitizeText = (value: string) => {
 	const trimmed = value.trim();
@@ -52,6 +54,34 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel }: Employ
 		location: initialData?.location ?? '',
 	});
 	const [customFields, setCustomFields] = useState<CustomFieldRow[]>(() => initializeCustomFields(initialData));
+	const [avatarPreview, setAvatarPreview] = useState<string | null>(initialData?.avatarUrl ?? null);
+	const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
+	const [removeAvatar, setRemoveAvatar] = useState(false);
+	const [avatarError, setAvatarError] = useState<string | null>(null);
+	const fileInputRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		setFormState({
+			employeeCode: initialData?.employeeCode ?? '',
+			firstName: initialData?.firstName ?? '',
+			lastName: initialData?.lastName ?? '',
+			displayName: initialData?.displayName ?? '',
+			email: initialData?.email ?? '',
+			phone: initialData?.phone ?? '',
+			department: initialData?.department ?? '',
+			jobTitle: initialData?.jobTitle ?? '',
+			employmentStatus: initialData?.employmentStatus ?? 'active',
+			hireDate: initialData?.hireDate?.split('T')[0] ?? initialData?.hireDate ?? '',
+			terminationDate: initialData?.terminationDate?.split('T')[0] ?? initialData?.terminationDate ?? '',
+			managerId: initialData?.managerId ?? '',
+			location: initialData?.location ?? '',
+		});
+		setCustomFields(initializeCustomFields(initialData));
+		setAvatarPreview(initialData?.avatarUrl ?? null);
+		setAvatarDataUrl(null);
+		setRemoveAvatar(false);
+		setAvatarError(null);
+	}, [initialData]);
 
 	const hasReadonlyStatus = useMemo(() => initialData?.employmentStatus === 'terminated', [initialData]);
 
@@ -88,6 +118,12 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel }: Employ
 				customFields: Object.keys(customFieldEntries).length ? customFieldEntries : null,
 			};
 
+			if (avatarDataUrl) {
+				payload.avatarDataUrl = avatarDataUrl;
+			} else if (removeAvatar && initialData?.avatarUrl) {
+				payload.removeAvatar = true;
+			}
+
 			await onSubmit(payload);
 		} catch (error) {
 			console.error('提交员工信息失败', error);
@@ -97,8 +133,91 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel }: Employ
 		}
 	};
 
+	const handlePickAvatar = () => {
+		fileInputRef.current?.click();
+	};
+
+	const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+		const file = event.target.files?.[0];
+		event.target.value = '';
+		if (!file) return;
+
+		if (file.size > MAX_AVATAR_SIZE) {
+			setAvatarError('请选择 1.5MB 以下的图片');
+			return;
+		}
+
+		setAvatarError(null);
+		const reader = new FileReader();
+		reader.onload = () => {
+			if (typeof reader.result === 'string') {
+				setAvatarPreview(reader.result);
+				setAvatarDataUrl(reader.result);
+				setRemoveAvatar(false);
+			}
+		};
+		reader.onerror = () => {
+			setAvatarError('读取图片失败，请重试');
+		};
+		reader.readAsDataURL(file);
+	};
+
+	const handleAvatarRemove = () => {
+		setAvatarPreview(null);
+		setAvatarDataUrl(null);
+		setRemoveAvatar(true);
+		setAvatarError(null);
+	};
+
+	const resolvedAvatar = removeAvatar ? null : avatarPreview ?? initialData?.avatarUrl ?? null;
+
 	return (
 		<form onSubmit={handleSubmit} className="space-y-6">
+			<input
+				type="file"
+				accept="image/*"
+				ref={fileInputRef}
+				className="hidden"
+				onChange={handleAvatarChange}
+			/>
+
+			<div className="flex items-center gap-4 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+				<div className="relative h-20 w-20 overflow-hidden rounded-full border border-gray-200 dark:border-gray-700">
+					<Image
+						src={resolvedAvatar ?? '/images/user/owner.jpg'}
+						alt="员工头像预览"
+						width={80}
+						height={80}
+						className="object-cover"
+						unoptimized
+					/>
+				</div>
+				<div className="flex flex-1 flex-col gap-2 text-sm">
+					<div className="font-medium text-gray-800 dark:text-gray-100">头像</div>
+					<p className="text-xs text-gray-500 dark:text-gray-400">支持 PNG/JPG/GIF，建议 400×400 像素以内，最大 1.5MB。</p>
+					<div className="flex flex-wrap gap-2">
+						<button
+							type="button"
+							onClick={handlePickAvatar}
+							disabled={loading}
+							className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
+						>
+							{resolvedAvatar ? '更换头像' : '上传头像'}
+						</button>
+						{resolvedAvatar && (
+							<button
+								type="button"
+								onClick={handleAvatarRemove}
+								disabled={loading}
+								className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+							>
+								移除
+							</button>
+						)}
+					</div>
+					{avatarError && <p className="text-xs text-rose-500">{avatarError}</p>}
+				</div>
+			</div>
 			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 				<div>
 					<label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">

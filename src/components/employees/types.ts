@@ -12,6 +12,7 @@ export type Employee = {
 	firstName: string;
 	lastName: string;
 	displayName: string | null;
+	avatarUrl: string | null;
 	email: string | null;
 	phone: string | null;
 	department: string | null;
@@ -50,6 +51,8 @@ export type EmployeeFormSubmitPayload = {
 	firstName: string;
 	lastName: string;
 	displayName?: string | null;
+	avatarDataUrl?: string | null;
+	removeAvatar?: boolean;
 	email?: string | null;
 	phone?: string | null;
 	department?: string | null;

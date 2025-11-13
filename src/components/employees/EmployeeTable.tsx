@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import EmployeeStatusBadge from './EmployeeStatusBadge';
 import type { Employee } from './types';
 
@@ -22,6 +23,19 @@ function formatDate(value: string | null) {
 function resolveDisplayName(employee: Employee) {
 	if (employee.displayName) return employee.displayName;
 	return `${employee.lastName}${employee.firstName}`.trim() || employee.email || employee.phone || '未知员工';
+}
+
+function getAvatarInitials(employee: Employee) {
+	const source =
+		employee.displayName ||
+		`${employee.lastName}${employee.firstName}`.trim() ||
+		employee.email ||
+		employee.phone ||
+		'员工';
+	const condensed = source.replace(/\s+/g, '');
+	const characters = condensed.slice(0, 2);
+	if (!characters) return '员工';
+	return /^[A-Za-z]+$/.test(characters) ? characters.toUpperCase() : characters;
 }
 
 export default function EmployeeTable({ employees, loading, onEdit, onDelete }: EmployeeTableProps) {
@@ -101,15 +115,33 @@ export default function EmployeeTable({ employees, loading, onEdit, onDelete }: 
 								{employee.employeeCode ?? '—'}
 							</td>
 							<td className="whitespace-nowrap px-4 py-4">
-								<div className="flex flex-col">
-									<span className="font-medium text-gray-900 dark:text-gray-100">
-										{resolveDisplayName(employee)}
-									</span>
-									{employee.displayName && (
-										<span className="text-xs text-gray-500 dark:text-gray-400">
-											{employee.firstName} {employee.lastName}
+								<div className="flex items-center gap-3">
+									<div className="relative h-10 w-10 overflow-hidden rounded-full border border-gray-200 dark:border-gray-700">
+										{employee.avatarUrl ? (
+											<Image
+												src={employee.avatarUrl}
+												alt={`${resolveDisplayName(employee)} 头像`}
+												width={40}
+												height={40}
+												className="h-full w-full object-cover"
+												unoptimized
+											/>
+										) : (
+											<div className="flex h-full w-full items-center justify-center bg-blue-50 text-sm font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-200">
+												{getAvatarInitials(employee)}
+											</div>
+										)}
+									</div>
+									<div className="flex flex-col">
+										<span className="font-medium text-gray-900 dark:text-gray-100">
+											{resolveDisplayName(employee)}
 										</span>
-									)}
+										{employee.displayName && (
+											<span className="text-xs text-gray-500 dark:text-gray-400">
+												{employee.firstName} {employee.lastName}
+											</span>
+										)}
+									</div>
 								</div>
 							</td>
 							<td className="px-4 py-4">
