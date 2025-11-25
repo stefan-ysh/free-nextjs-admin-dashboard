@@ -1,14 +1,15 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import Image from 'next/image';
 import {
   FinanceRecord,
   InvoiceStatus,
   InvoiceType,
   TransactionType,
 } from '@/types/finance';
+import { formatDateTimeLocal } from '@/lib/dates';
 
 interface InvoicePreviewModalProps {
   record: FinanceRecord;
@@ -61,16 +62,15 @@ export default function InvoicePreviewModal({ record, onClose }: InvoicePreviewM
     if (isImage) {
       return (
         <div key={index} className="space-y-2">
-          <div className="relative h-48 w-full overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-            <Image
-              src={file}
-              alt={`发票附件 ${index + 1}`}
-              fill
-              className="object-contain"
-              sizes="(max-width: 768px) 100vw, 50vw"
-              unoptimized
-            />
-          </div>
+          <Image
+            src={file}
+            alt={`发票附件 ${index + 1}`}
+            width={1200}
+            height={800}
+            sizes="(max-width: 768px) 100vw, 50vw"
+            className="w-full rounded-lg border border-gray-200 object-contain dark:border-gray-700"
+            unoptimized
+          />
           <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-300">
             <span>图片附件 {index + 1}</span>
             <a
@@ -145,7 +145,7 @@ export default function InvoicePreviewModal({ record, onClose }: InvoicePreviewM
             <p className="text-sm text-gray-500 dark:text-gray-400">发票预览</p>
             <h2 className="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">{record.name}</h2>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {transactionTypeLabel[record.type]} · {new Date(record.date).toLocaleDateString('zh-CN')}
+              {transactionTypeLabel[record.type]} · {formatDateTimeLocal(record.date) ?? record.date}
             </p>
           </header>
 
@@ -178,7 +178,7 @@ export default function InvoicePreviewModal({ record, onClose }: InvoicePreviewM
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">开票日期</p>
                 <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white">
-                  {new Date(invoice.issueDate).toLocaleDateString('zh-CN')}
+                  {formatDateTimeLocal(invoice.issueDate) ?? invoice.issueDate}
                 </p>
               </div>
             )}

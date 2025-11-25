@@ -1,8 +1,8 @@
 "use client";
 import React from "react";
 import ComponentCard from "../../common/ComponentCard";
-import Button from "../../ui/button/Button";
-import { Modal } from "../../ui/modal";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import Label from "../../form/Label";
 import Input from "../../form/input/InputField";
 import { useModal } from "@/hooks/useModal";
@@ -16,14 +16,11 @@ export default function FormInModal() {
   };
   return (
     <ComponentCard title="Form In Modal">
-      <Button size="sm" onClick={openModal}>
+      <Button size="sm" onClick={openModal} type="button">
         Open Modal
       </Button>
-      <Modal
-        isOpen={isOpen}
-        onClose={closeModal}
-        className="max-w-[584px] p-5 lg:p-10"
-      >
+      <Dialog open={isOpen} onOpenChange={(nextOpen) => (nextOpen ? openModal() : closeModal())}>
+        <DialogContent className="max-w-[584px] border-0 p-5 text-left lg:p-10">
         <form className="">
           <h4 className="mb-6 text-lg font-medium text-gray-800 dark:text-white/90">
             Personal Information
@@ -65,7 +62,8 @@ export default function FormInModal() {
             </Button>
           </div>
         </form>
-      </Modal>
+        </DialogContent>
+      </Dialog>
     </ComponentCard>
   );
 }

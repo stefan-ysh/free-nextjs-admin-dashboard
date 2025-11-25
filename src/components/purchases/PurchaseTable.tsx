@@ -1,267 +1,193 @@
 'use client';
 
-import { useState } from 'react';
 import PurchaseStatusBadge from './PurchaseStatusBadge';
-import PurchaseDetailModal from './PurchaseDetailModal';
-import { PurchaseRecord } from '@/types/purchase';
-import { isPurchaseEditable, isPurchaseDeletable } from '@/types/purchase';
+import type { PurchaseRecord, PaymentMethod } from '@/types/purchase';
 
-type PurchaseTableProps = {
-  purchases: PurchaseRecord[];
-  loading?: boolean;
-  onEdit: (purchase: PurchaseRecord) => void;
-  onDelete: (purchase: PurchaseRecord) => void;
-  onSubmit?: (purchase: PurchaseRecord) => void;
-  onApprove?: (purchase: PurchaseRecord) => void;
-  onReject?: (purchase: PurchaseRecord) => void;
-  onWithdraw?: (purchase: PurchaseRecord) => void;
-  currentUserId?: string;
-  canApprove?: boolean;
+const currencyFormatter = new Intl.NumberFormat('zh-CN', {
+	style: 'currency',
+	currency: 'CNY',
+});
+
+const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
+	year: 'numeric',
+	month: '2-digit',
+	day: '2-digit',
+});
+
+const paymentLabels: Record<PaymentMethod, string> = {
+	wechat: '微信',
+	alipay: '支付宝',
+	bank_transfer: '银行转账',
+	corporate_transfer: '对公转账',
+	cash: '现金',
 };
 
-type DetailAction = 'submit' | 'approve' | 'reject' | 'withdraw' | 'pay';
+type PurchaseRowPermissions = {
+	canEdit: boolean;
+	canDelete: boolean;
+	canSubmit: boolean;
+	canApprove: boolean;
+	canReject: boolean;
+	canPay: boolean;
+	canWithdraw: boolean;
+};
 
-function formatDate(value: string | null) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
-}
+type PurchaseTableProps = {
+	purchases: PurchaseRecord[];
+	loading?: boolean;
+	mutatingId?: string | null;
+	getRowPermissions: (purchase: PurchaseRecord) => PurchaseRowPermissions;
+	onView: (purchase: PurchaseRecord) => void;
+	onEdit: (purchase: PurchaseRecord) => void;
+	onDelete: (purchase: PurchaseRecord) => void;
+	onSubmit: (purchase: PurchaseRecord) => void;
+	onApprove: (purchase: PurchaseRecord) => void;
+	onReject: (purchase: PurchaseRecord) => void;
+	onWithdraw: (purchase: PurchaseRecord) => void;
+	onPay: (purchase: PurchaseRecord) => void;
+};
 
-function formatAmount(amount: number) {
-  return `¥${amount.toFixed(2)}`;
+function formatDate(value: string): string {
+	const date = new Date(value);
+	return Number.isNaN(date.getTime()) ? value : dateFormatter.format(date);
 }
 
 export default function PurchaseTable({
-  purchases,
-  loading,
-  onEdit,
-  onDelete,
-  onSubmit,
-  onApprove,
-  onReject,
-  onWithdraw,
-  currentUserId,
-  canApprove = false,
+	purchases,
+	loading,
+	mutatingId,
+	getRowPermissions,
+	onView,
+	onEdit,
+	onDelete,
+	onSubmit,
+	onApprove,
+	onReject,
+	onWithdraw,
+	onPay,
 }: PurchaseTableProps) {
-  const [selectedPurchaseId, setSelectedPurchaseId] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  const handleViewClick = (purchase: PurchaseRecord) => {
-    setSelectedPurchaseId(purchase.id);
-    setIsModalOpen(true);
-  };
-
-  const handleModalAction = (action: DetailAction) => {
-    // Close modal and trigger parent callbacks
-    setIsModalOpen(false);
-    
-    const purchase = purchases.find(p => p.id === selectedPurchaseId);
-    if (!purchase) return;
-
-    if (action === 'submit' && onSubmit) {
-      onSubmit(purchase);
-    } else if (action === 'approve' && onApprove) {
-      onApprove(purchase);
-    } else if (action === 'reject' && onReject) {
-      onReject(purchase);
-    } else if (action === 'withdraw' && onWithdraw) {
-      onWithdraw(purchase);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex min-h-[500px] items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-400" />
-          <div className="text-sm text-gray-500 dark:text-gray-400">加载中...</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (purchases.length === 0) {
-    return (
-      <div className="flex min-h-[500px] flex-col items-center justify-center gap-3">
-        <svg
-          className="h-16 w-16 text-gray-300 dark:text-gray-600"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-          />
-        </svg>
-        <div className="text-sm font-medium text-gray-600 dark:text-gray-300">暂无采购记录</div>
-        <div className="text-xs text-gray-400 dark:text-gray-500">
-          点击右上方&nbsp;&quot;新增采购&quot;&nbsp;按钮创建采购记录
-        </div>
-      </div>
-    );
-  }
-
-  const isOwner = (purchase: PurchaseRecord) => currentUserId === purchase.createdBy;
-  const canEdit = (purchase: PurchaseRecord) => isOwner(purchase) && isPurchaseEditable(purchase.status);
-  const canDelete = (purchase: PurchaseRecord) => isOwner(purchase) && isPurchaseDeletable(purchase.status);
-  const canSubmit = (purchase: PurchaseRecord) => 
-    isOwner(purchase) && (purchase.status === 'draft' || purchase.status === 'rejected');
-  const canDoApproval = (purchase: PurchaseRecord) => 
-    canApprove && purchase.status === 'pending_approval';
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[1200px] border-collapse">
-        <thead>
-          <tr className="border-b border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-800/50">
-            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-              采购单号
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-              购买日期
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-              物品名称
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-              数量
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-              总金额
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-              渠道
-            </th>
-            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-              状态
-            </th>
-            <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-              操作
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {purchases.map((purchase) => (
-            <tr
-              key={purchase.id}
-              className="border-b border-gray-100 bg-white transition-colors hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800/50"
-            >
-              <td className="px-4 py-4">
-                <div className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                  {purchase.purchaseNumber}
-                </div>
-              </td>
-              <td className="px-4 py-4">
-                <div className="text-sm text-gray-700 dark:text-gray-300">
-                  {formatDate(purchase.purchaseDate)}
-                </div>
-              </td>
-              <td className="px-4 py-4">
-                <div className="max-w-[200px] truncate text-sm font-medium text-gray-900 dark:text-white">
-                  {purchase.itemName}
-                </div>
-                {purchase.specification && (
-                  <div className="max-w-[200px] truncate text-xs text-gray-500 dark:text-gray-400">
-                    {purchase.specification}
-                  </div>
-                )}
-              </td>
-              <td className="px-4 py-4">
-                <div className="text-sm text-gray-700 dark:text-gray-300">
-                  {purchase.quantity}
-                </div>
-              </td>
-              <td className="px-4 py-4">
-                <div className="text-sm font-medium text-gray-900 dark:text-white">
-                  {formatAmount(purchase.totalAmount)}
-                </div>
-              </td>
-              <td className="px-4 py-4">
-                <div className="text-sm text-gray-700 dark:text-gray-300">
-                  {purchase.purchaseChannel === 'online' ? '线上' : '线下'}
-                </div>
-              </td>
-              <td className="px-4 py-4">
-                <PurchaseStatusBadge status={purchase.status} />
-              </td>
-              <td className="px-4 py-4">
-                <div className="flex items-center justify-end gap-2">
-                  <button
-                    onClick={() => handleViewClick(purchase)}
-                    className="rounded-md px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
-                  >
-                    查看
-                  </button>
-                  
-                  {canEdit(purchase) && (
-                    <button
-                      onClick={() => onEdit(purchase)}
-                      className="rounded-md px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
-                    >
-                      编辑
-                    </button>
-                  )}
-                  
-                  {canSubmit(purchase) && onSubmit && (
-                    <button
-                      onClick={() => onSubmit(purchase)}
-                      className="rounded-md px-3 py-1.5 text-xs font-medium text-green-600 transition-colors hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20"
-                    >
-                      提交
-                    </button>
-                  )}
-                  
-                  {canDoApproval(purchase) && onApprove && (
-                    <>
-                      <button
-                        onClick={() => onApprove(purchase)}
-                        className="rounded-md px-3 py-1.5 text-xs font-medium text-green-600 transition-colors hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20"
-                      >
-                        批准
-                      </button>
-                      {onReject && (
-                        <button
-                          onClick={() => onReject(purchase)}
-                          className="rounded-md px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-                        >
-                          驳回
-                        </button>
-                      )}
-                    </>
-                  )}
-                  
-                  {canDelete(purchase) && (
-                    <button
-                      onClick={() => onDelete(purchase)}
-                      className="rounded-md px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-                    >
-                      删除
-                    </button>
-                  )}
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {/* Detail Modal */}
-      {selectedPurchaseId && (
-        <PurchaseDetailModal
-          purchaseId={selectedPurchaseId}
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          onAction={handleModalAction}
-          currentUserId={currentUserId}
-          canApprove={canApprove}
-        />
-      )}
-    </div>
-  );
+	return (
+		<div className="overflow-x-auto">
+			<table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-800">
+				<thead className="bg-gray-50 dark:bg-gray-900/50">
+					<tr>
+						<th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-300">采购单号 / 物品</th>
+						<th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-300">金额</th>
+						<th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-300">状态</th>
+						<th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-300">采购日期</th>
+						<th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-300">付款方式</th>
+						<th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-300">操作</th>
+					</tr>
+				</thead>
+				<tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+					{!loading && purchases.length === 0 && (
+						<tr>
+							<td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+								暂无数据，尝试调整筛选条件。
+							</td>
+						</tr>
+					)}
+					{purchases.map((purchase) => {
+						const permissions = getRowPermissions(purchase);
+						const rowBusy = mutatingId === purchase.id;
+						return (
+							<tr key={purchase.id} className="bg-white transition hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-800">
+								<td className="whitespace-nowrap px-4 py-4">
+									<div className="font-semibold text-gray-900 dark:text-gray-100">{purchase.purchaseNumber}</div>
+									<div className="text-xs text-gray-500 dark:text-gray-400">{purchase.itemName}</div>
+								</td>
+								<td className="px-4 py-4 font-semibold text-gray-900 dark:text-gray-100">
+									{currencyFormatter.format(purchase.totalAmount)}
+								</td>
+								<td className="px-4 py-4">
+									<PurchaseStatusBadge status={purchase.status} />
+								</td>
+								<td className="px-4 py-4 text-gray-700 dark:text-gray-200">
+									{formatDate(purchase.purchaseDate)}
+								</td>
+								<td className="px-4 py-4 text-gray-700 dark:text-gray-200">
+									{paymentLabels[purchase.paymentMethod] ?? purchase.paymentMethod}
+								</td>
+								<td className="px-4 py-4">
+									<div className="flex flex-wrap gap-2 text-xs">
+										<button
+											onClick={() => onView(purchase)}
+											className="rounded-lg border border-gray-300 px-3 py-1 text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200"
+										>
+											详情
+										</button>
+										{permissions.canEdit && (
+											<button
+												onClick={() => onEdit(purchase)}
+												disabled={rowBusy}
+												className="rounded-lg border border-blue-500 px-3 py-1 text-blue-600 hover:bg-blue-50 disabled:opacity-60 dark:border-blue-400 dark:text-blue-200"
+											>
+												编辑
+											</button>
+										)}
+										{permissions.canSubmit && (
+											<button
+												onClick={() => onSubmit(purchase)}
+												disabled={rowBusy}
+												className="rounded-lg border border-emerald-500 px-3 py-1 text-emerald-600 hover:bg-emerald-50 disabled:opacity-60 dark:border-emerald-400 dark:text-emerald-200"
+											>
+												提交
+											</button>
+										)}
+										{permissions.canWithdraw && (
+											<button
+												onClick={() => onWithdraw(purchase)}
+												disabled={rowBusy}
+												className="rounded-lg border border-amber-500 px-3 py-1 text-amber-600 hover:bg-amber-50 disabled:opacity-60 dark:border-amber-400 dark:text-amber-200"
+											>
+												撤回
+											</button>
+										)}
+										{permissions.canApprove && (
+											<button
+												onClick={() => onApprove(purchase)}
+												disabled={rowBusy}
+												className="rounded-lg border border-indigo-500 px-3 py-1 text-indigo-600 hover:bg-indigo-50 disabled:opacity-60 dark:border-indigo-400 dark:text-indigo-200"
+											>
+												审批
+											</button>
+										)}
+										{permissions.canReject && (
+											<button
+												onClick={() => onReject(purchase)}
+												disabled={rowBusy}
+												className="rounded-lg border border-rose-500 px-3 py-1 text-rose-600 hover:bg-rose-50 disabled:opacity-60 dark:border-rose-400 dark:text-rose-200"
+											>
+												驳回
+											</button>
+										)}
+										{permissions.canPay && (
+											<button
+												onClick={() => onPay(purchase)}
+												disabled={rowBusy}
+												className="rounded-lg border border-purple-500 px-3 py-1 text-purple-600 hover:bg-purple-50 disabled:opacity-60 dark:border-purple-400 dark:text-purple-200"
+											>
+												打款
+											</button>
+										)}
+										{permissions.canDelete && (
+											<button
+												onClick={() => onDelete(purchase)}
+												disabled={rowBusy}
+												className="rounded-lg border border-gray-300 px-3 py-1 text-gray-600 hover:bg-gray-100 disabled:opacity-60 dark:border-gray-600 dark:text-gray-300"
+											>
+												删除
+											</button>
+										)}
+									</div>
+								</td>
+							</tr>
+						);
+					})}
+				</tbody>
+			</table>
+		</div>
+	);
 }
+
+export type { PurchaseRowPermissions };

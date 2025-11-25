@@ -7,6 +7,9 @@ export enum UserRole {
   FINANCE = 'finance',
   HR = 'hr',
   DEPARTMENT_MANAGER = 'department_manager',
+  INVENTORY_MANAGER = 'inventory_manager',
+  INVENTORY_OPERATOR = 'inventory_operator',
+  AUDITOR = 'auditor',
   EMPLOYEE = 'employee',
 }
 

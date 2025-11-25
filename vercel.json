@@ -10,14 +10,51 @@
       ]
     },
     {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "stale-while-revalidate=0, max-age=0"
+        }
+      ]
+    },
+    {
+      "source": "/(admin|full-width-pages|auth)(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/_next/static/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/(.*\.(?:js|css|png|jpg|jpeg|gif|svg|webp|ico|woff2?))",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=2592000, s-maxage=2592000"
+        }
+      ]
+    },
+    {
       "source": "(.*)",
       "headers": [
         {
           "key": "Cache-Control",
-          "value": "public, s-maxage=86400, max-age=86400"
-        }, {
-          "key": "Vercel-CDN-Cache-Control",
-          "value": "max-age=31536000"
+          "value": "no-store"
         }
       ]
     }

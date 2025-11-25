@@ -1,8 +1,11 @@
 import { requireCurrentUser } from '@/lib/auth/current-user';
+import { toPermissionUser } from '@/lib/auth/permission-user';
 import { deletePurchase, findPurchaseById, getPurchaseDetail, updatePurchase } from '@/lib/db/purchases';
 import { canDeletePurchase, canEditPurchase, checkPermission, Permissions } from '@/lib/permissions';
+import { mapPurchaseValidationError } from '@/lib/purchases/error-messages';
 import { NextResponse } from 'next/server';
-import type { UserProfile } from '@/types/user';
+
+import type { UpdatePurchaseInput } from '@/types/purchase';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -20,42 +23,20 @@ function badRequestResponse(message: string) {
   return NextResponse.json({ success: false, error: message }, { status: 400 });
 }
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const context = await requireCurrentUser();
     const { id } = await params;
-    
-    // Check if requesting detailed view
-    const url = new URL(request.url);
-    const detailed = url.searchParams.get('detailed') === 'true';
-    
-    if (detailed) {
-      const purchaseDetail = await getPurchaseDetail(id);
-      if (!purchaseDetail) return notFoundResponse();
+    const context = await requireCurrentUser();
+    const permissionUser = await toPermissionUser(context.user);
+    const purchaseDetail = await getPurchaseDetail(id);
+    if (!purchaseDetail) return notFoundResponse();
 
-  const userForPermission = context.user as unknown as UserProfile;
-  const viewAll = await checkPermission(userForPermission, Permissions.PURCHASE_VIEW_ALL);
-      if (!viewAll.allowed && context.user.id !== purchaseDetail.createdBy) {
-        return forbiddenResponse();
-      }
-
-      return NextResponse.json({ success: true, data: purchaseDetail });
-    }
-    
-    // Standard view (without joins)
-    const purchase = await findPurchaseById(id);
-    if (!purchase) return notFoundResponse();
-
-  const userForPermission = context.user as unknown as UserProfile;
-  const viewAll = await checkPermission(userForPermission, Permissions.PURCHASE_VIEW_ALL);
-    if (!viewAll.allowed && context.user.id !== purchase.createdBy) {
+    const viewAll = await checkPermission(permissionUser, Permissions.PURCHASE_VIEW_ALL);
+    if (!viewAll.allowed && context.user.id !== purchaseDetail.createdBy) {
       return forbiddenResponse();
     }
 
-    return NextResponse.json({ success: true, data: purchase });
+    return NextResponse.json({ success: true, data: purchaseDetail });
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHENTICATED') return unauthorizedResponse();
     console.error('获取采购详情失败', error);
@@ -63,50 +44,48 @@ export async function GET(
   }
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const context = await requireCurrentUser();
     const { id } = await params;
+    const context = await requireCurrentUser();
+    const permissionUser = await toPermissionUser(context.user);
     const purchase = await findPurchaseById(id);
     if (!purchase) return notFoundResponse();
 
     // check editable
-  const userForPermission = context.user as unknown as UserProfile;
-  if (!canEditPurchase(userForPermission, { createdBy: purchase.createdBy, status: purchase.status })) {
+    if (!canEditPurchase(permissionUser, { createdBy: purchase.createdBy, status: purchase.status })) {
       return forbiddenResponse();
     }
 
-    const body = await request.json();
-    if (!body || typeof body !== 'object') return badRequestResponse('请求体格式错误');
+    const rawBody: unknown = await request.json();
+    if (!rawBody || typeof rawBody !== 'object') return badRequestResponse('请求体格式错误');
+    const body = rawBody as UpdatePurchaseInput;
 
     const updated = await updatePurchase(id, body);
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     if (error instanceof Error) {
       if (error.message === 'UNAUTHENTICATED') return unauthorizedResponse();
-      if (error.message === 'NOT_EDITABLE' || error.message.startsWith('INVALID_')) return badRequestResponse(error.message);
+      const friendly = mapPurchaseValidationError(error);
+      if (friendly) return badRequestResponse(friendly);
       if (error.message === 'PURCHASE_NOT_FOUND') return notFoundResponse();
     }
+    const fallbackFriendly = mapPurchaseValidationError(error);
+    if (fallbackFriendly) return badRequestResponse(fallbackFriendly);
     console.error('更新采购失败', error);
     return NextResponse.json({ success: false, error: '服务器错误' }, { status: 500 });
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const context = await requireCurrentUser();
     const { id } = await params;
+    const context = await requireCurrentUser();
+    const permissionUser = await toPermissionUser(context.user);
     const purchase = await findPurchaseById(id);
     if (!purchase) return notFoundResponse();
 
-  const userForPermission = context.user as unknown as UserProfile;
-  if (!canDeletePurchase(userForPermission, { createdBy: purchase.createdBy, status: purchase.status })) {
+    if (!canDeletePurchase(permissionUser, { createdBy: purchase.createdBy, status: purchase.status })) {
       // admins might delete non-paid but permission check already in canDeletePurchase
       return forbiddenResponse();
     }
@@ -116,9 +95,12 @@ export async function DELETE(
   } catch (error) {
     if (error instanceof Error) {
       if (error.message === 'UNAUTHENTICATED') return unauthorizedResponse();
-      if (error.message === 'NOT_DELETABLE') return badRequestResponse(error.message);
+      const friendly = mapPurchaseValidationError(error);
+      if (friendly) return badRequestResponse(friendly);
       if (error.message === 'PURCHASE_NOT_FOUND') return notFoundResponse();
     }
+    const fallbackFriendly = mapPurchaseValidationError(error);
+    if (fallbackFriendly) return badRequestResponse(fallbackFriendly);
     console.error('删除采购失败', error);
     return NextResponse.json({ success: false, error: '服务器错误' }, { status: 500 });
   }

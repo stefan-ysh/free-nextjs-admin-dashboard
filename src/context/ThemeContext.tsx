@@ -21,21 +21,23 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     // This code will only run on the client side
     const savedTheme = localStorage.getItem("theme") as Theme | null;
-    const initialTheme = savedTheme || "light"; // Default to light theme
+    const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const initialTheme = savedTheme || (systemPrefersDark ? "dark" : "light");
 
     setTheme(initialTheme);
     setIsInitialized(true);
   }, []);
 
   useEffect(() => {
-    if (isInitialized) {
-      localStorage.setItem("theme", theme);
-      if (theme === "dark") {
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.remove("dark");
-      }
-    }
+    if (!isInitialized) return;
+    const root = document.documentElement;
+    const body = document.body;
+    const isDark = theme === "dark";
+    localStorage.setItem("theme", theme);
+    root.classList.toggle("dark", isDark);
+    body.classList.toggle("dark", isDark);
+    root.dataset.theme = theme;
+    body.dataset.theme = theme;
   }, [theme, isInitialized]);
 
   const toggleTheme = () => {

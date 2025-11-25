@@ -2,7 +2,7 @@
 import React from "react";
 import ComponentCard from "../../common/ComponentCard";
 
-import { Modal } from "../../ui/modal";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useModal } from "@/hooks/useModal";
 
 export default function ModalBasedAlerts() {
@@ -39,11 +39,11 @@ export default function ModalBasedAlerts() {
         </button>
       </div>
       {/* Success Modal */}
-      <Modal
-        isOpen={successModal.isOpen}
-        onClose={successModal.closeModal}
-        className="max-w-[600px] p-5 lg:p-10"
+      <Dialog
+        open={successModal.isOpen}
+        onOpenChange={(nextOpen) => (nextOpen ? successModal.openModal() : successModal.closeModal())}
       >
+        <DialogContent className="max-w-[600px] border-0 p-5 text-left lg:p-10">
         <div className="text-center">
           <div className="relative flex items-center justify-center z-1 mb-7">
             <svg
@@ -96,13 +96,14 @@ export default function ModalBasedAlerts() {
             </button>
           </div>
         </div>
-      </Modal>
+        </DialogContent>
+      </Dialog>
       {/* Info Modal */}
-      <Modal
-        isOpen={infoModal.isOpen}
-        onClose={infoModal.closeModal}
-        className="max-w-[600px] p-5 lg:p-10"
+      <Dialog
+        open={infoModal.isOpen}
+        onOpenChange={(nextOpen) => (nextOpen ? infoModal.openModal() : infoModal.closeModal())}
       >
+        <DialogContent className="max-w-[600px] border-0 p-5 text-left lg:p-10">
         <div className="text-center">
           <div className="relative flex items-center justify-center z-1 mb-7">
             <svg
@@ -156,13 +157,14 @@ export default function ModalBasedAlerts() {
             </button>
           </div>
         </div>
-      </Modal>
+        </DialogContent>
+      </Dialog>
       {/* Warning Modal */}
-      <Modal
-        isOpen={warningModal.isOpen}
-        onClose={warningModal.closeModal}
-        className="max-w-[600px] p-5 lg:p-10"
+      <Dialog
+        open={warningModal.isOpen}
+        onOpenChange={(nextOpen) => (nextOpen ? warningModal.openModal() : warningModal.closeModal())}
       >
+        <DialogContent className="max-w-[600px] border-0 p-5 text-left lg:p-10">
         <div className="text-center">
           <div className="relative flex items-center justify-center z-1 mb-7">
             <svg
@@ -216,13 +218,14 @@ export default function ModalBasedAlerts() {
             </button>
           </div>
         </div>
-      </Modal>
+        </DialogContent>
+      </Dialog>
       {/* Error Modal */}
-      <Modal
-        isOpen={errorModal.isOpen}
-        onClose={errorModal.closeModal}
-        className="max-w-[600px] p-5 lg:p-10"
+      <Dialog
+        open={errorModal.isOpen}
+        onOpenChange={(nextOpen) => (nextOpen ? errorModal.openModal() : errorModal.closeModal())}
       >
+        <DialogContent className="max-w-[600px] border-0 p-5 text-left lg:p-10">
         <div className="text-center">
           <div className="relative flex items-center justify-center z-1 mb-7">
             <svg
@@ -276,7 +279,8 @@ export default function ModalBasedAlerts() {
             </button>
           </div>
         </div>
-      </Modal>
+        </DialogContent>
+      </Dialog>
     </ComponentCard>
   );
 }

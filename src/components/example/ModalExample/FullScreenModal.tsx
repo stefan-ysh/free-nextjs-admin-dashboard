@@ -2,8 +2,8 @@
 import { useModal } from "@/hooks/useModal";
 import ComponentCard from "../../common/ComponentCard";
 
-import Button from "../../ui/button/Button";
-import { Modal } from "../../ui/modal";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 export default function FullScreenModal() {
   const {
@@ -18,16 +18,11 @@ export default function FullScreenModal() {
   };
   return (
     <ComponentCard title="Full Screen Modal">
-      <Button size="sm" onClick={openFullscreenModal}>
+      <Button size="sm" onClick={openFullscreenModal} type="button">
         Open Modal
       </Button>
-      <Modal
-        isOpen={isFullscreenModalOpen}
-        onClose={closeFullscreenModal}
-        isFullscreen={true}
-        showCloseButton={true}
-      >
-        <div className="fixed top-0 left-0 flex flex-col justify-between w-full h-screen p-6 overflow-x-hidden overflow-y-auto bg-white dark:bg-gray-900 lg:p-10">
+      <Dialog open={isFullscreenModalOpen} onOpenChange={(nextOpen) => (nextOpen ? openFullscreenModal() : closeFullscreenModal())}>
+        <DialogContent className="left-0 top-0 flex h-screen w-screen translate-x-0 translate-y-0 flex-col justify-between overflow-y-auto rounded-none border-0 bg-white p-6 text-left shadow-none dark:bg-gray-900 lg:p-10">
           <div>
             <h4 className="font-semibold text-gray-800 mb-7 text-title-sm dark:text-white/90">
               Modal Heading
@@ -59,8 +54,8 @@ export default function FullScreenModal() {
               Save Changes
             </Button>
           </div>
-        </div>
-      </Modal>
+        </DialogContent>
+      </Dialog>
     </ComponentCard>
   );
 }

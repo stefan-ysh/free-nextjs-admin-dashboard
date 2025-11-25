@@ -10,8 +10,8 @@
 - **语言**: TypeScript
 - **样式**: Tailwind CSS
 - **图表**: ApexCharts
-- **数据存储**: Vercel KV (Redis)
-- **部署**: Vercel / Cloudflare Pages
+- **数据存储**: 本地 MySQL + 文件系统
+- **部署**: 本地或自托管
 
 ## 项目结构
 
@@ -73,23 +73,29 @@ interface FinanceRecord {
 
 ### 2. 数据存储设计
 
-使用 Redis (Vercel KV) 存储,Key 设计:
+使用 MySQL 存储结构化数据,文件系统存放附件:
 
 ```
-finance:records:{id}              # 单条记录 (String/JSON)
-finance:records:list              # 记录ID列表 (Sorted Set, 按时间排序)
-finance:categories:{type}         # 分类列表 (JSON Array)
-finance:stats:monthly:{YYYY-MM}   # 月度统计缓存 (Hash)
-finance:counter                   # ID 计数器 (String)
+Table finance_records
+  - id (varchar) 主键
+  - name/type/category/date_value/contract_amount/fee/total_amount
+  - payment_type/invoice_json/description/tags_json
+  - created_by/created_at/updated_at
+
+Table finance_categories
+  - id/type/name/is_default/created_at
+
+Local storage folders
+  - avatars/
+  - finance/attachments/
 ```
 
-#### 为什么选择 Redis?
+#### 为什么改用 MySQL + 本地存储?
 
-- ✅ **高性能**: 内存数据库,毫秒级响应
-- ✅ **数据结构丰富**: Sorted Set 适合时间排序
-- ✅ **免费额度充足**: Vercel KV 免费 256MB
-- ✅ **部署简单**: 无需单独服务器
-- ✅ **自动备份**: Vercel 提供持久化
+- ✅ **数据完全自托管**: 不依赖云服务,隐私可控
+- ✅ **查询能力强**: SQL 方便做条件检索/统计
+- ✅ **部署简单**: MySQL + 文件夹即可
+- ✅ **附件可离线访问**: 文件直接存在本地磁盘
 
 ### 3. 页面功能
 
@@ -104,7 +110,10 @@ finance:counter                   # ID 计数器 (String)
 - 金额输入 (支持小数)
 - 分类选择 (下拉菜单)
 - 日期选择 (日期选择器)
+- 数量字段 (支持小数，用于记账模板中的“数量”列)
 - 备注描述 (多行文本)
+- 支付方式 (支持公对公、公对私等，也可手动输入)
+- 代付人 / 流水号字段，便于追踪“个人记账管理.xlsx”中记录的付款人和流水信息
 
 #### 记录列表
 - 表格展示所有记录
@@ -112,6 +121,13 @@ finance:counter                   # ID 计数器 (String)
 - 分页加载 (每页 20 条)
 - 类型标签 (绿色收入/红色支出)
 - 金额高亮显示
+- 快速筛选：收支类型、分类、金额区间与关键词搜索
+- 新增显示数量、支付方式、代付人/流水号列，与 Excel 模板保持一致
+
+#### 查询筛选
+- URL 查询参数支持 `type`、`category`、`minAmount`、`maxAmount`、`keyword`
+- 所有接口(`/finance` 页面以及 `/api/finance/records`、`/api/finance/stats`)都会尊重筛选条件
+- 筛选与日期范围联动，确保统计卡片和列表数据保持一致
 
 ## 开发指南
 
@@ -134,12 +150,11 @@ cp .env.example .env.local
 ```
 
 编辑 `.env.local`:
-```bash
-# 从 Vercel Dashboard 复制 KV 配置
-KV_URL="redis://..."
-KV_REST_API_URL="https://..."
-KV_REST_API_TOKEN="..."
-KV_REST_API_READ_ONLY_TOKEN="..."
+```ini
+MYSQL_URL="mysql://user:password@127.0.0.1:3306/tailadmin_local"
+# 或分别指定 MYSQL_HOST / MYSQL_PORT / MYSQL_USER / MYSQL_PASSWORD / MYSQL_DATABASE
+
+LOCAL_STORAGE_ROOT="/Users/you/Documents/free-nextjs-admin-storage" # 可选
 ```
 
 4. **启动开发服务器**
@@ -148,6 +163,22 @@ npm run dev
 ```
 
 访问: http://localhost:3000/finance
+
+### 批量导入 Excel 记录
+
+现在可以直接导入 `个人记账管理 (3).xlsx` 内的账单:
+
+```bash
+# 确保 Excel 文件放在仓库根目录，或通过参数传入路径
+npm run import:finance [可选:Excel文件路径]
+```
+
+脚本会自动:
+
+- 解析 `个人账单记录` 工作表，并识别“明细、日期、分类、手续费、数量、支付方式、代付人、发票信息”等列
+- 根据 `收支类型`、`款项类型` 自动映射为系统枚举
+- 避免重复导入（同名 + 同日 + 同合同金额的记录会被跳过）
+- 将数据标记为 `sourceType = import`, 方便后续追踪
 
 ### 添加新功能
 
@@ -195,7 +226,7 @@ npm run test
 # 创建记录
 curl -X POST http://localhost:3000/api/finance/records \
   -H "Content-Type: application/json" \
-  -d '{"type":"expense","amount":100,"category":"餐饮","date":"2025-11-09T00:00:00Z"}'
+  -d '{"name":"采购办公桌","type":"expense","contractAmount":1000,"fee":50,"category":"办公用品","date":"2025-11-09T00:00:00Z","paymentType":"full"}'
 
 # 获取记录
 curl http://localhost:3000/api/finance/records
@@ -245,18 +276,10 @@ curl http://localhost:3000/api/finance/stats
 ## 性能优化
 
 ### 1. 数据层优化
-```typescript
-// 使用缓存
-const CACHE_TTL = 60; // 60秒
-
-export async function getStats(month: string) {
-  const cached = await kv.get(`finance:stats:${month}`);
-  if (cached) return cached;
-  
-  const stats = await calculateStats(month);
-  await kv.set(`finance:stats:${month}`, stats, { ex: CACHE_TTL });
-  return stats;
-}
+```sql
+-- 使用索引优化常用查询
+CREATE INDEX IF NOT EXISTS idx_finance_date ON finance_records(date_value);
+CREATE INDEX IF NOT EXISTS idx_finance_type ON finance_records(type);
 ```
 
 ### 2. 前端优化
@@ -267,17 +290,17 @@ export async function getStats(month: string) {
 
 ### 3. API 优化
 - 分页查询减少数据传输
-- 使用 Redis Pipeline 批量操作
+- 尽量复用服务端缓存数据结构
 - 添加请求缓存头
 - 压缩响应数据
 
 ## 常见问题
 
 ### Q: 数据会丢失吗?
-A: Vercel KV 有持久化保证,但建议定期备份重要数据。
+A: 所有数据在 MySQL 和本地磁盘,建议定期使用 `mysqldump` + 文件夹备份。
 
 ### Q: 免费额度够用吗?
-A: 对于中小企业(日均 200 条记录),完全够用。
+A: 本地部署没有额度限制,取决于你的机器资源。
 
 ### Q: 可以自定义分类吗?
 A: 可以通过 API 添加自定义分类。
@@ -298,10 +321,10 @@ A: 可通过 API 获取所有数据并导出为 JSON。
 ## 参考资源
 
 - [Next.js 文档](https://nextjs.org/docs)
-- [Vercel KV 文档](https://vercel.com/docs/storage/vercel-kv)
+- [MySQL 文档](https://dev.mysql.com/doc/)
 - [Tailwind CSS 文档](https://tailwindcss.com/docs)
 - [ApexCharts 文档](https://apexcharts.com/docs)
 
 ---
 
-更新时间: 2025-11-09
+更新时间: 2025-11-16

@@ -2,8 +2,8 @@
 import React from "react";
 import ComponentCard from "../../common/ComponentCard";
 
-import { Modal } from "../../ui/modal";
-import Button from "../../ui/button/Button";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useModal } from "@/hooks/useModal";
 
 export default function DefaultModal() {
@@ -16,14 +16,11 @@ export default function DefaultModal() {
   return (
     <div>
       <ComponentCard title="Default Modal">
-        <Button size="sm" onClick={openModal}>
+        <Button size="sm" onClick={openModal} type="button">
           Open Modal
         </Button>
-        <Modal
-          isOpen={isOpen}
-          onClose={closeModal}
-          className="max-w-[600px] p-5 lg:p-10"
-        >
+        <Dialog open={isOpen} onOpenChange={(nextOpen) => (nextOpen ? openModal() : closeModal())}>
+          <DialogContent className="max-w-[600px] border-0 p-5 text-left lg:p-10">
           <h4 className="font-semibold text-gray-800 mb-7 text-title-sm dark:text-white/90">
             Modal Heading
           </h4>
@@ -46,7 +43,8 @@ export default function DefaultModal() {
               Save Changes
             </Button>
           </div>
-        </Modal>
+          </DialogContent>
+        </Dialog>
       </ComponentCard>
     </div>
   );

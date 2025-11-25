@@ -1,7 +1,12 @@
 import { randomUUID } from 'crypto';
-import { pool, sql } from '@/lib/postgres';
+import type { ResultSetHeader, RowDataPacket } from 'mysql2';
+
+import { mysqlPool, mysqlQuery } from '@/lib/mysql';
 import { ensureUsersSchema } from '@/lib/schema/users';
+import { ensureAuthSchema } from '@/lib/auth/schema';
 import { hashPassword } from '@/lib/auth/password';
+import { findUserById as findAuthUserById } from '@/lib/auth/user';
+import { mapAuthRole } from '@/lib/auth/roles';
 import {
   UserRecord,
   UserProfile,
@@ -15,14 +20,16 @@ import {
   SocialLinks,
 } from '@/types/user';
 
+const pool = mysqlPool();
+
 /**
  * 数据库行类型（snake_case）
  */
-type RawUserRow = {
+type RawUserRow = RowDataPacket & {
   id: string;
   email: string;
   password_hash: string;
-  roles: string[];
+  roles: string | null;
   primary_role: string;
   first_name: string | null;
   last_name: string | null;
@@ -44,8 +51,8 @@ type RawUserRow = {
   tax_id: string | null;
   social_links: unknown;
   custom_fields: unknown;
-  is_active: boolean;
-  email_verified: boolean;
+  is_active: number;
+  email_verified: number;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -56,14 +63,46 @@ type RawUserRow = {
 /**
  * 映射数据库行到用户记录
  */
+function parseJsonArray<T = string>(value: unknown): T[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value as T[];
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? (parsed as T[]) : [];
+    } catch (error) {
+      console.warn('Failed to parse JSON array column', error);
+    }
+  }
+  return [];
+}
+
+function parseJsonObject(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch (error) {
+      console.warn('Failed to parse JSON object column', error);
+    }
+  }
+  return {};
+}
+
 function mapUser(row: RawUserRow | undefined): UserRecord | null {
   if (!row) return null;
+  const roles = parseJsonArray<UserRole>(row.roles);
   
   return {
     id: row.id,
     email: row.email,
     passwordHash: row.password_hash,
-    roles: row.roles as UserRole[],
+    roles: roles.length ? roles : [UserRole.EMPLOYEE],
     primaryRole: row.primary_role as UserRole,
     firstName: row.first_name,
     lastName: row.last_name,
@@ -83,10 +122,10 @@ function mapUser(row: RawUserRow | undefined): UserRecord | null {
     country: row.country,
     postalCode: row.postal_code,
     taxId: row.tax_id,
-    socialLinks: normalizeSocialLinks(row.social_links),
-    customFields: normalizeCustomFields(row.custom_fields),
-    isActive: row.is_active,
-    emailVerified: row.email_verified,
+    socialLinks: normalizeSocialLinks(parseJsonObject(row.social_links)),
+    customFields: normalizeCustomFields(parseJsonObject(row.custom_fields)),
+    isActive: row.is_active === 1,
+    emailVerified: row.email_verified === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     createdBy: row.created_by,
@@ -146,10 +185,11 @@ function sanitizeNullableText(value: string | null | undefined): string | null {
  */
 export async function findUserByEmail(email: string): Promise<UserRecord | null> {
   await ensureUsersSchema();
-  const result = await sql<RawUserRow>`
-    SELECT * FROM users WHERE email = ${email.toLowerCase()} LIMIT 1
-  `;
-  return mapUser(result.rows[0]);
+  const [rows] = await pool.query<RawUserRow[]>(
+    'SELECT * FROM users WHERE email = ? LIMIT 1',
+    [email.toLowerCase()]
+  );
+  return mapUser(rows[0]);
 }
 
 /**
@@ -157,10 +197,11 @@ export async function findUserByEmail(email: string): Promise<UserRecord | null>
  */
 export async function findUserById(id: string): Promise<UserRecord | null> {
   await ensureUsersSchema();
-  const result = await sql<RawUserRow>`
-    SELECT * FROM users WHERE id = ${id} LIMIT 1
-  `;
-  return mapUser(result.rows[0]);
+  const [rows] = await pool.query<RawUserRow[]>(
+    'SELECT * FROM users WHERE id = ? LIMIT 1',
+    [id]
+  );
+  return mapUser(rows[0]);
 }
 
 /**
@@ -168,10 +209,11 @@ export async function findUserById(id: string): Promise<UserRecord | null> {
  */
 export async function findUserByEmployeeCode(employeeCode: string): Promise<UserRecord | null> {
   await ensureUsersSchema();
-  const result = await sql<RawUserRow>`
-    SELECT * FROM users WHERE employee_code = ${employeeCode} LIMIT 1
-  `;
-  return mapUser(result.rows[0]);
+  const [rows] = await pool.query<RawUserRow[]>(
+    'SELECT * FROM users WHERE employee_code = ? LIMIT 1',
+    [employeeCode]
+  );
+  return mapUser(rows[0]);
 }
 
 /**
@@ -205,14 +247,14 @@ export async function createUser(
                       `${input.firstName || ''} ${input.lastName || ''}`.trim() ||
                       email.split('@')[0];
   
-  const result = await sql<RawUserRow>`
+  await mysqlQuery`
     INSERT INTO users (
       id, email, password_hash, roles, primary_role,
       first_name, last_name, display_name,
       employee_code, department, job_title, employment_status, hire_date, manager_id,
       created_by
     ) VALUES (
-      ${id}, ${email}, ${passwordHash}, ${roles}, ${primaryRole},
+      ${id}, ${email}, ${passwordHash}, ${JSON.stringify(roles)}, ${primaryRole},
       ${sanitizeNullableText(input.firstName)},
       ${sanitizeNullableText(input.lastName)},
       ${displayName},
@@ -224,10 +266,9 @@ export async function createUser(
       ${input.managerId ?? null},
       ${createdBy ?? null}
     )
-    RETURNING *
   `;
   
-  return mapUser(result.rows[0])!;
+  return (await findUserById(id))!;
 }
 
 /**
@@ -239,29 +280,41 @@ export async function updateUserProfile(
 ): Promise<UserRecord> {
   await ensureUsersSchema();
   
-  const result = await sql<RawUserRow>`
-    UPDATE users
-    SET
-      first_name = ${sanitizeNullableText(input.firstName ?? undefined)},
-      last_name = ${sanitizeNullableText(input.lastName ?? undefined)},
-      display_name = ${input.displayName ?? undefined},
-      phone = ${sanitizeNullableText(input.phone ?? undefined)},
-      bio = ${sanitizeNullableText(input.bio ?? undefined)},
-      city = ${sanitizeNullableText(input.city ?? undefined)},
-      country = ${sanitizeNullableText(input.country ?? undefined)},
-      postal_code = ${sanitizeNullableText(input.postalCode ?? undefined)},
-      tax_id = ${sanitizeNullableText(input.taxId ?? undefined)},
-      social_links = ${input.socialLinks ? JSON.stringify(input.socialLinks) : undefined},
-      updated_at = NOW()
-    WHERE id = ${userId}
-    RETURNING *
-  `;
+  const [result] = await pool.query<ResultSetHeader>(
+    `UPDATE users
+      SET
+        first_name = ?,
+        last_name = ?,
+        display_name = ?,
+        phone = ?,
+        bio = ?,
+        city = ?,
+        country = ?,
+        postal_code = ?,
+        tax_id = ?,
+        social_links = ?,
+        updated_at = NOW()
+      WHERE id = ?`,
+    [
+      sanitizeNullableText(input.firstName ?? undefined),
+      sanitizeNullableText(input.lastName ?? undefined),
+      input.displayName ?? null,
+      sanitizeNullableText(input.phone ?? undefined),
+      sanitizeNullableText(input.bio ?? undefined),
+      sanitizeNullableText(input.city ?? undefined),
+      sanitizeNullableText(input.country ?? undefined),
+      sanitizeNullableText(input.postalCode ?? undefined),
+      sanitizeNullableText(input.taxId ?? undefined),
+      input.socialLinks ? JSON.stringify(input.socialLinks) : JSON.stringify({}),
+      userId,
+    ]
+  );
   
-  if (result.rows.length === 0) {
+  if (result.affectedRows === 0) {
     throw new Error('USER_NOT_FOUND');
   }
   
-  return mapUser(result.rows[0])!;
+  return (await findUserById(userId))!;
 }
 
 /**
@@ -281,27 +334,37 @@ export async function updateEmployeeInfo(
     }
   }
   
-  const result = await sql<RawUserRow>`
-    UPDATE users
-    SET
-      employee_code = ${input.employeeCode ?? undefined},
-      department = ${sanitizeNullableText(input.department ?? undefined)},
-      job_title = ${sanitizeNullableText(input.jobTitle ?? undefined)},
-      employment_status = ${input.employmentStatus ?? undefined},
-      hire_date = ${input.hireDate ?? undefined},
-      termination_date = ${input.terminationDate ?? undefined},
-      manager_id = ${input.managerId ?? undefined},
-      location = ${sanitizeNullableText(input.location ?? undefined)},
-      updated_at = NOW()
-    WHERE id = ${userId}
-    RETURNING *
-  `;
+  const [result] = await pool.query<ResultSetHeader>(
+    `UPDATE users
+      SET
+        employee_code = ?,
+        department = ?,
+        job_title = ?,
+        employment_status = ?,
+        hire_date = ?,
+        termination_date = ?,
+        manager_id = ?,
+        location = ?,
+        updated_at = NOW()
+      WHERE id = ?`,
+    [
+      input.employeeCode ?? null,
+      sanitizeNullableText(input.department ?? undefined),
+      sanitizeNullableText(input.jobTitle ?? undefined),
+      input.employmentStatus ?? null,
+      input.hireDate ?? null,
+      input.terminationDate ?? null,
+      input.managerId ?? null,
+      sanitizeNullableText(input.location ?? undefined),
+      userId,
+    ]
+  );
   
-  if (result.rows.length === 0) {
+  if (result.affectedRows === 0) {
     throw new Error('USER_NOT_FOUND');
   }
   
-  return mapUser(result.rows[0])!;
+  return (await findUserById(userId))!;
 }
 
 /**
@@ -313,6 +376,7 @@ export async function updateUserRoles(
   primaryRole?: UserRole
 ): Promise<UserRecord> {
   await ensureUsersSchema();
+  await ensureAuthSchema();
   
   if (roles.length === 0) {
     throw new Error('ROLES_REQUIRED');
@@ -323,21 +387,27 @@ export async function updateUserRoles(
     throw new Error('PRIMARY_ROLE_NOT_IN_ROLES');
   }
   
-  const result = await sql<RawUserRow>`
-    UPDATE users
-    SET
-      roles = ${roles},
-      primary_role = ${newPrimaryRole},
-      updated_at = NOW()
-    WHERE id = ${userId}
-    RETURNING *
-  `;
+  const [result] = await pool.query<ResultSetHeader>(
+    `UPDATE users
+      SET
+        roles = ?,
+        primary_role = ?,
+        updated_at = NOW()
+      WHERE id = ?`,
+    [JSON.stringify(roles), newPrimaryRole, userId]
+  );
   
-  if (result.rows.length === 0) {
+  if (result.affectedRows === 0) {
     throw new Error('USER_NOT_FOUND');
   }
+
+  await mysqlQuery`
+    UPDATE auth_users
+    SET role = ${newPrimaryRole}, updated_at = NOW()
+    WHERE id = ${userId}
+  `;
   
-  return mapUser(result.rows[0])!;
+  return (await findUserById(userId))!;
 }
 
 /**
@@ -347,7 +417,7 @@ export async function updateUserPassword(userId: string, password: string): Prom
   await ensureUsersSchema();
   const passwordHash = await hashPassword(password);
   
-  await sql`
+  await mysqlQuery`
     UPDATE users
     SET 
       password_hash = ${passwordHash},
@@ -367,18 +437,80 @@ export async function updateUserAvatar(
   await ensureUsersSchema();
   const sanitized = sanitizeNullableText(avatarUrl);
   
-  const result = await sql<RawUserRow>`
-    UPDATE users
-    SET avatar_url = ${sanitized}, updated_at = NOW()
-    WHERE id = ${userId}
-    RETURNING *
-  `;
+  const [result] = await pool.query<ResultSetHeader>(
+    'UPDATE users SET avatar_url = ?, updated_at = NOW() WHERE id = ?',
+    [sanitized, userId]
+  );
   
-  if (result.rows.length === 0) {
+  if (result.affectedRows === 0) {
     throw new Error('USER_NOT_FOUND');
   }
   
-  return mapUser(result.rows[0])!;
+  return (await findUserById(userId))!;
+}
+
+export async function ensureBusinessUserRecord(userId: string): Promise<UserRecord> {
+  await ensureUsersSchema();
+  const existing = await findUserById(userId);
+  if (existing) return existing;
+
+  const authUser = await findAuthUserById(userId);
+  if (!authUser) {
+    throw new Error('USER_NOT_FOUND');
+  }
+
+  const displayName = authUser.display_name?.trim() || authUser.email.split('@')[0];
+  const mappedRole = mapAuthRole(authUser.role);
+  const roles = [mappedRole];
+  const passwordHash = await hashPassword(randomUUID());
+
+  try {
+    await mysqlQuery`
+      INSERT INTO users (
+        id, email, password_hash, roles, primary_role,
+        first_name, last_name, display_name,
+        phone, avatar_url, department, job_title,
+        employment_status, hire_date, manager_id,
+        bio, city, country, postal_code, tax_id,
+        social_links, is_active, email_verified,
+        created_at, updated_at, password_updated_at
+      ) VALUES (
+        ${authUser.id},
+        ${authUser.email.toLowerCase()},
+        ${passwordHash},
+        ${JSON.stringify(roles)},
+        ${mappedRole},
+        ${sanitizeNullableText(authUser.first_name)},
+        ${sanitizeNullableText(authUser.last_name)},
+        ${displayName},
+        ${sanitizeNullableText(authUser.phone)},
+        ${sanitizeNullableText(authUser.avatar_url)},
+        ${null},
+        ${sanitizeNullableText(authUser.job_title)},
+        ${'active'},
+        ${null},
+        ${null},
+        ${sanitizeNullableText(authUser.bio)},
+        ${sanitizeNullableText(authUser.city)},
+        ${sanitizeNullableText(authUser.country)},
+        ${sanitizeNullableText(authUser.postal_code)},
+        ${sanitizeNullableText(authUser.tax_id)},
+        ${JSON.stringify(authUser.social_links ?? {})},
+        ${1},
+        ${1},
+        ${authUser.created_at},
+        ${authUser.updated_at},
+        ${authUser.password_updated_at ?? null}
+      )
+    `;
+  } catch (error) {
+    const sqlError = error as { code?: string };
+    if (sqlError?.code !== 'ER_DUP_ENTRY') {
+      throw error;
+    }
+  }
+
+  return (await findUserById(userId))!;
 }
 
 /**
@@ -386,7 +518,7 @@ export async function updateUserAvatar(
  */
 export async function updateLastLogin(userId: string): Promise<void> {
   await ensureUsersSchema();
-  await sql`
+  await mysqlQuery`
     UPDATE users
     SET last_login_at = NOW()
     WHERE id = ${userId}
@@ -418,60 +550,64 @@ export async function listUsers(params: ListUsersParams = {}): Promise<ListUsers
   
   // 搜索条件
   if (params.search) {
-    const searchIndex = values.length + 1;
-    values.push(`%${params.search.trim()}%`);
+    const search = `%${params.search.trim().toLowerCase()}%`;
     conditions.push(`(
-      first_name ILIKE $${searchIndex} OR 
-      last_name ILIKE $${searchIndex} OR 
-      display_name ILIKE $${searchIndex} OR 
-      email ILIKE $${searchIndex} OR
-      employee_code ILIKE $${searchIndex}
+      LOWER(first_name) LIKE ? OR 
+      LOWER(last_name) LIKE ? OR 
+      LOWER(display_name) LIKE ? OR 
+      LOWER(email) LIKE ? OR
+      LOWER(employee_code) LIKE ?
     )`);
+    values.push(search, search, search, search, search);
   }
   
   // 角色筛选
   if (params.roles && params.roles.length > 0) {
-    values.push(params.roles);
-    conditions.push(`roles && $${values.length}::text[]`);
+    const roleClauses = params.roles.map(() => 'JSON_CONTAINS(roles, JSON_QUOTE(?), "$")');
+    conditions.push(`(${roleClauses.join(' OR ')})`);
+    params.roles.forEach(role => values.push(role));
   }
   
   // 部门筛选
   if (params.department) {
+    conditions.push('department = ?');
     values.push(params.department.trim());
-    conditions.push(`department = $${values.length}`);
   }
   
   // 雇佣状态筛选
   if (params.employmentStatus && params.employmentStatus !== 'all') {
+    conditions.push('employment_status = ?');
     values.push(params.employmentStatus);
-    conditions.push(`employment_status = $${values.length}`);
   }
   
   // 激活状态筛选
   if (params.isActive !== undefined) {
-    values.push(params.isActive);
-    conditions.push(`is_active = $${values.length}`);
+    conditions.push('is_active = ?');
+    values.push(params.isActive ? 1 : 0);
   }
   
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   const orderClause = `ORDER BY ${sortColumn} ${sortOrder}, id ASC`;
-  const limitClause = `LIMIT $${values.length + 1}`;
-  const offsetClause = `OFFSET $${values.length + 2}`;
   
-  const dataValues = [...values, pageSize, (page - 1) * pageSize];
-  
-  const baseSelect = `SELECT * FROM users`;
-  const dataQuery = `${baseSelect} ${whereClause} ${orderClause} ${limitClause} ${offsetClause}`;
-  const countQuery = `SELECT COUNT(*)::int AS total FROM users ${whereClause}`;
+  const dataParams = [...values, pageSize, (page - 1) * pageSize];
   
   const [dataResult, countResult] = await Promise.all([
-    pool.query<RawUserRow>(dataQuery, dataValues),
-    pool.query<{ total: number }>(countQuery, values),
+    pool.query<RawUserRow[]>(
+      `SELECT * FROM users ${whereClause} ${orderClause} LIMIT ? OFFSET ?`,
+      dataParams
+    ),
+    pool.query<Array<RowDataPacket & { total: number }>>(
+      `SELECT COUNT(*) AS total FROM users ${whereClause}`,
+      values
+    ),
   ]);
   
+  const rows = dataResult[0] ?? [];
+  const total = countResult[0]?.[0]?.total ?? 0;
+  
   return {
-    items: dataResult.rows.map(row => toProfile(mapUser(row)!)),
-    total: countResult.rows[0]?.total ?? 0,
+    items: rows.map(row => toProfile(mapUser(row)!)),
+    total: Number(total),
     page,
     pageSize,
   };
@@ -482,9 +618,9 @@ export async function listUsers(params: ListUsersParams = {}): Promise<ListUsers
  */
 export async function deactivateUser(userId: string): Promise<void> {
   await ensureUsersSchema();
-  await sql`
+  await mysqlQuery`
     UPDATE users
-    SET is_active = false, updated_at = NOW()
+    SET is_active = 0, updated_at = NOW()
     WHERE id = ${userId}
   `;
 }
@@ -494,9 +630,9 @@ export async function deactivateUser(userId: string): Promise<void> {
  */
 export async function activateUser(userId: string): Promise<void> {
   await ensureUsersSchema();
-  await sql`
+  await mysqlQuery`
     UPDATE users
-    SET is_active = true, updated_at = NOW()
+    SET is_active = 1, updated_at = NOW()
     WHERE id = ${userId}
   `;
 }
@@ -506,7 +642,7 @@ export async function activateUser(userId: string): Promise<void> {
  */
 export async function getDepartments(): Promise<string[]> {
   await ensureUsersSchema();
-  const result = await sql<{ department: string }>`
+  const result = await mysqlQuery<RowDataPacket & { department: string }>`
     SELECT DISTINCT department
     FROM users
     WHERE department IS NOT NULL
@@ -520,10 +656,10 @@ export async function getDepartments(): Promise<string[]> {
  */
 export async function getSubordinates(managerId: string): Promise<UserProfile[]> {
   await ensureUsersSchema();
-  const result = await sql<RawUserRow>`
+  const result = await mysqlQuery<RawUserRow>`
     SELECT * FROM users
     WHERE manager_id = ${managerId}
-    AND is_active = true
+      AND is_active = 1
     ORDER BY last_name, first_name
   `;
   return result.rows.map(row => toProfile(mapUser(row)!));

@@ -1,0 +1,438 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { FinanceRecord, FinanceStats } from '@/types/finance';
+import FinanceTable from './FinanceTable';
+import FinanceForm, { FinanceFormSubmitPayload } from './FinanceForm';
+import FinanceStatsCards from './FinanceStatsCards';
+import { Button } from '@/components/ui/button';
+import {
+    Select,
+    SelectContent,
+    SelectGroup,
+    SelectItem,
+    SelectLabel,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TransactionType } from '@/types/finance';
+import { getCategoryGroups } from '@/constants/finance-categories';
+
+interface FinanceClientProps {
+    records: FinanceRecord[];
+    stats: FinanceStats;
+    categories: { income: string[]; expense: string[] };
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+    };
+    permissions: {
+        canView: boolean;
+        canManage: boolean;
+    };
+}
+
+export default function FinanceClient({
+    records,
+    stats,
+    categories,
+    pagination,
+    permissions,
+}: FinanceClientProps) {
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    const [editingRecord, setEditingRecord] = useState<FinanceRecord | null>(null);
+    const [keywordInput, setKeywordInput] = useState(searchParams.get('keyword') || '');
+    const [minAmountInput, setMinAmountInput] = useState(searchParams.get('minAmount') || '');
+    const [maxAmountInput, setMaxAmountInput] = useState(searchParams.get('maxAmount') || '');
+
+    const currentRange = searchParams.get('range') || 'all';
+    const currentTypeParam = searchParams.get('type') || 'all';
+    const categoryParam = searchParams.get('category') || 'all';
+    const keywordParam = searchParams.get('keyword') || '';
+    const minAmountParam = searchParams.get('minAmount') || '';
+    const maxAmountParam = searchParams.get('maxAmount') || '';
+    const selectedType =
+        currentTypeParam === TransactionType.INCOME || currentTypeParam === TransactionType.EXPENSE
+            ? currentTypeParam
+            : 'all';
+
+    useEffect(() => {
+        setKeywordInput(keywordParam);
+        setMinAmountInput(minAmountParam);
+        setMaxAmountInput(maxAmountParam);
+    }, [keywordParam, minAmountParam, maxAmountParam]);
+
+    const categoryGroups = useMemo(() => {
+        if (selectedType === TransactionType.INCOME) {
+            return getCategoryGroups(TransactionType.INCOME, categories.income);
+        }
+        if (selectedType === TransactionType.EXPENSE) {
+            return getCategoryGroups(TransactionType.EXPENSE, categories.expense);
+        }
+        const incomeGroups = getCategoryGroups(TransactionType.INCOME, categories.income).map((group) => ({
+            label: `收入 · ${group.label}`,
+            options: group.options,
+        }));
+        const expenseGroups = getCategoryGroups(TransactionType.EXPENSE, categories.expense).map((group) => ({
+            label: `支出 · ${group.label}`,
+            options: group.options,
+        }));
+        return [...incomeGroups, ...expenseGroups];
+    }, [categories.expense, categories.income, selectedType]);
+
+    const categoryOptions = useMemo(
+        () => categoryGroups.flatMap((group) => group.options.map((option) => option.label)),
+        [categoryGroups]
+    );
+    const categoryValue =
+        categoryParam === 'all' || !categoryOptions.includes(categoryParam)
+            ? 'all'
+            : categoryParam;
+
+    const updateFilters = (mutator: (params: URLSearchParams) => void) => {
+        const params = new URLSearchParams(searchParams.toString());
+        mutator(params);
+        params.set('page', '1');
+        const query = params.toString();
+        router.push(query ? `${pathname}?${query}` : pathname);
+    };
+
+    const handleRangeChange = (value: string) => {
+        updateFilters((params) => {
+            params.set('range', value);
+
+            if (value === 'all') {
+                params.delete('startDate');
+                params.delete('endDate');
+                return;
+            }
+
+            const now = new Date();
+            let startDate = '';
+            const endDate = now.toISOString().slice(0, 10);
+
+            if (value === '30d') {
+                const d = new Date();
+                d.setDate(d.getDate() - 30);
+                startDate = d.toISOString().slice(0, 10);
+            } else if (value === '90d') {
+                const d = new Date();
+                d.setDate(d.getDate() - 90);
+                startDate = d.toISOString().slice(0, 10);
+            } else if (value === 'ytd') {
+                startDate = `${now.getFullYear()}-01-01`;
+            }
+
+            if (startDate) {
+                params.set('startDate', startDate);
+            } else {
+                params.delete('startDate');
+            }
+            params.set('endDate', endDate);
+        });
+    };
+
+    const handlePageChange = (newPage: number) => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('page', newPage.toString());
+        router.push(`${pathname}?${params.toString()}`);
+    };
+
+    const handleTypeChange = (value: string) => {
+        updateFilters((params) => {
+            if (value === 'all') {
+                params.delete('type');
+            } else {
+                params.set('type', value);
+            }
+            params.delete('category');
+        });
+    };
+
+    const handleCategoryChange = (value: string) => {
+        updateFilters((params) => {
+            if (value === 'all') {
+                params.delete('category');
+            } else {
+                params.set('category', value);
+            }
+        });
+    };
+
+    const handleApplyFilters = () => {
+        updateFilters((params) => {
+            const keyword = keywordInput.trim();
+            const minAmount = minAmountInput.trim();
+            const maxAmount = maxAmountInput.trim();
+
+            if (keyword) {
+                params.set('keyword', keyword);
+            } else {
+                params.delete('keyword');
+            }
+
+            if (minAmount) {
+                params.set('minAmount', minAmount);
+            } else {
+                params.delete('minAmount');
+            }
+
+            if (maxAmount) {
+                params.set('maxAmount', maxAmount);
+            } else {
+                params.delete('maxAmount');
+            }
+        });
+    };
+
+    const handleResetFilters = () => {
+        setKeywordInput('');
+        setMinAmountInput('');
+        setMaxAmountInput('');
+        updateFilters((params) => {
+            ['type', 'category', 'keyword', 'minAmount', 'maxAmount', 'range', 'startDate', 'endDate'].forEach((key) =>
+                params.delete(key)
+            );
+        });
+    };
+
+    const handleSubmit = async (data: FinanceFormSubmitPayload) => {
+        try {
+            const url = editingRecord
+                ? `/api/finance/records/${editingRecord.id}`
+                : '/api/finance/records';
+            const method = editingRecord ? 'PATCH' : 'POST';
+
+            const res = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+
+            if (!res.ok) {
+                const error = await res.json();
+                alert(error.error || '操作失败');
+                return;
+            }
+
+            setIsDrawerOpen(false);
+            setEditingRecord(null);
+            router.refresh();
+        } catch (error) {
+            console.error(error);
+            alert('操作失败');
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        try {
+            const res = await fetch(`/api/finance/records/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                router.refresh();
+            } else {
+                alert('删除失败');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('删除失败');
+        }
+    };
+
+    if (!permissions.canView) {
+        return (
+            <div className="rounded-lg border border-red-200 bg-white p-6 text-red-600 shadow dark:border-red-800 dark:bg-gray-900 dark:text-red-300">
+                当前账户无权访问财务模块，请联系管理员开通权限。
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6 p-0">
+            {/* Stats Section */}
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-2">
+                    <Select value={currentRange} onValueChange={handleRangeChange}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="时间范围" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="30d">近 30 天</SelectItem>
+                            <SelectItem value="90d">近 90 天</SelectItem>
+                            <SelectItem value="ytd">本年度</SelectItem>
+                            <SelectItem value="all">全部数据</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
+            <FinanceStatsCards stats={stats} />
+
+            {/* Filters */}
+            <div className="space-y-4 rounded-lg bg-white p-4 shadow-sm dark-gray-800 dark:bg-gray-900">
+                <div className="flex flex-col gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">收支类型</span>
+                    <Tabs value={selectedType} onValueChange={handleTypeChange} className="w-full">
+                        <TabsList className="grid w-full grid-cols-3">
+                            <TabsTrigger value="all">全部</TabsTrigger>
+                            <TabsTrigger value={TransactionType.INCOME}>仅收入</TabsTrigger>
+                            <TabsTrigger value={TransactionType.EXPENSE}>仅支出</TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                    <div className="space-y-2">
+                        <span className="text-sm font-medium text-muted-foreground">分类</span>
+                        <Select value={categoryValue} onValueChange={handleCategoryChange}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="全部分类" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-72 overflow-y-auto">
+                                <SelectItem value="all">全部分类</SelectItem>
+                                {categoryGroups.map((group) => (
+                                    <SelectGroup key={`filter-${group.label}`}>
+                                        <SelectLabel className="text-xs text-muted-foreground">
+                                            {group.label}
+                                        </SelectLabel>
+                                        {group.options.map((option) => (
+                                            <SelectItem key={`${group.label}-${option.label}`} value={option.label}>
+                                                {option.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectGroup>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <span className="text-sm font-medium text-muted-foreground">最小金额</span>
+                        <Input
+                            type="number"
+                            inputMode="decimal"
+                            placeholder="¥"
+                            value={minAmountInput}
+                            onChange={(e) => setMinAmountInput(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleApplyFilters();
+                                }
+                            }}
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <span className="text-sm font-medium text-muted-foreground">最大金额</span>
+                        <Input
+                            type="number"
+                            inputMode="decimal"
+                            placeholder="¥"
+                            value={maxAmountInput}
+                            onChange={(e) => setMaxAmountInput(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleApplyFilters();
+                                }
+                            }}
+                        />
+                    </div>
+                </div>
+
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div className="flex flex-1 items-center gap-2">
+                        <Input
+                            placeholder="搜索名称或备注"
+                            value={keywordInput}
+                            onChange={(e) => setKeywordInput(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleApplyFilters();
+                                }
+                            }}
+                        />
+                        <Button variant="secondary" onClick={handleApplyFilters}>
+                            应用筛选
+                        </Button>
+                    </div>
+                    <Button variant="ghost" onClick={handleResetFilters}>
+                        重置条件
+                    </Button>
+                </div>
+            </div>
+
+            {/* Records Section */}
+            <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold tracking-tight">财务记录</h2>
+                {permissions.canManage && (
+                    <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
+                        <SheetTrigger asChild>
+                            <Button onClick={() => setEditingRecord(null)}>+ 添加记录</Button>
+                        </SheetTrigger>
+                        <SheetContent side="right" className="sm:max-w-xl">
+                            <SheetHeader>
+                                <SheetTitle>{editingRecord ? '编辑记录' : '添加记录'}</SheetTitle>
+                            </SheetHeader>
+                            <div className="flex-1 overflow-y-auto">
+                                <FinanceForm
+                                    initialData={editingRecord || undefined}
+                                    onSubmit={handleSubmit}
+                                    onCancel={() => setIsDrawerOpen(false)}
+                                    incomeCategories={categories.income}
+                                    expenseCategories={categories.expense}
+                                />
+                            </div>
+                        </SheetContent>
+                    </Sheet>
+                )}
+            </div>
+
+            <FinanceTable
+                records={records}
+                onEdit={(record) => {
+                    setEditingRecord(record);
+                    setIsDrawerOpen(true);
+                }}
+                onDelete={handleDelete}
+                canEdit={permissions.canManage}
+                canDelete={permissions.canManage}
+            />
+
+            {/* Pagination */}
+            {pagination.totalPages > 1 && (
+                <div className="flex items-center justify-end space-x-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(pagination.page - 1)}
+                        disabled={pagination.page <= 1}
+                    >
+                        上一页
+                    </Button>
+                    <div className="text-sm font-medium">
+                        第 {pagination.page} / {pagination.totalPages} 页
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(pagination.page + 1)}
+                        disabled={pagination.page >= pagination.totalPages}
+                    >
+                        下一页
+                    </Button>
+                </div>
+            )}
+        </div>
+    );
+}

@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 
 import { requireCurrentUser } from '@/lib/auth/current-user';
-import { getAvailableDepartments } from '@/lib/hr/employees';
+import { toPermissionUser } from '@/lib/auth/permission-user';
+import { listDepartmentOptions } from '@/lib/hr/departments';
+import { checkPermission, Permissions } from '@/lib/permissions';
 
 function unauthorizedResponse() {
 	return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -14,12 +16,22 @@ function forbiddenResponse() {
 export async function GET() {
 	try {
 		const context = await requireCurrentUser();
-		if (context.user.role !== 'finance_admin') {
+		const permissionUser = await toPermissionUser(context.user);
+		const perm = await checkPermission(permissionUser, Permissions.USER_VIEW_ALL);
+		if (!perm.allowed) {
 			return forbiddenResponse();
 		}
 
-		const departments = await getAvailableDepartments();
-		return NextResponse.json({ success: true, data: departments });
+		const departments = await listDepartmentOptions();
+		return NextResponse.json({
+			success: true,
+			data: departments.map((dept) => ({
+				id: dept.id,
+				name: dept.name,
+				code: dept.code,
+				parentId: dept.parentId,
+			})),
+		});
 	} catch (error) {
 		if (error instanceof Error && error.message === 'UNAUTHENTICATED') {
 			return unauthorizedResponse();

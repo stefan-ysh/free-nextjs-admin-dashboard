@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 
-interface AuthUser {
+export interface AuthUser {
   id: string;
   email: string;
   role: string;

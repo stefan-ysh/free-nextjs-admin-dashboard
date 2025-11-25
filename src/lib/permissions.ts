@@ -1,6 +1,4 @@
-import { UserProfile, UserRecord, UserRole, hasRole, hasAnyRole, hasAllRoles, isAdmin, isFinance } from '@/types/user';
-
-type PermittedUser = UserProfile | UserRecord;
+import { UserProfile, UserRole, hasRole, hasAnyRole, hasAllRoles, isAdmin, isFinance } from '@/types/user';
 
 /**
  * 权限检查结果
@@ -19,14 +17,14 @@ export interface PermissionConfig {
   // 需要的角色（必须全部满足）
   allRoles?: UserRole[];
   // 自定义权限检查函数
-  customCheck?: (user: PermittedUser) => boolean | Promise<boolean>;
+  customCheck?: (user: UserProfile) => boolean | Promise<boolean>;
 }
 
 /**
  * 检查用户权限
  */
 export async function checkPermission(
-  user: PermittedUser,
+  user: UserProfile,
   config: PermissionConfig
 ): Promise<PermissionCheckResult> {
   // 超级管理员拥有所有权限
@@ -56,7 +54,7 @@ export async function checkPermission(
   
   // 自定义检查
   if (config.customCheck) {
-  const customResult = await config.customCheck(user);
+    const customResult = await config.customCheck(user);
     if (!customResult) {
       return {
         allowed: false,
@@ -103,7 +101,7 @@ export const Permissions = {
   } as PermissionConfig,
   
   PROJECT_UPDATE: {
-  customCheck: (user: PermittedUser) => {
+    customCheck: (user: UserProfile) => {
       // 管理员和部门经理可以更新项目
       return hasAnyRole(user, [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEPARTMENT_MANAGER]);
     },
@@ -162,12 +160,88 @@ export const Permissions = {
   FINANCE_MANAGE: {
     anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE],
   } as PermissionConfig,
+
+  // ============ 进销存管理 ============
+  INVENTORY_VIEW_DASHBOARD: {
+    anyRoles: [
+      UserRole.SUPER_ADMIN,
+      UserRole.ADMIN,
+      UserRole.INVENTORY_MANAGER,
+      UserRole.INVENTORY_OPERATOR,
+    ],
+  } as PermissionConfig,
+
+  INVENTORY_MANAGE_ITEMS: {
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.INVENTORY_MANAGER],
+  } as PermissionConfig,
+
+  INVENTORY_MANAGE_WAREHOUSE: {
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.INVENTORY_MANAGER],
+  } as PermissionConfig,
+
+  INVENTORY_OPERATE_INBOUND: {
+    anyRoles: [
+      UserRole.SUPER_ADMIN,
+      UserRole.ADMIN,
+      UserRole.INVENTORY_OPERATOR,
+      UserRole.INVENTORY_MANAGER,
+    ],
+  } as PermissionConfig,
+
+  INVENTORY_OPERATE_OUTBOUND: {
+    anyRoles: [
+      UserRole.SUPER_ADMIN,
+      UserRole.ADMIN,
+      UserRole.INVENTORY_OPERATOR,
+      UserRole.INVENTORY_MANAGER,
+    ],
+  } as PermissionConfig,
+
+  INVENTORY_VIEW_ALL: {
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.AUDITOR],
+  } as PermissionConfig,
+
+  // ============ 客户管理 ============
+  CLIENT_VIEW: {
+    anyRoles: [
+      UserRole.SUPER_ADMIN,
+      UserRole.ADMIN,
+      UserRole.FINANCE,
+      UserRole.INVENTORY_MANAGER,
+      UserRole.INVENTORY_OPERATOR,
+    ],
+  } as PermissionConfig,
+
+  CLIENT_MANAGE: {
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.INVENTORY_MANAGER],
+  } as PermissionConfig,
+
+  // ============ 日程管理 ============
+  CALENDAR_VIEW: {
+    anyRoles: [
+      UserRole.SUPER_ADMIN,
+      UserRole.ADMIN,
+      UserRole.HR,
+      UserRole.DEPARTMENT_MANAGER,
+      UserRole.FINANCE,
+      UserRole.EMPLOYEE,
+    ],
+  } as PermissionConfig,
+
+  CALENDAR_MANAGE: {
+    anyRoles: [
+      UserRole.SUPER_ADMIN,
+      UserRole.ADMIN,
+      UserRole.HR,
+      UserRole.DEPARTMENT_MANAGER,
+    ],
+  } as PermissionConfig,
 };
 
 /**
  * 资源所有权检查
  */
-export function isResourceOwner(user: PermittedUser, resourceOwnerId: string): boolean {
+export function isResourceOwner(user: UserProfile, resourceOwnerId: string): boolean {
   return user.id === resourceOwnerId;
 }
 
@@ -175,7 +249,7 @@ export function isResourceOwner(user: PermittedUser, resourceOwnerId: string): b
  * 检查用户是否可以访问指定用户的数据
  */
 export function canAccessUserData(
-  currentUser: PermittedUser,
+  currentUser: UserProfile,
   targetUserId: string
 ): boolean {
   // 超级管理员、管理员、HR 可以访问所有用户数据
@@ -202,7 +276,7 @@ export function canAccessUserData(
  * 检查用户是否可以访问部门数据
  */
 export function canAccessDepartmentData(
-  user: PermittedUser,
+  user: UserProfile,
   department: string
 ): boolean {
   // 管理员可以访问所有部门
@@ -232,7 +306,7 @@ export function canAccessDepartmentData(
  * 检查用户是否可以编辑项目
  */
 export function canEditProject(
-  user: PermittedUser,
+  user: UserProfile,
   projectManagerId: string
 ): boolean {
   // 管理员可以编辑所有项目
@@ -252,10 +326,15 @@ export function canEditProject(
  * 检查用户是否可以编辑采购记录
  */
 export function canEditPurchase(
-  user: PermittedUser,
+  user: UserProfile,
   purchase: { createdBy: string; status: string }
 ): boolean {
-  // 管理员可以编辑所有记录
+  // 已打款记录不允许继续编辑
+  if (purchase.status === 'paid') {
+    return false;
+  }
+
+  // 管理员可以编辑非已打款记录
   if (isAdmin(user)) {
     return true;
   }
@@ -273,7 +352,7 @@ export function canEditPurchase(
  * 检查用户是否可以删除采购记录
  */
 export function canDeletePurchase(
-  user: PermittedUser,
+  user: UserProfile,
   purchase: { createdBy: string; status: string }
 ): boolean {
   // 管理员可以删除（除了已打款的）
@@ -294,7 +373,7 @@ export function canDeletePurchase(
  * Express 风格的中间件包装器（用于 API 路由）
  */
 export function requirePermission(config: PermissionConfig) {
-  return async (user: PermittedUser) => {
+  return async (user: UserProfile) => {
     const result = await checkPermission(user, config);
     if (!result.allowed) {
       throw new Error(`PERMISSION_DENIED: ${result.reason || '无权限'}`);
@@ -308,25 +387,29 @@ export function requirePermission(config: PermissionConfig) {
  */
 export const can = {
   // 用户管理
-  viewAllUsers: (user: PermittedUser) => checkPermission(user, Permissions.USER_VIEW_ALL),
-  createUser: (user: PermittedUser) => checkPermission(user, Permissions.USER_CREATE),
-  updateUser: (user: PermittedUser) => checkPermission(user, Permissions.USER_UPDATE),
-  deleteUser: (user: PermittedUser) => checkPermission(user, Permissions.USER_DELETE),
-  assignRoles: (user: PermittedUser) => checkPermission(user, Permissions.USER_ASSIGN_ROLES),
+  viewAllUsers: (user: UserProfile) => checkPermission(user, Permissions.USER_VIEW_ALL),
+  createUser: (user: UserProfile) => checkPermission(user, Permissions.USER_CREATE),
+  updateUser: (user: UserProfile) => checkPermission(user, Permissions.USER_UPDATE),
+  deleteUser: (user: UserProfile) => checkPermission(user, Permissions.USER_DELETE),
+  assignRoles: (user: UserProfile) => checkPermission(user, Permissions.USER_ASSIGN_ROLES),
   
   // 项目管理
-  viewAllProjects: (user: PermittedUser) => checkPermission(user, Permissions.PROJECT_VIEW_ALL),
-  createProject: (user: PermittedUser) => checkPermission(user, Permissions.PROJECT_CREATE),
-  updateProject: (user: PermittedUser) => checkPermission(user, Permissions.PROJECT_UPDATE),
-  deleteProject: (user: PermittedUser) => checkPermission(user, Permissions.PROJECT_DELETE),
+  viewAllProjects: (user: UserProfile) => checkPermission(user, Permissions.PROJECT_VIEW_ALL),
+  createProject: (user: UserProfile) => checkPermission(user, Permissions.PROJECT_CREATE),
+  updateProject: (user: UserProfile) => checkPermission(user, Permissions.PROJECT_UPDATE),
+  deleteProject: (user: UserProfile) => checkPermission(user, Permissions.PROJECT_DELETE),
   
   // 采购管理
-  viewAllPurchases: (user: PermittedUser) => checkPermission(user, Permissions.PURCHASE_VIEW_ALL),
-  approvePurchase: (user: PermittedUser) => checkPermission(user, Permissions.PURCHASE_APPROVE),
-  rejectPurchase: (user: PermittedUser) => checkPermission(user, Permissions.PURCHASE_REJECT),
-  payPurchase: (user: PermittedUser) => checkPermission(user, Permissions.PURCHASE_PAY),
+  viewAllPurchases: (user: UserProfile) => checkPermission(user, Permissions.PURCHASE_VIEW_ALL),
+  approvePurchase: (user: UserProfile) => checkPermission(user, Permissions.PURCHASE_APPROVE),
+  rejectPurchase: (user: UserProfile) => checkPermission(user, Permissions.PURCHASE_REJECT),
+  payPurchase: (user: UserProfile) => checkPermission(user, Permissions.PURCHASE_PAY),
   
   // 财务管理
-  viewFinanceData: (user: PermittedUser) => checkPermission(user, Permissions.FINANCE_VIEW_ALL),
-  manageFinance: (user: PermittedUser) => checkPermission(user, Permissions.FINANCE_MANAGE),
+  viewFinanceData: (user: UserProfile) => checkPermission(user, Permissions.FINANCE_VIEW_ALL),
+  manageFinance: (user: UserProfile) => checkPermission(user, Permissions.FINANCE_MANAGE),
+
+  // 日程管理
+  viewCalendar: (user: UserProfile) => checkPermission(user, Permissions.CALENDAR_VIEW),
+  manageCalendar: (user: UserProfile) => checkPermission(user, Permissions.CALENDAR_MANAGE),
 };

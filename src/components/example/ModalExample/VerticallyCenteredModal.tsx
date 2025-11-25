@@ -1,8 +1,8 @@
 "use client";
 import React from "react";
 import ComponentCard from "../../common/ComponentCard";
-import Button from "../../ui/button/Button";
-import { Modal } from "../../ui/modal";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useModal } from "@/hooks/useModal";
 
 export default function VerticallyCenteredModal() {
@@ -14,15 +14,11 @@ export default function VerticallyCenteredModal() {
   };
   return (
     <ComponentCard title="Vertically Centered Modal">
-      <Button size="sm" onClick={openModal}>
+      <Button size="sm" onClick={openModal} type="button">
         Open Modal
       </Button>
-      <Modal
-        isOpen={isOpen}
-        onClose={closeModal}
-        showCloseButton={false}
-        className="max-w-[507px] p-6 lg:p-10"
-      >
+      <Dialog open={isOpen} onOpenChange={(nextOpen) => (nextOpen ? openModal() : closeModal())}>
+        <DialogContent className="max-w-[507px] border-0 p-6 text-left lg:p-10">
         <div className="text-center">
           <h4 className="mb-2 text-2xl font-semibold text-gray-800 dark:text-white/90 sm:text-title-sm">
             All Done! Success Confirmed
@@ -41,7 +37,8 @@ export default function VerticallyCenteredModal() {
             </Button>
           </div>
         </div>
-      </Modal>
+        </DialogContent>
+      </Dialog>
     </ComponentCard>
   );
 }

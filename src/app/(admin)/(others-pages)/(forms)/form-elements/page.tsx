@@ -1,4 +1,3 @@
-import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import CheckboxComponents from "@/components/form/form-elements/CheckboxComponents";
 import DefaultInputs from "@/components/form/form-elements/DefaultInputs";
 import DropzoneComponent from "@/components/form/form-elements/DropZone";
@@ -21,7 +20,6 @@ export const metadata: Metadata = {
 export default function FormElements() {
   return (
     <div>
-      <PageBreadcrumb pageTitle="From Elements" />
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <div className="space-y-6">
           <DefaultInputs />

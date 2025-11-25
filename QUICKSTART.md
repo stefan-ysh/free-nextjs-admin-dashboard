@@ -1,198 +1,97 @@
 # 财务管理系统 - 快速入门指南
 
-## 🎯 5 分钟快速上手
+本指南帮助你在 **完全离线 / 本地** 环境下把项目跑起来。
 
-### 步骤 1: 克隆项目
+## 步骤 1: 克隆 & 安装依赖
 
 ```bash
-git clone <your-repository-url>
+git clone https://github.com/stefan-ysh/free-nextjs-admin-dashboard.git
 cd free-nextjs-admin-dashboard
-```
-
-### 步骤 2: 安装依赖
-
-```bash
 npm install
 ```
 
-已安装的关键依赖:
-- `next@15.2.3` - Next.js 框架
-- `@vercel/kv` - Vercel KV SDK
-- `apexcharts` - 图表库
-- `tailwindcss@4.0.0` - 样式框架
+## 步骤 2: 准备数据库
 
-### 步骤 3: 配置数据库
+### MySQL (全量数据)
+```bash
+# 以 Homebrew 为例
+brew services start mysql
+mysql -uroot -p -e "CREATE DATABASE IF NOT EXISTS tailadmin_local CHARACTER SET utf8mb4;"
+```
 
-#### 选项 A: 使用 Vercel KV (推荐)
+可以替换为 Docker、Windows 服务或远程自建数据库,只要连接字符串可用即可。
 
-1. **创建 Vercel 账号**: https://vercel.com/signup
-
-2. **创建 KV 数据库**:
-   - 登录 Vercel Dashboard
-   - 进入 Storage 标签
-   - 点击 "Create Database" → 选择 "KV"
-   - 命名为 `finance-records`
-   - 选择最近的区域
-
-3. **获取连接信息**:
-   - 创建完成后,复制环境变量
-   - 在本地创建 `.env.local`:
+## 步骤 3: 配置环境变量
 
 ```bash
 cp .env.example .env.local
 ```
 
-4. **填入环境变量**:
-
 编辑 `.env.local`:
-```bash
-KV_URL="redis://default:xxxxx@xxxxx.kv.vercel-storage.com:6379"
-KV_REST_API_URL="https://xxxxx.kv.vercel-storage.com"
-KV_REST_API_TOKEN="xxxxx"
-KV_REST_API_READ_ONLY_TOKEN="xxxxx"
+```ini
+# MySQL 连接(示例)
+MYSQL_URL="mysql://root:changeme@127.0.0.1:3306/tailadmin_local?timezone=Z"
+
+# 本地文件存储根目录 (可选)
+LOCAL_STORAGE_ROOT="/Users/you/Documents/free-nextjs-admin-storage"
 ```
 
-### 步骤 4: 启动开发服务器
+> 项目会根据这些变量自动创建连接池,无需额外迁移脚本。
+
+## 步骤 4: (可选) 创建初始管理员
+
+```bash
+npm run seed:admin -- admin@example.com SuperSecurePass finance_admin
+```
+
+该脚本直接使用 MySQL 连接,不会访问任何云端依赖。
+
+## 步骤 5: 启动开发服务器
 
 ```bash
 npm run dev
 ```
 
-打开浏览器访问: http://localhost:3000
+访问 http://localhost:3000/finance 即可体验财务模块。首次访问会自动建表:
+- `finance_records` / `finance_categories`
+- `projects` / `purchases` / `auth_users` 等
 
-### 步骤 5: 访问财务管理
+## 步骤 6: 上传附件 / 图片
+- 所有文件默认写入 `~/Documents/free-nextjs-admin-storage`
+- 可通过 `LOCAL_STORAGE_ROOT` 指向 NAS / 外置硬盘
+- 访问路径统一为 `/api/files/<相对路径>`
 
-1. 在侧边栏找到 **"财务管理"** 菜单项
-2. 或直接访问: http://localhost:3000/finance
+## 权限与角色 (RBAC)
 
-### 步骤 6: 添加第一条记录
+- 授权角色在 `src/lib/auth/roles.ts` 定义，前后台共享；`usePermissions` 钩子会把当前登录用户同步到前端，确保 UI 与 API 同步校验。
+- `src/lib/permissions.ts` 列出了全部权限常量，若新增模块，请优先补充该文件并复用 `usePermissions`。
 
-1. 点击 **"+ 添加记录"** 按钮
-2. 填写表单:
-   - 类型: 选择 "收入" 或 "支出"
-   - 金额: 输入数字 (如: 1000)
-   - 分类: 从下拉菜单选择
-   - 日期: 选择日期
-   - 描述: 输入备注 (可选)
-3. 点击 **"添加"** 按钮
-4. 查看记录出现在列表中
-5. 统计卡片自动更新
+| 模块 | 查看权限 | 写入 / 操作权限 | 默认角色 |
+| --- | --- | --- | --- |
+| 财务 | `FINANCE_VIEW_ALL` | `FINANCE_MANAGE` (新增、更新、删除) | SUPER_ADMIN / ADMIN / FINANCE |
+| 员工 | `USER_VIEW_ALL` | `USER_CREATE` / `USER_UPDATE` / `USER_DELETE` | SUPER_ADMIN / ADMIN / HR |
+| 采购 | `PURCHASE_VIEW_ALL` 或 `PURCHASE_VIEW_DEPARTMENT` | `PURCHASE_CREATE`、`PURCHASE_UPDATE`、`PURCHASE_APPROVE` | SUPER_ADMIN / ADMIN / FINANCE / 部门经理 |
 
-## 🎉 完成!
+> ✅ 财务和员工模块已经完成前端权限兜底；采购模块的 UI 仍在搭建，但路由已根据权限过滤，未授权账号会看到提示页。
 
-现在你可以:
-- ✅ 添加、编辑、删除财务记录
-- ✅ 查看实时统计数据
-- ✅ 按分类管理收支
-- ✅ 浏览历史记录
+调试技巧:
+- 通过 `npm run seed:admin` 创建 `super_admin`/`finance_admin` 账户，直接拥有全部或财务权限。
+- 低权限/部门经理账号可以验证菜单、按钮、表单的显隐效果；若需要自定义权限，可在数据库中直接修改 `auth_users.role` 字段。
 
-## 📱 功能演示
+## 常见操作
+- **添加记录**: 进入 `/finance` → 点击 “+ 添加记录”
+- **查看统计**: 页面顶部的四张统计卡实时计算总收入/支出/余额
+- **采购审批**: `/purchases` 模块共享同一个 MySQL 数据源,支出通过审批后会自动回写项目实际成本
 
-### 添加支出记录
-```
-类型: ● 支出
-金额: 150.00 元
-分类: 餐饮
-日期: 2025-11-09
-描述: 团队午餐
-```
+## 遇到问题?
+1. `ECONNREFUSED`: 确认数据库服务是否启动、端口是否正确
+2. “缺少数据库连接字符串”: 检查 `.env.local` 是否被正确加载
+3. 附件 404: 确认 `LOCAL_STORAGE_ROOT` 是否存在且拥有读写权限
+4. 端口冲突: 修改 `package.json` 中 `dev` 命令或设置 `PORT=4000 npm run dev`
 
-### 添加收入记录
-```
-类型: ● 收入
-金额: 5000.00 元
-分类: 工资
-日期: 2025-11-09
-描述: 月度工资
-```
+更多细节请阅读:
+- [docs/FINANCE_MODULE.md](./docs/FINANCE_MODULE.md)
+- [docs/LOCAL_STORAGE_SETUP.md](./docs/LOCAL_STORAGE_SETUP.md)
+- [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)
 
-### 查看统计
-```
-┌────────────────────────────────────────────────┐
-│  总收入: ¥5,000.00   总支出: ¥150.00          │
-│  净收支: ¥4,850.00   记录数: 2                │
-└────────────────────────────────────────────────┘
-```
-
-## 🚀 部署到生产环境
-
-### 方式 1: 一键部署到 Vercel
-
-1. 推送代码到 GitHub
-2. 访问 [Vercel](https://vercel.com)
-3. 点击 "Import Project"
-4. 选择你的 GitHub 仓库
-5. Vercel 自动检测 Next.js 项目
-6. 在 Storage 中连接你的 KV 数据库
-7. 点击 "Deploy"
-8. 等待 2-3 分钟完成部署
-
-### 方式 2: 使用 Vercel CLI
-
-```bash
-# 安装 Vercel CLI
-npm install -g vercel
-
-# 登录
-vercel login
-
-# 部署
-vercel --prod
-```
-
-## 📚 下一步
-
-### 学习更多
-- 📖 [完整功能文档](./docs/FINANCE_MODULE.md)
-- 🚀 [部署详细指南](./docs/DEPLOYMENT.md)
-- ⚙️ [Vercel KV 配置](./docs/VERCEL_KV_SETUP.md)
-
-### 扩展功能
-- 添加图表可视化
-- 导出 Excel 报表
-- 设置预算提醒
-- 多用户权限管理
-
-### 自定义
-- 修改默认分类
-- 调整颜色主题
-- 添加自定义字段
-- 集成其他服务
-
-## ❓ 常见问题
-
-### Q: 本地开发需要 Vercel KV 吗?
-A: 是的,需要创建 Vercel KV 数据库并配置环境变量。免费额度完全够用。
-
-### Q: 数据存储在哪里?
-A: 数据存储在 Vercel KV (Redis),云端托管,自动备份。
-
-### Q: 免费版本有限制吗?
-A: Vercel KV 免费版提供 256MB 存储和每月 10 万次请求,适合中小型使用。
-
-### Q: 可以离线使用吗?
-A: 目前需要网络连接访问 KV 数据库,未来可以添加 PWA 支持。
-
-### Q: 如何备份数据?
-A: Vercel KV 自动备份。你也可以通过 API 导出所有数据为 JSON。
-
-## 🆘 遇到问题?
-
-1. **检查环境变量**: 确认 `.env.local` 配置正确
-2. **查看控制台**: 打开浏览器开发者工具查看错误
-3. **重启服务**: 修改环境变量后需要重启 `npm run dev`
-4. **查看文档**: 阅读 `docs/` 目录下的详细文档
-5. **提交 Issue**: 在 GitHub 上报告问题
-
-## 📮 技术支持
-
-- 📖 查看文档: `docs/FINANCE_MODULE.md`
-- 🐛 报告 Bug: GitHub Issues
-- 💡 功能建议: GitHub Discussions
-- 📧 邮件联系: (添加你的邮箱)
-
----
-
-**祝使用愉快! 🎊**
-
-有任何问题欢迎随时咨询!
+祝开发顺利! 🚀

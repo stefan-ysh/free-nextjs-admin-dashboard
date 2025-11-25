@@ -2,17 +2,45 @@
 
 import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useForm, useFieldArray } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
-	EmploymentStatus,
+	Form,
+	FormControl,
+	FormField,
+	FormItem,
+	FormLabel,
+	FormDescription,
+	FormMessage,
+} from '@/components/ui/form';
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '@/components/ui/select';
+import DatePicker from '@/components/ui/DatePicker';
+import {
+	DepartmentOption,
 	Employee,
 	EmployeeFormSubmitPayload,
+	EmployeeGender,
+	EMPLOYEE_GENDER_LABELS,
 	EMPLOYMENT_STATUS_LABELS,
+	JobGradeOption,
 } from './types';
 
 type EmployeeFormProps = {
 	initialData?: Employee | null;
 	onSubmit: (payload: EmployeeFormSubmitPayload) => Promise<void>;
 	onCancel?: () => void;
+	departmentOptions?: DepartmentOption[];
+	jobGradeOptions?: JobGradeOption[];
 };
 
 type CustomFieldRow = {
@@ -20,12 +48,28 @@ type CustomFieldRow = {
 	value: string;
 };
 
-const STATUS_OPTIONS: EmploymentStatus[] = ['active', 'on_leave', 'terminated'];
+const STATUS_OPTIONS = ['active', 'on_leave', 'terminated'] as const;
+const GENDER_OPTIONS = ['male', 'female', 'other'] as const;
 const MAX_AVATAR_SIZE = 1_572_864; // 1.5MB
 
-const sanitizeText = (value: string) => {
+const sanitizeText = (value?: string | null) => {
+	if (!value) return null;
 	const trimmed = value.trim();
 	return trimmed.length ? trimmed : null;
+};
+
+const extractDateInput = (value?: string | null) => {
+	if (!value) return '';
+	const trimmed = value.trim();
+	if (!trimmed) return '';
+	const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+	if (match) {
+		return match[1];
+	}
+	if (trimmed.includes('T')) {
+		return trimmed.split('T')[0] || '';
+	}
+	return trimmed;
 };
 
 const initializeCustomFields = (data?: Employee | null): CustomFieldRow[] => {
@@ -36,102 +80,221 @@ const initializeCustomFields = (data?: Employee | null): CustomFieldRow[] => {
 	return entries.length ? entries : [{ key: '', value: '' }];
 };
 
-export default function EmployeeForm({ initialData, onSubmit, onCancel }: EmployeeFormProps) {
-	const [loading, setLoading] = useState(false);
-	const [formState, setFormState] = useState({
-		employeeCode: initialData?.employeeCode ?? '',
-		firstName: initialData?.firstName ?? '',
-		lastName: initialData?.lastName ?? '',
-		displayName: initialData?.displayName ?? '',
-		email: initialData?.email ?? '',
-		phone: initialData?.phone ?? '',
-		department: initialData?.department ?? '',
-		jobTitle: initialData?.jobTitle ?? '',
-		employmentStatus: initialData?.employmentStatus ?? 'active',
-		hireDate: initialData?.hireDate?.split('T')[0] ?? initialData?.hireDate ?? '',
-		terminationDate: initialData?.terminationDate?.split('T')[0] ?? initialData?.terminationDate ?? '',
-		managerId: initialData?.managerId ?? '',
-		location: initialData?.location ?? '',
-	});
-	const [customFields, setCustomFields] = useState<CustomFieldRow[]>(() => initializeCustomFields(initialData));
+const buildDefaultValues = (data?: Employee | null): EmployeeFormValues => ({
+	employeeCode: data?.employeeCode ?? '',
+	firstName: data?.firstName ?? '',
+	lastName: data?.lastName ?? '',
+	displayName: data?.displayName ?? '',
+	email: data?.email ?? '',
+	phone: data?.phone ?? '',
+	department: data?.department ?? '',
+	departmentId: data?.departmentId ?? '',
+	nationalId: data?.nationalId ?? '',
+	gender: (data?.gender && GENDER_OPTIONS.includes(data.gender as typeof GENDER_OPTIONS[number])) ? data.gender as typeof GENDER_OPTIONS[number] : '',
+	jobTitle: data?.jobTitle ?? '',
+	jobGradeId: data?.jobGradeId ?? '',
+	employmentStatus: data?.employmentStatus ?? 'active',
+	hireDate: extractDateInput(data?.hireDate ?? ''),
+	terminationDate: extractDateInput(data?.terminationDate ?? ''),
+	managerId: data?.managerId ?? '',
+	location: data?.location ?? '',
+	address: data?.address ?? '',
+	organization: data?.organization ?? '',
+	educationBackground: data?.educationBackground ?? '',
+	customFields: initializeCustomFields(data),
+	statusChangeNote: '',
+});
+
+const employeeSchema = z.object({
+	employeeCode: z.string().optional(),
+	firstName: z
+		.string()
+		.min(1, '请输入名')
+		.refine((val) => val.trim().length > 0, { message: '请输入名' }),
+	lastName: z
+		.string()
+		.min(1, '请输入姓氏')
+		.refine((val) => val.trim().length > 0, { message: '请输入姓氏' }),
+	displayName: z.string().optional(),
+	email: z
+		.string()
+		.email('请输入有效邮箱')
+		.or(z.literal(''))
+		.optional(),
+	phone: z.string().optional(),
+	department: z.string().optional(),
+	departmentId: z.string().optional(),
+	nationalId: z.string().optional(),
+	gender: z.enum(GENDER_OPTIONS).or(z.literal('')).optional(),
+	jobTitle: z.string().optional(),
+	jobGradeId: z.string().optional(),
+	employmentStatus: z.enum(STATUS_OPTIONS),
+	hireDate: z.string().optional(),
+	terminationDate: z.string().optional(),
+	managerId: z.string().optional(),
+	location: z.string().optional(),
+	address: z.string().optional(),
+	organization: z.string().optional(),
+	educationBackground: z.string().optional(),
+	statusChangeNote: z.string().optional(),
+	customFields: z
+		.array(
+			z.object({
+				key: z.string().optional(),
+				value: z.string().optional(),
+			})
+		)
+		.optional(),
+});
+
+type EmployeeFormValues = z.infer<typeof employeeSchema>;
+
+export default function EmployeeForm({ initialData, onSubmit, onCancel, departmentOptions, jobGradeOptions }: EmployeeFormProps) {
 	const [avatarPreview, setAvatarPreview] = useState<string | null>(initialData?.avatarUrl ?? null);
 	const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
 	const [removeAvatar, setRemoveAvatar] = useState(false);
 	const [avatarError, setAvatarError] = useState<string | null>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
+	const [availableDepartments, setAvailableDepartments] = useState<DepartmentOption[]>(departmentOptions ?? []);
+	const [availableJobGrades, setAvailableJobGrades] = useState<JobGradeOption[]>(jobGradeOptions ?? []);
+
+	const form = useForm<EmployeeFormValues>({
+		resolver: zodResolver(employeeSchema),
+		defaultValues: buildDefaultValues(initialData),
+	});
+
+	const { control, reset, handleSubmit, formState } = form;
+	const { fields, append, remove } = useFieldArray({ control, name: 'customFields' });
+	const watchedStatus = form.watch('employmentStatus');
+	const statusChanged = initialData ? watchedStatus !== initialData.employmentStatus : false;
 
 	useEffect(() => {
-		setFormState({
-			employeeCode: initialData?.employeeCode ?? '',
-			firstName: initialData?.firstName ?? '',
-			lastName: initialData?.lastName ?? '',
-			displayName: initialData?.displayName ?? '',
-			email: initialData?.email ?? '',
-			phone: initialData?.phone ?? '',
-			department: initialData?.department ?? '',
-			jobTitle: initialData?.jobTitle ?? '',
-			employmentStatus: initialData?.employmentStatus ?? 'active',
-			hireDate: initialData?.hireDate?.split('T')[0] ?? initialData?.hireDate ?? '',
-			terminationDate: initialData?.terminationDate?.split('T')[0] ?? initialData?.terminationDate ?? '',
-			managerId: initialData?.managerId ?? '',
-			location: initialData?.location ?? '',
-		});
-		setCustomFields(initializeCustomFields(initialData));
+		if (departmentOptions?.length) {
+			setAvailableDepartments(departmentOptions);
+		}
+	}, [departmentOptions]);
+
+	useEffect(() => {
+		if (jobGradeOptions?.length) {
+			setAvailableJobGrades(jobGradeOptions);
+		}
+	}, [jobGradeOptions]);
+
+	useEffect(() => {
+		if (departmentOptions?.length) {
+			return;
+		}
+		let cancelled = false;
+		async function fetchDepartments() {
+			try {
+				const response = await fetch('/api/employees/departments');
+				if (!response.ok) return;
+				const data = await response.json();
+				if (!cancelled && data.success && Array.isArray(data.data)) {
+					setAvailableDepartments(data.data);
+				}
+			} catch (error) {
+				console.error('加载部门列表失败', error);
+			}
+		}
+		fetchDepartments();
+		return () => {
+			cancelled = true;
+		};
+	}, [departmentOptions]);
+
+	useEffect(() => {
+		if (jobGradeOptions?.length) {
+			return;
+		}
+		let cancelled = false;
+		async function fetchJobGrades() {
+			try {
+				const response = await fetch('/api/employees/job-grades');
+				if (!response.ok) return;
+				const data = await response.json();
+				if (!cancelled && data.success && Array.isArray(data.data)) {
+					setAvailableJobGrades(data.data);
+				}
+			} catch (error) {
+				console.error('加载职级列表失败', error);
+			}
+		}
+		fetchJobGrades();
+		return () => {
+			cancelled = true;
+		};
+	}, [jobGradeOptions]);
+
+	useEffect(() => {
+		reset(buildDefaultValues(initialData));
 		setAvatarPreview(initialData?.avatarUrl ?? null);
 		setAvatarDataUrl(null);
 		setRemoveAvatar(false);
 		setAvatarError(null);
-	}, [initialData]);
+	}, [initialData, reset]);
+
+	useEffect(() => {
+		if (!statusChanged && form.getValues('statusChangeNote')) {
+			form.setValue('statusChangeNote', '', { shouldDirty: false, shouldValidate: false });
+		}
+	}, [statusChanged, form]);
+
+	useEffect(() => {
+		const currentId = form.getValues('departmentId');
+		if (!currentId) return;
+		const currentName = form.getValues('department');
+		if (currentName) return;
+		const matched = availableDepartments.find((option) => option.id === currentId);
+		if (matched) {
+			form.setValue('department', matched.name ?? '', { shouldDirty: false, shouldValidate: false });
+		}
+	}, [availableDepartments, form]);
 
 	const hasReadonlyStatus = useMemo(() => initialData?.employmentStatus === 'terminated', [initialData]);
 
-	const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-		event.preventDefault();
-		if (!formState.firstName.trim() || !formState.lastName.trim()) {
-			alert('请填写员工姓名');
-			return;
+	const handleFormSubmit = handleSubmit(async (values) => {
+		const customFieldEntries = (values.customFields ?? [])
+			.filter((row) => row?.key && row.key.trim())
+			.reduce<Record<string, string>>((acc, row) => {
+				if (!row?.key) return acc;
+				acc[row.key.trim()] = row?.value?.trim() ?? '';
+				return acc;
+			}, {});
+
+		const payload: EmployeeFormSubmitPayload = {
+			employeeCode: sanitizeText(values.employeeCode),
+			firstName: values.firstName.trim(),
+			lastName: values.lastName.trim(),
+			displayName: sanitizeText(values.displayName),
+			email: sanitizeText(values.email),
+			phone: sanitizeText(values.phone),
+			department: sanitizeText(values.department),
+			departmentId: sanitizeText(values.departmentId),
+			nationalId: sanitizeText(values.nationalId),
+			gender: values.gender ? (values.gender as EmployeeGender) : null,
+			jobTitle: sanitizeText(values.jobTitle),
+			jobGradeId: sanitizeText(values.jobGradeId),
+			employmentStatus: values.employmentStatus,
+			hireDate: sanitizeText(values.hireDate),
+			terminationDate: sanitizeText(values.terminationDate),
+			managerId: sanitizeText(values.managerId),
+			location: sanitizeText(values.location),
+			address: sanitizeText(values.address),
+			organization: sanitizeText(values.organization),
+			educationBackground: sanitizeText(values.educationBackground),
+			customFields: Object.keys(customFieldEntries).length ? customFieldEntries : null,
+			statusChangeNote: statusChanged ? sanitizeText(values.statusChangeNote) : null,
+		};
+
+		if (avatarDataUrl) {
+			payload.avatarDataUrl = avatarDataUrl;
+		} else if (removeAvatar && initialData?.avatarUrl) {
+			payload.removeAvatar = true;
 		}
 
-		setLoading(true);
-		try {
-			const customFieldEntries = customFields
-				.filter((row) => row.key.trim())
-				.reduce<Record<string, string>>((acc, row) => {
-					acc[row.key.trim()] = row.value.trim();
-					return acc;
-				}, {});
-
-			const payload: EmployeeFormSubmitPayload = {
-				employeeCode: sanitizeText(formState.employeeCode),
-				firstName: formState.firstName.trim(),
-				lastName: formState.lastName.trim(),
-				displayName: sanitizeText(formState.displayName),
-				email: sanitizeText(formState.email),
-				phone: sanitizeText(formState.phone),
-				department: sanitizeText(formState.department),
-				jobTitle: sanitizeText(formState.jobTitle),
-				employmentStatus: formState.employmentStatus,
-				hireDate: sanitizeText(formState.hireDate),
-				terminationDate: sanitizeText(formState.terminationDate),
-				managerId: sanitizeText(formState.managerId),
-				location: sanitizeText(formState.location),
-				customFields: Object.keys(customFieldEntries).length ? customFieldEntries : null,
-			};
-
-			if (avatarDataUrl) {
-				payload.avatarDataUrl = avatarDataUrl;
-			} else if (removeAvatar && initialData?.avatarUrl) {
-				payload.removeAvatar = true;
-			}
-
-			await onSubmit(payload);
-		} catch (error) {
-			console.error('提交员工信息失败', error);
-			alert('保存失败, 请检查网络或稍后再试');
-		} finally {
-			setLoading(false);
-		}
-	};
+		await onSubmit(payload);
+	});
 
 	const handlePickAvatar = () => {
 		fileInputRef.current?.click();
@@ -172,284 +335,488 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel }: Employ
 	const resolvedAvatar = removeAvatar ? null : avatarPreview ?? initialData?.avatarUrl ?? null;
 
 	return (
-		<form onSubmit={handleSubmit} className="space-y-6">
-			<input
-				type="file"
-				accept="image/*"
-				ref={fileInputRef}
-				className="hidden"
-				onChange={handleAvatarChange}
-			/>
+		<Form {...form}>
+			<form onSubmit={handleFormSubmit} className="space-y-6">
+				<input
+					type="file"
+					accept="image/*"
+					ref={fileInputRef}
+					className="hidden"
+					onChange={handleAvatarChange}
+				/>
 
-			<div className="flex items-center gap-4 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
-				<div className="relative h-20 w-20 overflow-hidden rounded-full border border-gray-200 dark:border-gray-700">
-					<Image
-						src={resolvedAvatar ?? '/images/user/owner.jpg'}
-						alt="员工头像预览"
-						width={80}
-						height={80}
-						className="object-cover"
-						unoptimized
-					/>
-				</div>
-				<div className="flex flex-1 flex-col gap-2 text-sm">
-					<div className="font-medium text-gray-800 dark:text-gray-100">头像</div>
-					<p className="text-xs text-gray-500 dark:text-gray-400">支持 PNG/JPG/GIF，建议 400×400 像素以内，最大 1.5MB。</p>
-					<div className="flex flex-wrap gap-2">
-						<button
-							type="button"
-							onClick={handlePickAvatar}
-							disabled={loading}
-							className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
-						>
-							{resolvedAvatar ? '更换头像' : '上传头像'}
-						</button>
-						{resolvedAvatar && (
-							<button
-								type="button"
-								onClick={handleAvatarRemove}
-								disabled={loading}
-								className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
-							>
-								移除
-							</button>
-						)}
+				<div className="flex items-center gap-4 rounded-2xl border border-border bg-muted/20 p-4">
+					<div className="relative h-20 w-20 overflow-hidden rounded-full border border-border">
+						<Image
+							src={resolvedAvatar ?? '/images/user/owner.jpg'}
+							alt="员工头像预览"
+							width={80}
+							height={80}
+							className="object-cover"
+							unoptimized
+						/>
 					</div>
-					{avatarError && <p className="text-xs text-rose-500">{avatarError}</p>}
-				</div>
-			</div>
-			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-				<div>
-					<label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-						员工编号
-					</label>
-					<input
-						value={formState.employeeCode}
-						onChange={(event) => setFormState((prev) => ({ ...prev, employeeCode: event.target.value }))}
-						placeholder="可选, 例如 EMP-001"
-						className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-					/>
-				</div>
-				<div>
-					<label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-						常用名
-					</label>
-					<input
-						value={formState.displayName}
-						onChange={(event) => setFormState((prev) => ({ ...prev, displayName: event.target.value }))}
-						placeholder="昵称 / 名片展示名称"
-						className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-					/>
-				</div>
-				<div>
-					<label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-						姓 <span className="text-rose-500">*</span>
-					</label>
-					<input
-						required
-						value={formState.lastName}
-						onChange={(event) => setFormState((prev) => ({ ...prev, lastName: event.target.value }))}
-						className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-					/>
-				</div>
-				<div>
-					<label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-						名 <span className="text-rose-500">*</span>
-					</label>
-					<input
-						required
-						value={formState.firstName}
-						onChange={(event) => setFormState((prev) => ({ ...prev, firstName: event.target.value }))}
-						className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-					/>
-				</div>
-			</div>
-
-			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-				<div>
-					<label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-						邮箱
-					</label>
-					<input
-						type="email"
-						value={formState.email}
-						onChange={(event) => setFormState((prev) => ({ ...prev, email: event.target.value }))}
-						placeholder="name@example.com"
-						className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-					/>
-				</div>
-				<div>
-					<label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-						电话
-					</label>
-					<input
-						value={formState.phone}
-						onChange={(event) => setFormState((prev) => ({ ...prev, phone: event.target.value }))}
-						placeholder="手机号或分机号"
-						className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-					/>
-				</div>
-				<div>
-					<label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-						部门
-					</label>
-					<input
-						value={formState.department}
-						onChange={(event) => setFormState((prev) => ({ ...prev, department: event.target.value }))}
-						placeholder="例如: 财务中心"
-						className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-					/>
-				</div>
-				<div>
-					<label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-						职位
-					</label>
-					<input
-						value={formState.jobTitle}
-						onChange={(event) => setFormState((prev) => ({ ...prev, jobTitle: event.target.value }))}
-						placeholder="职位名称"
-						className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-					/>
-				</div>
-			</div>
-
-			<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-				<div>
-					<label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">状态</label>
-					<select
-						value={formState.employmentStatus}
-						onChange={(event) =>
-							setFormState((prev) => ({
-								...prev,
-								employmentStatus: event.target.value as EmploymentStatus,
-							}))
-						}
-						disabled={hasReadonlyStatus}
-						className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-					>
-						{STATUS_OPTIONS.map((option) => (
-							<option key={option} value={option}>
-								{EMPLOYMENT_STATUS_LABELS[option]}
-							</option>
-						))}
-					</select>
-				</div>
-				<div>
-					<label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">入职日期</label>
-					<input
-						type="date"
-						value={formState.hireDate}
-						onChange={(event) => setFormState((prev) => ({ ...prev, hireDate: event.target.value }))}
-						className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-					/>
-				</div>
-				<div>
-					<label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">离职日期</label>
-					<input
-						type="date"
-						value={formState.terminationDate}
-						onChange={(event) =>
-							setFormState((prev) => ({ ...prev, terminationDate: event.target.value }))
-						}
-						className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-					/>
-				</div>
-			</div>
-
-			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-				<div>
-					<label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">直属上级</label>
-					<input
-						value={formState.managerId}
-						onChange={(event) => setFormState((prev) => ({ ...prev, managerId: event.target.value }))}
-						placeholder="可填写上级工号或姓名"
-						className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-					/>
-				</div>
-				<div>
-					<label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">办公地点</label>
-					<input
-						value={formState.location}
-						onChange={(event) => setFormState((prev) => ({ ...prev, location: event.target.value }))}
-						placeholder="城市 / 园区 / 办公室"
-						className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-					/>
-				</div>
-			</div>
-
-			<div className="rounded-lg border border-dashed border-gray-300 p-4 dark:border-gray-700">
-				<div className="mb-3 flex items-center justify-between">
-					<h3 className="text-sm font-medium text-gray-800 dark:text-gray-100">自定义字段</h3>
-					<button
-						type="button"
-						onClick={() => setCustomFields((rows) => [...rows, { key: '', value: '' }])}
-						className="text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-300"
-					>
-						+ 添加字段
-					</button>
-				</div>
-				<div className="space-y-3">
-					{customFields.map((row, index) => (
-						<div key={`custom-field-${index}`} className="grid grid-cols-1 gap-3 md:grid-cols-2">
-							<input
-								value={row.key}
-								onChange={(event) =>
-									setCustomFields((prev) => {
-										const next = [...prev];
-										next[index] = { ...next[index], key: event.target.value };
-										return next;
-									})
-								}
-								placeholder="字段名 (例如 员工编号2)"
-								className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-							/>
-							<div className="flex gap-2">
-								<input
-									value={row.value}
-									onChange={(event) =>
-										setCustomFields((prev) => {
-											const next = [...prev];
-											next[index] = { ...next[index], value: event.target.value };
-											return next;
-										})
-									}
-									placeholder="字段值"
-									className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-								/>
-								{customFields.length > 1 && (
-									<button
-										type="button"
-										onClick={() => setCustomFields((prev) => prev.filter((_, idx) => idx !== index))}
-										className="shrink-0 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:border-rose-400 hover:text-rose-500 dark:border-gray-600 dark:text-gray-300"
-									>
-										删除
-									</button>
-								)}
-							</div>
+					<div className="flex flex-1 flex-col gap-2 text-sm">
+						<div className="font-medium text-foreground">头像</div>
+						<p className="text-xs text-muted-foreground">支持 PNG/JPG/GIF，建议 400×400 像素以内，最大 1.5MB。</p>
+						<div className="flex flex-wrap gap-2">
+							<Button type="button" size="sm" onClick={handlePickAvatar} disabled={formState.isSubmitting}>
+								{resolvedAvatar ? '更换头像' : '上传头像'}
+							</Button>
+							{resolvedAvatar && (
+								<Button type="button" variant="outline" size="sm" onClick={handleAvatarRemove} disabled={formState.isSubmitting}>
+									移除
+								</Button>
+							)}
 						</div>
-					))}
+						{avatarError && <p className="text-xs text-destructive">{avatarError}</p>}
+					</div>
 				</div>
-			</div>
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+					<FormField
+						control={control}
+						name="employeeCode"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>员工编号</FormLabel>
+								<FormControl>
+									<Input placeholder="可选, 例如 EMP-001" {...field} />
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+					<FormField
+						control={control}
+						name="displayName"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>常用名</FormLabel>
+								<FormControl>
+									<Input placeholder="昵称 / 名片展示名称" {...field} />
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+					<FormField
+						control={control}
+						name="lastName"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>
+									姓 <span className="text-destructive">*</span>
+								</FormLabel>
+								<FormControl>
+									<Input {...field} />
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+					<FormField
+						control={control}
+						name="firstName"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>
+									名 <span className="text-destructive">*</span>
+								</FormLabel>
+								<FormControl>
+									<Input {...field} />
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+				</div>
 
-			<div className="flex justify-end gap-3">
-				{onCancel && (
-					<button
-						type="button"
-						disabled={loading}
-						onClick={onCancel}
-						className="rounded-lg border border-gray-300 px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-					>
-						取消
-					</button>
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+					<FormField
+						control={control}
+						name="email"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>邮箱</FormLabel>
+								<FormControl>
+									<Input type="email" placeholder="name@example.com" {...field} />
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+					<FormField
+						control={control}
+						name="phone"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>电话</FormLabel>
+								<FormControl>
+									<Input placeholder="手机号或分机号" {...field} />
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+				</div>
+
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+					<FormField
+						control={control}
+						name="nationalId"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>身份证号</FormLabel>
+								<FormControl>
+									<Input placeholder="填写居民身份证号码" {...field} />
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+					<FormField
+						control={control}
+						name="gender"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>性别</FormLabel>
+								<Select
+									value={field.value || 'unspecified'}
+									onValueChange={(value) => field.onChange(value === 'unspecified' ? '' : value)}
+								>
+									<FormControl>
+										<SelectTrigger>
+											<SelectValue placeholder="未设置" />
+										</SelectTrigger>
+									</FormControl>
+									<SelectContent>
+										<SelectItem value="unspecified">未设置</SelectItem>
+										{GENDER_OPTIONS.map((option) => (
+											<SelectItem key={option} value={option}>
+												{EMPLOYEE_GENDER_LABELS[option]}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+				</div>
+
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+					<FormField
+						control={control}
+						name="organization"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>机关 / 单位</FormLabel>
+								<FormControl>
+									<Input placeholder="供职机构或行政机关" {...field} />
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+					<FormField
+						control={control}
+						name="educationBackground"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>教育背景</FormLabel>
+								<FormControl>
+									<Input placeholder="最高学历或专业" {...field} />
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+				</div>
+
+				<FormField
+					control={control}
+					name="address"
+					render={({ field }) => (
+						<FormItem>
+							<FormLabel>住址</FormLabel>
+							<FormControl>
+								<Textarea rows={3} placeholder="省市区 + 详细地址" {...field} />
+							</FormControl>
+							<FormMessage />
+						</FormItem>
+					)}
+				/>
+
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+					<FormField
+						control={control}
+						name="departmentId"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>部门 (结构化)</FormLabel>
+								<Select
+									value={field.value || 'none'}
+									onValueChange={(value) => {
+										const normalized = value === 'none' ? '' : value;
+										field.onChange(normalized);
+										if (normalized) {
+											const matched = availableDepartments.find((option) => option.id === normalized);
+											form.setValue('department', matched?.name ?? '', { shouldDirty: true });
+										} else {
+											form.setValue('department', '', { shouldDirty: true });
+										}
+									}}
+								>
+									<FormControl>
+										<SelectTrigger>
+											<SelectValue placeholder={availableDepartments.length ? '选择部门' : '正在加载部门…'} />
+										</SelectTrigger>
+									</FormControl>
+									<SelectContent>
+										<SelectItem value="none">未设置</SelectItem>
+										{!availableDepartments.length && (
+											<SelectItem value="__no_departments" disabled>
+												暂无可选部门
+											</SelectItem>
+										)}
+										{availableDepartments.map((dept) => (
+											<SelectItem key={dept.id} value={dept.id}>
+												{dept.name}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+								<FormDescription>选择后会自动同步部门名称，可右侧手动微调。</FormDescription>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+					<FormField
+						control={control}
+						name="department"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>部门名称</FormLabel>
+								<FormControl>
+									<Input placeholder="例如: 财务中心" {...field} />
+								</FormControl>
+								<FormDescription>无结构化数据时，可手动填写或覆盖自动名称。</FormDescription>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+					<FormField
+						control={control}
+						name="jobGradeId"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>职级</FormLabel>
+								<Select
+									value={field.value || 'none'}
+									onValueChange={(value) => field.onChange(value === 'none' ? '' : value)}
+								>
+									<FormControl>
+										<SelectTrigger>
+											<SelectValue placeholder={availableJobGrades.length ? '选择职级' : '正在加载职级…'} />
+										</SelectTrigger>
+									</FormControl>
+									<SelectContent>
+										<SelectItem value="none">未设置</SelectItem>
+										{!availableJobGrades.length && (
+											<SelectItem value="__no_job_grade" disabled>
+												暂无可选职级
+											</SelectItem>
+										)}
+										{availableJobGrades.map((grade) => (
+											<SelectItem key={grade.id} value={grade.id}>
+												{grade.name}
+												{grade.level != null ? ` (L${grade.level})` : ''}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+					<FormField
+						control={control}
+						name="jobTitle"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>职位</FormLabel>
+								<FormControl>
+									<Input placeholder="职位名称" {...field} />
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+				</div>
+
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+					<FormField
+						control={control}
+						name="employmentStatus"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>状态</FormLabel>
+								<Select value={field.value} onValueChange={field.onChange} disabled={hasReadonlyStatus}>
+									<FormControl>
+										<SelectTrigger>
+											<SelectValue />
+										</SelectTrigger>
+									</FormControl>
+									<SelectContent>
+										{STATUS_OPTIONS.map((option) => (
+											<SelectItem key={option} value={option}>
+												{EMPLOYMENT_STATUS_LABELS[option]}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+					<FormField
+						control={control}
+						name="hireDate"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>入职日期</FormLabel>
+								<FormControl>
+									<DatePicker value={field.value ?? ''} onChange={field.onChange} clearable={false} />
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+					<FormField
+						control={control}
+						name="terminationDate"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>离职日期</FormLabel>
+								<FormControl>
+									<DatePicker value={field.value ?? ''} onChange={field.onChange} />
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+				</div>
+
+				{initialData && statusChanged && (
+					<FormField
+						control={control}
+						name="statusChangeNote"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>状态变更备注</FormLabel>
+								<FormDescription>可选，说明此次状态调整的背景或审批信息。</FormDescription>
+								<FormControl>
+									<Textarea rows={3} placeholder="例如：完成入职手续，状态改为在职" {...field} />
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
 				)}
-				<button
-					type="submit"
-					disabled={loading}
-					className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
-				>
-					{loading ? '保存中...' : initialData ? '更新' : '创建'}
-				</button>
-			</div>
-		</form>
+
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+					<FormField
+						control={control}
+						name="managerId"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>直属上级</FormLabel>
+								<FormControl>
+									<Input placeholder="可填写上级工号或姓名" {...field} />
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+					<FormField
+						control={control}
+						name="location"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>办公地点</FormLabel>
+								<FormControl>
+									<Input placeholder="城市 / 园区 / 办公室" {...field} />
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+				</div>
+
+				<div className="rounded-2xl border border-dashed border-border p-4">
+					<div className="mb-3 flex items-center justify-between">
+						<h3 className="text-sm font-medium text-foreground">自定义字段</h3>
+						<Button type="button" variant="ghost" size="sm" onClick={() => append({ key: '', value: '' })}>
+							+ 添加字段
+						</Button>
+					</div>
+					<div className="space-y-3">
+						{fields.map((field, index) => (
+							<div key={field.id} className="grid grid-cols-1 gap-3 md:grid-cols-2">
+								<FormField
+									control={control}
+									name={`customFields.${index}.key` as const}
+									render={({ field: fieldProps }) => (
+										<FormItem>
+											<FormLabel>字段名</FormLabel>
+											<FormControl>
+												<Input placeholder="例如 员工编号2" {...fieldProps} />
+											</FormControl>
+											<FormMessage />
+										</FormItem>
+									)}
+								/>
+								<div className="flex gap-2">
+									<FormField
+										control={control}
+										name={`customFields.${index}.value` as const}
+										render={({ field: fieldProps }) => (
+											<FormItem className="flex-1">
+												<FormLabel>字段值</FormLabel>
+												<FormControl>
+													<Input placeholder="字段值" {...fieldProps} />
+												</FormControl>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+									{fields.length > 1 && (
+										<Button
+											type="button"
+											variant="ghost"
+											className="shrink-0"
+											onClick={() => remove(index)}
+										>
+											删除
+										</Button>
+									)}
+								</div>
+							</div>
+						))}
+					</div>
+				</div>
+
+				<div className="flex justify-end gap-3">
+					{onCancel && (
+						<Button type="button" variant="outline" onClick={onCancel} disabled={formState.isSubmitting}>
+							取消
+						</Button>
+					)}
+					<Button type="submit" disabled={formState.isSubmitting}>
+						{formState.isSubmitting ? '保存中...' : initialData ? '更新' : '创建'}
+					</Button>
+				</div>
+			</form>
+		</Form>
 	);
 }

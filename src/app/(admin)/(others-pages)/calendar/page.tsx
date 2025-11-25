@@ -1,5 +1,4 @@
 import Calendar from "@/components/calendar/Calendar";
-import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { Metadata } from "next";
 import React from "react";
 
@@ -11,8 +10,7 @@ export const metadata: Metadata = {
 };
 export default function page() {
   return (
-    <div>
-      <PageBreadcrumb pageTitle="Calendar" />
+    <div className="flex h-full flex-col rounded-none border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
       <Calendar />
     </div>
   );

@@ -4,11 +4,12 @@ import ComponentCard from '../../common/ComponentCard';
 import Label from '../Label';
 import Input from '../input/InputField';
 import Select from '../Select';
-import { ChevronDownIcon, EyeCloseIcon, EyeIcon, TimeIcon } from '../../../icons';
-import DatePicker from '@/components/form/date-picker';
+import { ChevronDown as ChevronDownIcon, Clock as TimeIcon, Eye as EyeIcon, EyeOff as EyeCloseIcon } from 'lucide-react';
+import DatePicker from '@/components/ui/DatePicker';
 
 export default function DefaultInputs() {
   const [showPassword, setShowPassword] = useState(false);
+  const [demoDate, setDemoDate] = useState('');
   const options = [
     { value: "marketing", label: "Marketing" },
     { value: "template", label: "Template" },
@@ -64,12 +65,12 @@ export default function DefaultInputs() {
 
         <div>
           <DatePicker
-            id="date-picker"
             label="Date Picker Input"
             placeholder="Select a date"
-            onChange={(dates, currentDateString) => {
-              // Handle your logic
-              console.log({ dates, currentDateString });
+            value={demoDate}
+            onChange={(value) => {
+              setDemoDate(value);
+              console.log({ value });
             }}
           />
         </div>

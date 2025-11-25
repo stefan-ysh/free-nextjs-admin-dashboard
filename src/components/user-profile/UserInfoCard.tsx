@@ -3,11 +3,18 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 import { useModal } from "../../hooks/useModal";
-import TextArea from "../form/input/TextArea";
-import Input from "../form/input/InputField";
-import Label from "../form/Label";
-import Button from "../ui/button/Button";
-import { Modal } from "../ui/modal";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { ProfileData } from "./types";
 
 type UserInfoCardProps = {
@@ -118,65 +125,63 @@ export default function UserInfoCard({ profile, onUpdate, loading = false }: Use
         </Button>
       </div>
 
-      <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[640px] m-4">
-        <div className="no-scrollbar relative w-full max-w-[640px] overflow-y-auto rounded-3xl bg-white p-4 dark:bg-gray-900 lg:p-9">
-          <div className="px-2">
-            <h4 className="mb-2 text-2xl font-semibold text-gray-800 dark:text-white/90">编辑基础信息</h4>
-            <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">更新您的个人资料以便团队成员了解您。</p>
-          </div>
-          <form className="flex flex-col" onSubmit={handleSubmit}>
-            <div className="custom-scrollbar max-h-[420px] overflow-y-auto px-2 pb-3">
-              <div className="grid grid-cols-1 gap-x-6 gap-y-5 lg:grid-cols-2">
-                <div>
-                  <Label>名</Label>
-                  <Input
-                    type="text"
-                    value={formState.firstName}
-                    onChange={(event) => setFormState((prev) => ({ ...prev, firstName: event.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label>姓</Label>
-                  <Input
-                    type="text"
-                    value={formState.lastName}
-                    onChange={(event) => setFormState((prev) => ({ ...prev, lastName: event.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label>邮箱</Label>
-                  <Input type="email" value={profile?.email ?? ""} disabled />
-                </div>
-                <div>
-                  <Label>手机号</Label>
-                  <Input
-                    type="tel"
-                    value={formState.phone}
-                    onChange={(event) => setFormState((prev) => ({ ...prev, phone: event.target.value }))}
-                  />
-                </div>
-                <div className="lg:col-span-2">
-                  <Label>个人简介</Label>
-                  <TextArea
-                    rows={4}
-                    value={formState.bio}
-                    onChange={(value) => setFormState((prev) => ({ ...prev, bio: value }))}
-                  />
-                </div>
+      <Dialog open={isOpen} onOpenChange={(open) => !open && closeModal()}>
+        <DialogContent className="max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle>编辑基础信息</DialogTitle>
+            <DialogDescription>更新您的个人资料以便团队成员了解您。</DialogDescription>
+          </DialogHeader>
+          <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
+            <div className="grid grid-cols-1 gap-x-6 gap-y-5 lg:grid-cols-2">
+              <div className="space-y-2">
+                <Label>名</Label>
+                <Input
+                  type="text"
+                  value={formState.firstName}
+                  onChange={(event) => setFormState((prev) => ({ ...prev, firstName: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>姓</Label>
+                <Input
+                  type="text"
+                  value={formState.lastName}
+                  onChange={(event) => setFormState((prev) => ({ ...prev, lastName: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>邮箱</Label>
+                <Input type="email" value={profile?.email ?? ""} disabled />
+              </div>
+              <div className="space-y-2">
+                <Label>手机号</Label>
+                <Input
+                  type="tel"
+                  value={formState.phone}
+                  onChange={(event) => setFormState((prev) => ({ ...prev, phone: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-2 lg:col-span-2">
+                <Label>个人简介</Label>
+                <Textarea
+                  rows={4}
+                  value={formState.bio}
+                  onChange={(event) => setFormState((prev) => ({ ...prev, bio: event.target.value }))}
+                />
               </div>
             </div>
-            {error && <p className="px-2 text-sm text-error-500">{error}</p>}
-            <div className="flex items-center gap-3 px-2 mt-6 lg:justify-end">
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <DialogFooter>
               <Button size="sm" variant="outline" type="button" onClick={closeModal} disabled={saving}>
                 取消
               </Button>
               <Button size="sm" type="submit" disabled={saving}>
                 {saving ? "保存中..." : "保存修改"}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
-        </div>
-      </Modal>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

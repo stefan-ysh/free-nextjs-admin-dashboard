@@ -2,8 +2,9 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 
-import Button from "../ui/button/Button";
+import { Button } from "@/components/ui/button";
 import type { DeviceInfo } from "./types";
+import { formatDateTimeLocal } from "@/lib/dates";
 
 type UserDevicesCardProps = {
   devices: DeviceInfo[];
@@ -17,11 +18,7 @@ type UserDevicesCardProps = {
 
 function formatDateTime(value: string) {
   if (!value) return "时间未知";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value || "时间未知";
-  }
-  return date.toLocaleString();
+  return formatDateTimeLocal(value) ?? value;
 }
 
 function resolveDeviceLabel(device: DeviceInfo) {

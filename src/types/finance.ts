@@ -41,30 +41,45 @@ export interface InvoiceInfo {
 }
 
 // 财务记录接口
+export type FinanceSourceType = 'manual' | 'purchase' | 'project' | 'import' | 'inventory' | 'project_payment';
+export type FinanceRecordStatus = 'draft' | 'cleared';
+export type FinanceRecordMetadata = Record<string, unknown>;
+
 export interface FinanceRecord {
   id: string;
-  
+
   // 基本信息
   name: string;                    // 明细名称(如:办公室装修、员工工资等)
   date: string;                    // 交易日期 (ISO string)
-  category: string;                // 分类(装修费用、工资、采购等)
+  category: string;                // 分类(如:差旅费、办公费-快递与邮寄、项目收入等)
   type: TransactionType;           // 收支类型
-  
+  status: FinanceRecordStatus;     // 流水状态(草稿/已确认)
+
   // 金额信息
   contractAmount: number;          // 合同金额
   fee: number;                     // 手续费
   totalAmount: number;             // 总金额(合同金额 + 手续费,自动计算)
-  
+  quantity?: number;               // 数量/件数
+
   // 款项信息
   paymentType: PaymentType;        // 款项类型
-  
+  paymentChannel?: string;         // 支付方式(公对公/公对私等)
+  payer?: string;                  // 代付人
+  transactionNo?: string;          // 流水号
+
   // 发票信息
   invoice?: InvoiceInfo;           // 发票信息(可选)
-  
+
   // 其他信息
   description?: string;            // 备注描述
   tags?: string[];                 // 标签
-  
+  sourceType?: FinanceSourceType;  // 数据来源
+  purchaseId?: string | null;      // 关联采购记录
+  projectId?: string | null;       // 关联项目
+  inventoryMovementId?: string | null; // 关联库存流水
+  projectPaymentId?: string | null; // 关联项目收款
+  metadata?: FinanceRecordMetadata; // 额外元数据(JSON)
+
   // 系统字段
   createdAt: string;               // 创建时间
   updatedAt: string;               // 更新时间
@@ -90,14 +105,14 @@ export interface FinanceStats {
   totalExpense: number;         // 总支出
   balance: number;              // 余额
   recordCount: number;          // 记录数
-  
+
   // 发票统计
   invoiceStats?: {
     issued: number;             // 已开票金额
     pending: number;            // 待开票金额
     notRequired: number;        // 无需开票金额
   };
-  
+
   // 款项统计
   paymentStats?: {
     deposit: number;            // 定金
@@ -105,7 +120,7 @@ export interface FinanceStats {
     installment: number;       // 分期
     balance: number;           // 尾款
   };
-  
+
   categoryStats: CategoryStat[];  // 分类统计
 }
 

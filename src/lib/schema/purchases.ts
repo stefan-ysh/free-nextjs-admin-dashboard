@@ -1,293 +1,117 @@
-import { sql } from '@/lib/postgres';
+import { schemaPool, safeCreateIndex, ensureColumn } from '@/lib/schema/mysql-utils';
+import { ensureUsersSchema } from '@/lib/schema/users';
+import { ensureProjectsSchema } from '@/lib/schema/projects';
 
 let initialized = false;
 
-/**
- * 采购管理表结构
- */
 export async function ensurePurchasesSchema() {
   if (initialized) return;
 
-  // 创建采购记录表
-  await sql`
+  await ensureUsersSchema();
+  await ensureProjectsSchema();
+
+  const pool = schemaPool();
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS purchases (
-      -- ============ 核心字段 ============
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      purchase_number TEXT UNIQUE NOT NULL,
-      
-      -- ============ 基本信息 ============
+      id CHAR(36) NOT NULL PRIMARY KEY,
+      purchase_number VARCHAR(40) NOT NULL UNIQUE,
       purchase_date DATE NOT NULL,
-      item_name TEXT NOT NULL,
+      item_name VARCHAR(255) NOT NULL,
       specification TEXT,
-      quantity NUMERIC(10,2) NOT NULL,
-      unit_price NUMERIC(12,2) NOT NULL,
-      total_amount NUMERIC(15,2) NOT NULL,
-      
-      -- ============ 购买信息 ============
-      purchase_channel TEXT NOT NULL,
-      purchase_location TEXT,
+      quantity DECIMAL(10,2) NOT NULL,
+      unit_price DECIMAL(12,2) NOT NULL,
+      total_amount DECIMAL(15,2) NOT NULL,
+      fee_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+      purchase_channel ENUM('online','offline') NOT NULL,
+      purchase_location VARCHAR(255),
       purchase_link TEXT,
       purpose TEXT NOT NULL,
-      
-      -- ============ 付款信息 ============
-      payment_method TEXT NOT NULL,
-      purchaser_id UUID NOT NULL,
-      
-      -- ============ 发票信息 ============
-      invoice_type TEXT NOT NULL,
-      invoice_images TEXT[] DEFAULT ARRAY[]::TEXT[],
-      receipt_images TEXT[] DEFAULT ARRAY[]::TEXT[],
-      
-      -- ============ 项目关联 ============
-      has_project BOOLEAN NOT NULL DEFAULT false,
-      project_id UUID,
-      
-      -- ============ 状态流程 ============
-      status TEXT NOT NULL DEFAULT 'draft',
-      
-      -- ============ 审批信息 ============
-      submitted_at TIMESTAMPTZ,
-      approved_at TIMESTAMPTZ,
-      approved_by UUID,
-      rejected_at TIMESTAMPTZ,
-      rejected_by UUID,
+      payment_method ENUM('wechat','alipay','bank_transfer','corporate_transfer','cash') NOT NULL,
+      payment_type ENUM('deposit','full','installment','balance','other') NOT NULL DEFAULT 'full',
+      payment_channel VARCHAR(120),
+      payer_name VARCHAR(120),
+      transaction_no VARCHAR(160),
+      purchaser_id CHAR(36) NOT NULL,
+      invoice_type ENUM('special','general','none') NOT NULL,
+      invoice_status ENUM('pending','issued','not_required') NOT NULL DEFAULT 'not_required',
+      invoice_number VARCHAR(120),
+      invoice_issue_date DATE,
+      invoice_images JSON NOT NULL DEFAULT (JSON_ARRAY()),
+      receipt_images JSON NOT NULL DEFAULT (JSON_ARRAY()),
+      has_project TINYINT(1) NOT NULL DEFAULT 0,
+      project_id CHAR(36),
+      status ENUM('draft','pending_approval','approved','rejected','paid','cancelled') NOT NULL DEFAULT 'draft',
+      submitted_at DATETIME(3),
+      approved_at DATETIME(3),
+      approved_by CHAR(36),
+      rejected_at DATETIME(3),
+      rejected_by CHAR(36),
       rejection_reason TEXT,
-      paid_at TIMESTAMPTZ,
-      paid_by UUID,
-      
-      -- ============ 其他 ============
+      paid_at DATETIME(3),
+      paid_by CHAR(36),
       notes TEXT,
-      attachments TEXT[] DEFAULT ARRAY[]::TEXT[],
-      
-      -- ============ 审计字段 ============
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      created_by UUID NOT NULL,
-      is_deleted BOOLEAN NOT NULL DEFAULT false,
-      deleted_at TIMESTAMPTZ
-    )
-  `;
+      attachments JSON NOT NULL DEFAULT (JSON_ARRAY()),
+      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+      created_by CHAR(36) NOT NULL,
+      is_deleted TINYINT(1) NOT NULL DEFAULT 0,
+      deleted_at DATETIME(3),
+      CONSTRAINT chk_purchases_quantity CHECK (quantity > 0),
+      CONSTRAINT chk_purchases_unit_price CHECK (unit_price >= 0),
+      CONSTRAINT chk_purchases_total CHECK (total_amount >= 0),
+      CONSTRAINT chk_purchases_fee CHECK (fee_amount >= 0),
+      CONSTRAINT chk_purchases_total_consistency CHECK (ABS(total_amount - (quantity * unit_price)) <= 0.01),
+      CONSTRAINT fk_purchases_purchaser FOREIGN KEY (purchaser_id) REFERENCES users(id) ON DELETE RESTRICT,
+      CONSTRAINT fk_purchases_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
+      CONSTRAINT fk_purchases_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+      CONSTRAINT fk_purchases_approved_by FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL,
+      CONSTRAINT fk_purchases_rejected_by FOREIGN KEY (rejected_by) REFERENCES users(id) ON DELETE SET NULL,
+      CONSTRAINT fk_purchases_paid_by FOREIGN KEY (paid_by) REFERENCES users(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
 
-  // 创建报销流程日志表
-  await sql`
+  // Ensure newer columns exist for legacy databases
+  await ensureColumn('purchases', 'fee_amount', "DECIMAL(12,2) NOT NULL DEFAULT 0");
+  await ensureColumn(
+    'purchases',
+    'payment_type',
+    "ENUM('deposit','full','installment','balance','other') NOT NULL DEFAULT 'full'"
+  );
+  await ensureColumn('purchases', 'payment_channel', 'VARCHAR(120)');
+  await ensureColumn('purchases', 'payer_name', 'VARCHAR(120)');
+  await ensureColumn('purchases', 'transaction_no', 'VARCHAR(160)');
+  await ensureColumn(
+    'purchases',
+    'invoice_status',
+    "ENUM('pending','issued','not_required') NOT NULL DEFAULT 'not_required'"
+  );
+  await ensureColumn('purchases', 'invoice_number', 'VARCHAR(120)');
+  await ensureColumn('purchases', 'invoice_issue_date', 'DATE');
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS reimbursement_logs (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      purchase_id UUID NOT NULL,
-      action TEXT NOT NULL,
-      from_status TEXT NOT NULL,
-      to_status TEXT NOT NULL,
-      operator_id UUID NOT NULL,
+      id CHAR(36) NOT NULL PRIMARY KEY,
+      purchase_id CHAR(36) NOT NULL,
+      action ENUM('submit','approve','reject','pay','cancel','withdraw') NOT NULL,
+      from_status ENUM('draft','pending_approval','approved','rejected','paid','cancelled') NOT NULL,
+      to_status ENUM('draft','pending_approval','approved','rejected','paid','cancelled') NOT NULL,
+      operator_id CHAR(36) NOT NULL,
       comment TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
+      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      CONSTRAINT fk_reimbursement_purchase FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE CASCADE,
+      CONSTRAINT fk_reimbursement_operator FOREIGN KEY (operator_id) REFERENCES users(id) ON DELETE RESTRICT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
 
-  // 创建索引 - purchases
-  await sql`
-    CREATE INDEX IF NOT EXISTS idx_purchases_number 
-    ON purchases(purchase_number)
-  `;
-
-  await sql`
-    CREATE INDEX IF NOT EXISTS idx_purchases_purchaser 
-    ON purchases(purchaser_id)
-  `;
-
-  await sql`
-    CREATE INDEX IF NOT EXISTS idx_purchases_status 
-    ON purchases(status) 
-    WHERE is_deleted = false
-  `;
-
-  await sql`
-    CREATE INDEX IF NOT EXISTS idx_purchases_project 
-    ON purchases(project_id) 
-    WHERE project_id IS NOT NULL
-  `;
-
-  await sql`
-    CREATE INDEX IF NOT EXISTS idx_purchases_date 
-    ON purchases(purchase_date DESC)
-  `;
-
-  await sql`
-    CREATE INDEX IF NOT EXISTS idx_purchases_created_by 
-    ON purchases(created_by)
-  `;
-
-  // 创建索引 - reimbursement_logs
-  await sql`
-    CREATE INDEX IF NOT EXISTS idx_reimbursement_logs_purchase 
-    ON reimbursement_logs(purchase_id)
-  `;
-
-  await sql`
-    CREATE INDEX IF NOT EXISTS idx_reimbursement_logs_created 
-    ON reimbursement_logs(created_at DESC)
-  `;
-
-  // 添加约束
-  await sql`
-    DO $$
-    BEGIN
-      -- 数量约束
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'purchases_quantity_check'
-      ) THEN
-        ALTER TABLE purchases
-        ADD CONSTRAINT purchases_quantity_check
-        CHECK (quantity > 0);
-      END IF;
-      
-      -- 单价约束
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'purchases_unit_price_check'
-      ) THEN
-        ALTER TABLE purchases
-        ADD CONSTRAINT purchases_unit_price_check
-        CHECK (unit_price >= 0);
-      END IF;
-      
-      -- 总价约束（允许小误差）
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'purchases_total_check'
-      ) THEN
-        ALTER TABLE purchases
-        ADD CONSTRAINT purchases_total_check
-        CHECK (abs(total_amount - (quantity * unit_price)) < 0.01);
-      END IF;
-      
-      -- 购买渠道约束
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'purchases_channel_check'
-      ) THEN
-        ALTER TABLE purchases
-        ADD CONSTRAINT purchases_channel_check
-        CHECK (purchase_channel IN ('online', 'offline'));
-      END IF;
-      
-      -- 付款方式约束
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'purchases_payment_check'
-      ) THEN
-        ALTER TABLE purchases
-        ADD CONSTRAINT purchases_payment_check
-        CHECK (payment_method IN ('wechat', 'alipay', 'bank_transfer', 'corporate_transfer', 'cash'));
-      END IF;
-      
-      -- 发票类型约束
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'purchases_invoice_check'
-      ) THEN
-        ALTER TABLE purchases
-        ADD CONSTRAINT purchases_invoice_check
-        CHECK (invoice_type IN ('special', 'general', 'none'));
-      END IF;
-      
-      -- 状态约束
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'purchases_status_check'
-      ) THEN
-        ALTER TABLE purchases
-        ADD CONSTRAINT purchases_status_check
-        CHECK (status IN ('draft', 'pending_approval', 'approved', 'rejected', 'paid', 'cancelled'));
-      END IF;
-      
-      -- 项目关联约束
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'purchases_project_check'
-      ) THEN
-        ALTER TABLE purchases
-        ADD CONSTRAINT purchases_project_check
-        CHECK (
-          (has_project = false) OR 
-          (has_project = true AND project_id IS NOT NULL)
-        );
-      END IF;
-      
-      -- 外键：purchaser_id 引用 users
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'purchases_purchaser_fkey'
-      ) THEN
-        ALTER TABLE purchases
-        ADD CONSTRAINT purchases_purchaser_fkey
-        FOREIGN KEY (purchaser_id) REFERENCES users(id);
-      END IF;
-      
-      -- 外键：created_by 引用 users
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'purchases_created_by_fkey'
-      ) THEN
-        ALTER TABLE purchases
-        ADD CONSTRAINT purchases_created_by_fkey
-        FOREIGN KEY (created_by) REFERENCES users(id);
-      END IF;
-      
-      -- 外键：approved_by 引用 users
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'purchases_approved_by_fkey'
-      ) THEN
-        ALTER TABLE purchases
-        ADD CONSTRAINT purchases_approved_by_fkey
-        FOREIGN KEY (approved_by) REFERENCES users(id);
-      END IF;
-      
-      -- 外键：rejected_by 引用 users
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'purchases_rejected_by_fkey'
-      ) THEN
-        ALTER TABLE purchases
-        ADD CONSTRAINT purchases_rejected_by_fkey
-        FOREIGN KEY (rejected_by) REFERENCES users(id);
-      END IF;
-      
-      -- 外键：paid_by 引用 users
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'purchases_paid_by_fkey'
-      ) THEN
-        ALTER TABLE purchases
-        ADD CONSTRAINT purchases_paid_by_fkey
-        FOREIGN KEY (paid_by) REFERENCES users(id);
-      END IF;
-      
-      -- 外键：project_id 引用 projects
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'purchases_project_fkey'
-      ) THEN
-        ALTER TABLE purchases
-        ADD CONSTRAINT purchases_project_fkey
-        FOREIGN KEY (project_id) REFERENCES projects(id);
-      END IF;
-      
-      -- 外键：reimbursement_logs.purchase_id 引用 purchases
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'reimbursement_logs_purchase_fkey'
-      ) THEN
-        ALTER TABLE reimbursement_logs
-        ADD CONSTRAINT reimbursement_logs_purchase_fkey
-        FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE CASCADE;
-      END IF;
-      
-      -- 外键：reimbursement_logs.operator_id 引用 users
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'reimbursement_logs_operator_fkey'
-      ) THEN
-        ALTER TABLE reimbursement_logs
-        ADD CONSTRAINT reimbursement_logs_operator_fkey
-        FOREIGN KEY (operator_id) REFERENCES users(id);
-      END IF;
-      
-      -- 日志操作类型约束
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'reimbursement_logs_action_check'
-      ) THEN
-        ALTER TABLE reimbursement_logs
-        ADD CONSTRAINT reimbursement_logs_action_check
-        CHECK (action IN ('submit', 'approve', 'reject', 'pay', 'cancel', 'withdraw'));
-      END IF;
-    END
-    $$
-  `;
+  await safeCreateIndex('CREATE INDEX idx_purchases_number ON purchases(purchase_number)');
+  await safeCreateIndex('CREATE INDEX idx_purchases_purchaser ON purchases(purchaser_id)');
+  await safeCreateIndex('CREATE INDEX idx_purchases_status ON purchases(status)');
+  await safeCreateIndex('CREATE INDEX idx_purchases_project ON purchases(project_id)');
+  await safeCreateIndex('CREATE INDEX idx_purchases_date ON purchases(purchase_date)');
+  await safeCreateIndex('CREATE INDEX idx_purchases_created_by ON purchases(created_by)');
+  await safeCreateIndex('CREATE INDEX idx_reimbursement_logs_purchase ON reimbursement_logs(purchase_id)');
+  await safeCreateIndex('CREATE INDEX idx_reimbursement_logs_created ON reimbursement_logs(created_at)');
 
   initialized = true;
 }

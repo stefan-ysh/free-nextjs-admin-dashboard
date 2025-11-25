@@ -1,164 +1,148 @@
 "use client";
-import Checkbox from "@/components/form/input/Checkbox";
-import Input from "@/components/form/input/InputField";
-import Label from "@/components/form/Label";
-import Button from "@/components/ui/button/Button";
-import { ChevronLeftIcon, EyeCloseIcon, EyeIcon } from "@/icons";
-import { useAuth } from "@/app/auth-context";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
+import { useAuth } from "@/app/auth-context";
+// import { useToast } from "@/components/ui/use-toast";
 
 export default function SignInForm() {
-  const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { refresh } = useAuth();
+  // const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+    rememberMe: false,
+  });
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (loading) return;
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
-    if (!email || !password) {
-      setError("请输入邮箱和密码");
-      return;
-    }
+  const handleCheckboxChange = (checked: boolean | "indeterminate") => {
+    setFormData((prev) => ({ ...prev, rememberMe: checked === true }));
+  };
 
-    setLoading(true);
-    setError(null);
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading(true);
 
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email, password, rememberMe }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
       });
 
       const data = await res.json();
-      if (!res.ok || !data.success) {
-        setError(data.error ?? "登录失败，请检查账号密码");
-        return;
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || "登录失败");
       }
 
-  await refresh();
-  router.replace("/");
-  router.refresh();
-    } catch (err) {
-      console.error("登录请求失败", err);
-      setError("服务器异常，请稍后重试");
+      toast.success("登录成功", {
+        description: "正在跳转...",
+      });
+
+      await refresh();
+      router.replace("/");
+      router.refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "登录失败";
+      toast.error("登录失败", {
+        description: message,
+      });
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
+
   return (
-    <div className="flex flex-col flex-1 w-full lg:w-1/2">
-      <div className="w-full max-w-md mx-auto mb-5 sm:pt-10">
-        <Link
-          href="/"
-          prefetch={false}
-          className="inline-flex items-center text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-        >
-          <ChevronLeftIcon />
-          返回仪表盘
-        </Link>
-
-        <div className="mt-8 sm:mt-10">
-          <div className="mb-5 sm:mb-8">
-            <h1 className="mb-2 font-semibold text-gray-800 text-title-sm dark:text-white/90 sm:text-title-md">
-              登录
-            </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              使用邮箱和密码登录
-            </p>
+    <div className="grid gap-6">
+      <form onSubmit={handleSubmit}>
+        <div className="grid gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="email">邮箱 / 账号</Label>
+            <Input
+              id="email"
+              name="email"
+              placeholder="name@example.com"
+              type="text"
+              autoCapitalize="none"
+              autoComplete="email"
+              autoCorrect="off"
+              disabled={isLoading}
+              value={formData.email}
+              onChange={handleChange}
+              required
+            />
           </div>
-
-          <form onSubmit={handleSubmit}>
-            <div className="space-y-6">
-              <div>
-                <Label>
-                   邮箱 <span className="text-error-500">*</span>
-                </Label>
-                <Input
-                  placeholder="info@gmail.com"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                />
-              </div>
-
-              <div>
-                <Label>
-                  密码 <span className="text-error-500">*</span>
-                </Label>
-                <div className="relative">
-                  <Input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2"
-                  >
-                    {showPassword ? (
-                      <EyeIcon className="fill-gray-500 dark:fill-gray-400" />
-                    ) : (
-                      <EyeCloseIcon className="fill-gray-500 dark:fill-gray-400" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-3">
-                  <Checkbox checked={rememberMe} onChange={setRememberMe} />
-                  <span className="font-normal text-gray-700 text-theme-sm dark:text-gray-400">
-                    保持登录
-                  </span>
-                </label>
-                <Link
-                  href="/reset-password"
-                  prefetch={false}
-                  className="text-sm text-brand-500 hover:text-brand-600 dark:text-brand-400"
-                >
-                  忘记密码?
-                </Link>
-              </div>
-
-              {error && (
-                <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-300">
-                  {error}
-                </div>
-              )}
-
-              <div>
-                <Button className="w-full" size="sm" disabled={loading}>
-                  {loading ? "Signing in..." : "Sign in"}
-                </Button>
-              </div>
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">密码</Label>
             </div>
-          </form>
-
-          {/* <div className="mt-5">
-            <p className="text-sm font-normal text-center text-gray-700 dark:text-gray-400 sm:text-left">
-              Don&apos;t have an account?{" "}
-              <Link
-                href="/signup"
-                className="text-brand-500 hover:text-brand-600 dark:text-brand-400"
+            <div className="relative">
+              <Input
+                id="password"
+                name="password"
+                placeholder="••••••••"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                disabled={isLoading}
+                value={formData.password}
+                onChange={handleChange}
+                required
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                onClick={() => setShowPassword(!showPassword)}
               >
-                Sign Up
-              </Link>
-            </p>
-          </div> */}
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <Eye className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className="sr-only">
+                  {showPassword ? "Hide password" : "Show password"}
+                </span>
+              </Button>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="rememberMe"
+              checked={formData.rememberMe}
+              onCheckedChange={handleCheckboxChange}
+              disabled={isLoading}
+            />
+            <Label
+              htmlFor="rememberMe"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              记住我
+            </Label>
+          </div>
+          <Button disabled={isLoading} type="submit">
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            登录
+          </Button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

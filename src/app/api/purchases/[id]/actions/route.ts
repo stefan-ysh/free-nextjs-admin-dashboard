@@ -1,97 +1,31 @@
 import { NextResponse } from 'next/server';
 
-import { requireCurrentUser } from '@/lib/auth/current-user';
 import {
-  findPurchaseById,
-  submitPurchase,
-  approvePurchase,
-  rejectPurchase,
-  markAsPaid,
-  withdrawPurchase,
-  getPurchaseLogs,
-} from '@/lib/db/purchases';
-import { checkPermission, Permissions } from '@/lib/permissions';
-import type { UserProfile } from '@/types/user';
-
-function unauthorizedResponse() {
-  return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
-}
-
-function forbiddenResponse() {
-  return NextResponse.json({ success: false, error: '无权访问' }, { status: 403 });
-}
-
-function notFoundResponse() {
-  return NextResponse.json({ success: false, error: '未找到' }, { status: 404 });
-}
+  handlePurchaseWorkflowAction,
+  isPurchaseWorkflowAction,
+} from '@/app/api/purchases/[id]/workflow-handler';
 
 function badRequestResponse(message: string) {
   return NextResponse.json({ success: false, error: message }, { status: 400 });
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const context = await requireCurrentUser();
-    const { id } = await params;
-    const purchase = await findPurchaseById(id);
-    if (!purchase) return notFoundResponse();
+type WorkflowBody = {
+  action?: string;
+  reason?: unknown;
+};
 
-    const body = await request.json();
-    if (!body || typeof body !== 'object') return badRequestResponse('请求体格式错误');
-    const action = body.action as string | undefined;
-    if (!action) return badRequestResponse('缺少 action 字段');
-  const userForPermission = context.user as unknown as UserProfile;
+function normalizeReason(reason: unknown) {
+  if (typeof reason !== 'string') return undefined;
+  const trimmed = reason.trim();
+  return trimmed ? trimmed : undefined;
+}
 
-    switch (action) {
-      case 'submit': {
-        // owner only
-        if (context.user.id !== purchase.createdBy) return forbiddenResponse();
-        const res = await submitPurchase(id, context.user.id);
-        return NextResponse.json({ success: true, data: res });
-      }
-      case 'approve': {
-        const perm = await checkPermission(userForPermission, Permissions.PURCHASE_APPROVE);
-        if (!perm.allowed) return forbiddenResponse();
-        const res = await approvePurchase(id, context.user.id);
-        return NextResponse.json({ success: true, data: res });
-      }
-      case 'reject': {
-        const perm = await checkPermission(userForPermission, Permissions.PURCHASE_REJECT);
-        if (!perm.allowed) return forbiddenResponse();
-        const reason = typeof body.reason === 'string' ? body.reason : '';
-        const res = await rejectPurchase(id, context.user.id, reason);
-        return NextResponse.json({ success: true, data: res });
-      }
-      case 'pay': {
-        const perm = await checkPermission(userForPermission, Permissions.PURCHASE_PAY);
-        if (!perm.allowed) return forbiddenResponse();
-        const res = await markAsPaid(id, context.user.id);
-        return NextResponse.json({ success: true, data: res });
-      }
-      case 'withdraw': {
-        // owner only
-        if (context.user.id !== purchase.createdBy) return forbiddenResponse();
-        const res = await withdrawPurchase(id, context.user.id);
-        return NextResponse.json({ success: true, data: res });
-      }
-      case 'logs': {
-        const viewAll = await checkPermission(userForPermission, Permissions.PURCHASE_VIEW_ALL);
-        if (!viewAll.allowed && context.user.id !== purchase.createdBy) return forbiddenResponse();
-        const logs = await getPurchaseLogs(id);
-        return NextResponse.json({ success: true, data: logs });
-      }
-      default:
-        return badRequestResponse('未知 action');
-    }
-  } catch (error) {
-    if (error instanceof Error) {
-      if (error.message === 'UNAUTHENTICATED') return unauthorizedResponse();
-      if (error.message.startsWith('NOT_') || error.message.startsWith('PURCHASE_')) return badRequestResponse(error.message);
-    }
-    console.error('采购操作失败', error);
-    return NextResponse.json({ success: false, error: '服务器错误' }, { status: 500 });
-  }
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const rawBody: unknown = await request.json().catch(() => null);
+  if (!rawBody || typeof rawBody !== 'object') return badRequestResponse('请求体格式错误');
+  const { action, reason } = rawBody as WorkflowBody;
+  if (!action) return badRequestResponse('缺少 action 字段');
+  if (!isPurchaseWorkflowAction(action)) return badRequestResponse('未知 action');
+
+  return handlePurchaseWorkflowAction(action, params, { reason: normalizeReason(reason) });
 }

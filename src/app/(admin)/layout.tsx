@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/constants';
 import { findActiveSession } from '@/lib/auth/session';
 import { findUserById } from '@/lib/auth/user';
-import AdminLayoutClient from '@/layout/AdminLayoutClient';
+import { AdminLayoutClient } from "@/layout/AdminLayoutClient";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies();

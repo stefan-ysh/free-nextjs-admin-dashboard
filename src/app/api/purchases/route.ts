@@ -1,51 +1,12 @@
 import { NextResponse } from 'next/server';
 
 import { requireCurrentUser } from '@/lib/auth/current-user';
+import { toPermissionUser } from '@/lib/auth/permission-user';
 import { listPurchases, createPurchase } from '@/lib/db/purchases';
 import { checkPermission, Permissions } from '@/lib/permissions';
-import type {
-  ListPurchasesParams,
-  PurchaseStatus,
-  PurchaseChannel,
-  PaymentMethod,
-} from '@/types/purchase';
-import type { UserProfile } from '@/types/user';
-
-const PURCHASE_STATUSES: PurchaseStatus[] = ['draft', 'pending_approval', 'approved', 'rejected', 'paid', 'cancelled'];
-const PURCHASE_CHANNELS: PurchaseChannel[] = ['online', 'offline'];
-const PAYMENT_METHODS: PaymentMethod[] = ['wechat', 'alipay', 'bank_transfer', 'corporate_transfer', 'cash'];
-const SORTABLE_FIELDS: NonNullable<ListPurchasesParams['sortBy']>[] = ['createdAt', 'updatedAt', 'purchaseDate', 'totalAmount', 'status'];
-const SORT_ORDERS: NonNullable<ListPurchasesParams['sortOrder']>[] = ['asc', 'desc'];
-
-function parseStatus(value: string | null): ListPurchasesParams['status'] {
-  if (!value) return undefined;
-  if (value === 'all') return 'all';
-  return PURCHASE_STATUSES.includes(value as PurchaseStatus) ? (value as PurchaseStatus) : undefined;
-}
-
-function parsePurchaseChannel(value: string | null): PurchaseChannel | undefined {
-  if (!value) return undefined;
-  return PURCHASE_CHANNELS.includes(value as PurchaseChannel) ? (value as PurchaseChannel) : undefined;
-}
-
-function parsePaymentMethod(value: string | null): PaymentMethod | undefined {
-  if (!value) return undefined;
-  return PAYMENT_METHODS.includes(value as PaymentMethod) ? (value as PaymentMethod) : undefined;
-}
-
-function parseSortBy(value: string | null): ListPurchasesParams['sortBy'] {
-  if (!value) return undefined;
-  return SORTABLE_FIELDS.includes(value as NonNullable<ListPurchasesParams['sortBy']>)
-    ? (value as NonNullable<ListPurchasesParams['sortBy']>)
-    : undefined;
-}
-
-function parseSortOrder(value: string | null): ListPurchasesParams['sortOrder'] {
-  if (!value) return undefined;
-  return SORT_ORDERS.includes(value as NonNullable<ListPurchasesParams['sortOrder']>)
-    ? (value as NonNullable<ListPurchasesParams['sortOrder']>)
-    : undefined;
-}
+import { CreatePurchaseInput } from '@/types/purchase';
+import { parsePurchaseListParams } from './query-utils';
+import { mapPurchaseValidationError } from '@/lib/purchases/error-messages';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -62,34 +23,14 @@ function badRequestResponse(message: string) {
 export async function GET(request: Request) {
   try {
     const context = await requireCurrentUser();
+    const permissionUser = await toPermissionUser(context.user);
 
     // allow full listing for users with viewAll permission, otherwise restrict to own purchases
-    const userForPermission = context.user as unknown as UserProfile;
-    const viewAll = await checkPermission(userForPermission, Permissions.PURCHASE_VIEW_ALL);
-
+    const viewAll = await checkPermission(permissionUser, Permissions.PURCHASE_VIEW_ALL);
     const { searchParams } = new URL(request.url);
-    const params: ListPurchasesParams = {};
-    params.search = searchParams.get('search') ?? undefined;
-  params.status = parseStatus(searchParams.get('status'));
-    params.projectId = searchParams.get('projectId') ?? undefined;
-  params.purchaseChannel = parsePurchaseChannel(searchParams.get('purchaseChannel'));
-  params.paymentMethod = parsePaymentMethod(searchParams.get('paymentMethod'));
-    params.startDate = searchParams.get('startDate') ?? undefined;
-    params.endDate = searchParams.get('endDate') ?? undefined;
+    const params = parsePurchaseListParams(searchParams);
 
-    const page = Number.parseInt(searchParams.get('page') ?? '', 10);
-    const pageSize = Number.parseInt(searchParams.get('pageSize') ?? '', 10);
-    params.page = Number.isNaN(page) ? undefined : page;
-    params.pageSize = Number.isNaN(pageSize) ? undefined : pageSize;
-
-  params.sortBy = parseSortBy(searchParams.get('sortBy'));
-  params.sortOrder = parseSortOrder(searchParams.get('sortOrder'));
-
-    // purchaserId handling: if caller is not allowed to view all, force to current user
-    const purchaserIdParam = searchParams.get('purchaserId') ?? undefined;
-    if (viewAll.allowed) {
-      params.purchaserId = purchaserIdParam ?? undefined;
-    } else {
+    if (!viewAll.allowed) {
       params.purchaserId = context.user.id;
     }
 
@@ -107,17 +48,25 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const context = await requireCurrentUser();
+    const permissionUser = await toPermissionUser(context.user);
 
     // check create permission (business-layer will do deeper checks)
-    const userForPermission = context.user as unknown as UserProfile;
-    const perm = await checkPermission(userForPermission, Permissions.PURCHASE_CREATE);
+    const perm = await checkPermission(permissionUser, Permissions.PURCHASE_CREATE);
     if (!perm.allowed) return forbiddenResponse();
 
-    const body = await request.json();
-    if (!body || typeof body !== 'object') return badRequestResponse('请求体格式错误');
+    const rawBody: unknown = await request.json();
+    if (!rawBody || typeof rawBody !== 'object') return badRequestResponse('请求体格式错误');
+    const body = rawBody as CreatePurchaseInput;
 
     // minimal validation - DAO will assert more
-    if (!body.purchaseDate || !body.itemName || typeof body.quantity !== 'number' || typeof body.unitPrice !== 'number') {
+    if (
+      !body.purchaseDate ||
+      !body.itemName ||
+      typeof body.quantity !== 'number' ||
+      typeof body.unitPrice !== 'number' ||
+      typeof body.paymentMethod !== 'string' ||
+      typeof body.paymentType !== 'string'
+    ) {
       return badRequestResponse('缺少必填字段');
     }
 
@@ -126,10 +75,11 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof Error) {
       if (error.message === 'UNAUTHENTICATED') return unauthorizedResponse();
-      if (error.message.startsWith('PURCHASE_') || error.message.startsWith('INVALID_') || error.message.startsWith('MISSING_')) {
-        return badRequestResponse(error.message);
-      }
+      const friendly = mapPurchaseValidationError(error);
+      if (friendly) return badRequestResponse(friendly);
     }
+    const fallbackFriendly = mapPurchaseValidationError(error);
+    if (fallbackFriendly) return badRequestResponse(fallbackFriendly);
     console.error('创建采购失败', error);
     return NextResponse.json({ success: false, error: '服务器错误' }, { status: 500 });
   }

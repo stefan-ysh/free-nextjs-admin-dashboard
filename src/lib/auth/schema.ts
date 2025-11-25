@@ -1,67 +1,62 @@
-import { sql } from '@/lib/postgres';
+import { schemaPool, safeCreateIndex } from '@/lib/schema/mysql-utils';
+import { AUTH_ROLE_VALUES } from './roles';
+
+const ROLE_VALUES = AUTH_ROLE_VALUES;
+
+const ROLE_ENUM_SQL = ROLE_VALUES.map((role) => `'${role}'`).join(',');
 
 let initialized = false;
 
-/**
- * Ensures auth-related tables exist. Safe to call multiple times.
- */
 export async function ensureAuthSchema() {
   if (initialized) return;
 
-  await sql`
+  const pool = schemaPool();
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS auth_users (
-      id UUID PRIMARY KEY,
-      email TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'staff',
-      first_name TEXT,
-      last_name TEXT,
-      display_name TEXT,
-      job_title TEXT,
-      phone TEXT,
+      id CHAR(36) NOT NULL PRIMARY KEY,
+      email VARCHAR(255) NOT NULL UNIQUE,
+      password_hash VARCHAR(255) NOT NULL,
+      role ENUM(${ROLE_ENUM_SQL}) NOT NULL DEFAULT 'staff',
+      first_name VARCHAR(120),
+      last_name VARCHAR(120),
+      display_name VARCHAR(255),
+      job_title VARCHAR(120),
+      phone VARCHAR(60),
       bio TEXT,
-      country TEXT,
-      city TEXT,
-      postal_code TEXT,
-      tax_id TEXT,
+      country VARCHAR(120),
+      city VARCHAR(120),
+      postal_code VARCHAR(40),
+      tax_id VARCHAR(120),
       avatar_url TEXT,
-      social_links JSONB NOT NULL DEFAULT '{}'::jsonb,
-      password_updated_at TIMESTAMPTZ,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
+      social_links JSON NOT NULL DEFAULT (JSON_OBJECT()),
+      password_updated_at DATETIME(3),
+      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
 
-  await sql`
+  await pool.query(
+    `ALTER TABLE auth_users MODIFY COLUMN role ENUM(${ROLE_ENUM_SQL}) NOT NULL DEFAULT 'staff'`
+  );
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS auth_sessions (
-      id UUID PRIMARY KEY,
-      user_id UUID NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-      session_token TEXT NOT NULL UNIQUE,
-      device_type TEXT NOT NULL,
-      user_agent_hash TEXT NOT NULL,
+      id CHAR(36) NOT NULL PRIMARY KEY,
+      user_id CHAR(36) NOT NULL,
+      session_token CHAR(64) NOT NULL UNIQUE,
+      device_type VARCHAR(32) NOT NULL,
+      user_agent_hash CHAR(64) NOT NULL,
       user_agent TEXT,
-      remember_me BOOLEAN NOT NULL DEFAULT FALSE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      expires_at TIMESTAMPTZ NOT NULL,
-      last_active TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
+      remember_me TINYINT(1) NOT NULL DEFAULT 0,
+      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      expires_at DATETIME(3) NOT NULL,
+      last_active DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      CONSTRAINT fk_auth_sessions_user FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
 
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS first_name TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS last_name TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS display_name TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS job_title TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS phone TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS bio TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS country TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS city TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS postal_code TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS tax_id TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS avatar_url TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS social_links JSONB NOT NULL DEFAULT '{}'::jsonb`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS password_updated_at TIMESTAMPTZ`;
-
-  await sql`ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS user_agent TEXT`;
+  await safeCreateIndex('CREATE INDEX idx_auth_sessions_user ON auth_sessions(user_id)');
 
   initialized = true;
 }

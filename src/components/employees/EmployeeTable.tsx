@@ -1,23 +1,42 @@
 'use client';
 
-import Image from 'next/image';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import EmployeeStatusBadge from './EmployeeStatusBadge';
 import type { Employee } from './types';
+import { formatDateTimeLocal } from '@/lib/dates';
+import { Inbox, Loader2, Mail, MoreHorizontal, Phone, User2, Pencil, Trash2, ShieldCheck } from 'lucide-react';
+import { USER_ROLE_LABELS } from '@/constants/user-roles';
 
 type EmployeeTableProps = {
 	employees: Employee[];
 	loading?: boolean;
 	onEdit: (employee: Employee) => void;
 	onDelete: (employee: Employee) => void;
+	canEdit?: boolean;
+	canDelete?: boolean;
+	onAssignRoles?: (employee: Employee) => void;
+	canAssignRoles?: boolean;
 };
 
 function formatDate(value: string | null) {
 	if (!value) return '—';
-	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) {
-		return value;
+	const formatted = formatDateTimeLocal(value);
+	if (formatted) {
+		return formatted;
 	}
-	return date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
+	if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+		return `${value} 00:00:00`;
+	}
+	return value;
 }
 
 function resolveDisplayName(employee: Employee) {
@@ -38,189 +57,205 @@ function getAvatarInitials(employee: Employee) {
 	return /^[A-Za-z]+$/.test(characters) ? characters.toUpperCase() : characters;
 }
 
-export default function EmployeeTable({ employees, loading, onEdit, onDelete }: EmployeeTableProps) {
+export default function EmployeeTable({
+	employees,
+	loading,
+	onEdit,
+	onDelete,
+	onAssignRoles,
+	canEdit = false,
+	canDelete = false,
+	canAssignRoles = false,
+}: EmployeeTableProps) {
 	if (loading) {
 		return (
-			<div className="flex min-h-[500px] items-center justify-center">
-				<div className="flex flex-col items-center gap-3">
-					<div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-400" />
-					<div className="text-sm text-gray-500 dark:text-gray-400">加载中...</div>
-				</div>
+			<div className="flex min-h-[480px] flex-col items-center justify-center text-sm text-muted-foreground">
+				<Loader2 className="mb-3 h-8 w-8 animate-spin text-primary" />
+				正在加载员工数据...
 			</div>
 		);
 	}
 
 	if (employees.length === 0) {
 		return (
-			<div className="flex min-h-[500px] flex-col items-center justify-center gap-3">
-				<svg
-					className="h-16 w-16 text-gray-300 dark:text-gray-600"
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-				>
-					<path
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						strokeWidth={1.5}
-						d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-					/>
-				</svg>
-				<div className="text-sm font-medium text-gray-600 dark:text-gray-300">暂无员工数据</div>
-				<div className="text-xs text-gray-400 dark:text-gray-500">
-					使用上方筛选条件检索或点击新增按钮创建员工记录
-				</div>
+			<div className="flex min-h-[480px] flex-col items-center justify-center rounded-lg border border-dashed border-muted-foreground/40 bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+				<Inbox className="mb-4 h-12 w-12 text-muted-foreground/60" />
+				<div className="font-medium text-foreground">暂无员工记录</div>
+				<p className="mt-1 max-w-sm text-xs text-muted-foreground">
+					请调整筛选条件或使用「新增员工」按钮录入第一条数据。
+				</p>
 			</div>
 		);
 	}
 
 	return (
-		<div className="overflow-x-auto">
-			<table className="w-full min-w-[1000px] border-collapse">
-				<thead>
-					<tr className="border-b border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-800/50">
-						<th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-							员工编号
-						</th>
-						<th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-							姓名
-						</th>
-						<th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-							联系方式
-						</th>
-						<th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-							部门
-						</th>
-						<th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-							职位
-						</th>
-						<th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-							状态
-						</th>
-						<th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-							入职日期
-						</th>
-						<th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-							操作
-						</th>
-					</tr>
-				</thead>
-				<tbody className="divide-y divide-gray-100 bg-white dark:divide-gray-800 dark:bg-gray-900">
-					{employees.map((employee) => (
-						<tr
-							key={employee.id}
-							className="text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800/50"
-						>
-							<td className="whitespace-nowrap px-4 py-4 font-mono text-xs text-gray-500 dark:text-gray-400">
-								{employee.employeeCode ?? '—'}
-							</td>
-							<td className="whitespace-nowrap px-4 py-4">
-								<div className="flex items-center gap-3">
-									<div className="relative h-10 w-10 overflow-hidden rounded-full border border-gray-200 dark:border-gray-700">
-										{employee.avatarUrl ? (
-											<Image
-												src={employee.avatarUrl}
-												alt={`${resolveDisplayName(employee)} 头像`}
-												width={40}
-												height={40}
-												className="h-full w-full object-cover"
-												unoptimized
-											/>
-										) : (
-											<div className="flex h-full w-full items-center justify-center bg-blue-50 text-sm font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-200">
-												{getAvatarInitials(employee)}
-											</div>
-										)}
-									</div>
-									<div className="flex flex-col">
-										<span className="font-medium text-gray-900 dark:text-gray-100">
-											{resolveDisplayName(employee)}
+		<Table className="min-w-[1000px] text-muted-foreground">
+			<TableHeader>
+				<TableRow className="bg-muted/60">
+					<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">员工编号</TableHead>
+					<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">姓名</TableHead>
+					<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">联系方式</TableHead>
+					<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">部门</TableHead>
+					<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">职位</TableHead>
+					<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">状态</TableHead>
+					<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">入职日期</TableHead>
+					{(canEdit || canDelete || canAssignRoles) && (
+						<TableHead className="px-4 py-3 text-right uppercase tracking-wide text-muted-foreground">操作</TableHead>
+					)}
+				</TableRow>
+			</TableHeader>
+			<TableBody>
+				{employees.map((employee) => (
+					<TableRow key={employee.id} className="text-sm text-foreground">
+						<TableCell className="px-4 py-4 font-mono text-xs text-muted-foreground">
+							{employee.employeeCode ?? '—'}
+						</TableCell>
+						<TableCell className="px-4 py-4">
+							<div className="flex items-center gap-3">
+								<Avatar className="border border-border bg-background">
+									{employee.avatarUrl ? (
+										<AvatarImage src={employee.avatarUrl} alt={`${resolveDisplayName(employee)} avatar`} />
+									) : (
+										<AvatarFallback className="bg-primary/10 text-sm font-medium text-primary">
+											{getAvatarInitials(employee)}
+										</AvatarFallback>
+									)}
+								</Avatar>
+								<div className="flex flex-col">
+									<span className="font-medium text-foreground">{resolveDisplayName(employee)}</span>
+									{employee.displayName && (
+										<span className="text-xs text-muted-foreground">
+											{employee.firstName} {employee.lastName}
 										</span>
-										{employee.displayName && (
-											<span className="text-xs text-gray-500 dark:text-gray-400">
-												{employee.firstName} {employee.lastName}
-											</span>
-										)}
-									</div>
-								</div>
-							</td>
-							<td className="px-4 py-4">
-								<div className="flex flex-col gap-1">
-									{employee.email && (
-										<a
-											href={`mailto:${employee.email}`}
-											className="text-xs text-blue-600 hover:underline dark:text-blue-400"
-										>
-											{employee.email}
-										</a>
 									)}
-									{employee.phone && (
-										<a
-											href={`tel:${employee.phone}`}
-											className="text-xs text-gray-600 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"
-										>
-											{employee.phone}
-										</a>
+									{employee.userRoles && employee.userRoles.length > 0 && (
+										<div className="mt-1 flex flex-wrap gap-1">
+											{employee.userRoles.map((role) => (
+												<Badge
+													key={role}
+													variant={role === employee.userPrimaryRole ? 'default' : 'outline'}
+													className={role === employee.userPrimaryRole ? 'border-primary/40 bg-primary/10 text-primary' : 'border-dashed text-muted-foreground'}
+												>
+													{USER_ROLE_LABELS[role] ?? role}
+													{role === employee.userPrimaryRole && <span className="ml-1 text-[10px]">主</span>}
+												</Badge>
+											))}
+										</div>
 									)}
-									{!employee.email && !employee.phone && <span className="text-xs text-gray-400">—</span>}
 								</div>
-							</td>
-							<td className="whitespace-nowrap px-4 py-4">
-								{employee.department ? (
-									<span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20 dark:bg-blue-900/20 dark:text-blue-300 dark:ring-blue-400/30">
-										{employee.department}
-									</span>
-								) : (
-									<span className="text-gray-400">—</span>
+							</div>
+						</TableCell>
+						<TableCell className="px-4 py-4">
+							<div className="flex flex-col gap-1 text-xs">
+								{employee.email && (
+									<a
+										href={`mailto:${employee.email}`}
+										className="inline-flex items-center gap-1 text-primary hover:underline"
+									>
+										<Mail className="h-3.5 w-3.5" />
+										{employee.email}
+									</a>
 								)}
-							</td>
-							<td className="whitespace-nowrap px-4 py-4 text-gray-600 dark:text-gray-400">
-								{employee.jobTitle ?? '—'}
-							</td>
-							<td className="whitespace-nowrap px-4 py-4">
-								<EmployeeStatusBadge status={employee.employmentStatus} />
-							</td>
-							<td className="whitespace-nowrap px-4 py-4 text-gray-600 dark:text-gray-400">
-								{formatDate(employee.hireDate)}
-							</td>
-							<td className="whitespace-nowrap px-4 py-4 text-right">
-								<div className="flex items-center justify-end gap-2">
-									<button
-										onClick={() => onEdit(employee)}
-										className="inline-flex items-center gap-1 rounded-lg border border-blue-500 bg-white px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 dark:border-blue-400 dark:bg-gray-800 dark:text-blue-300 dark:hover:bg-blue-950/30"
-										title="编辑员工"
+								{employee.phone && (
+									<a
+										href={`tel:${employee.phone}`}
+										className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary"
 									>
-										<svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path
-												strokeLinecap="round"
-												strokeLinejoin="round"
-												strokeWidth={2}
-												d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-											/>
-										</svg>
-										编辑
-									</button>
-									<button
-										onClick={() => onDelete(employee)}
-										className="inline-flex items-center gap-1 rounded-lg border border-rose-500 bg-white px-3 py-1.5 text-xs font-medium text-rose-600 transition-colors hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-1 dark:border-rose-400 dark:bg-gray-800 dark:text-rose-300 dark:hover:bg-rose-950/30"
-										title="删除员工"
-									>
-										<svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path
-												strokeLinecap="round"
-												strokeLinejoin="round"
-												strokeWidth={2}
-												d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-											/>
-										</svg>
-										删除
-									</button>
+										<Phone className="h-3.5 w-3.5" />
+										{employee.phone}
+									</a>
+								)}
+								{!employee.email && !employee.phone && (
+									<span className="inline-flex items-center gap-1 text-muted-foreground/70">
+										<User2 className="h-3.5 w-3.5" />
+										暂无
+									</span>
+								)}
+							</div>
+						</TableCell>
+						<TableCell className="px-4 py-4">
+							{employee.department || employee.departmentCode ? (
+								<div className="flex flex-col gap-1">
+									{employee.department && (
+										<Badge variant="secondary" className="w-fit border-transparent bg-primary/10 text-primary">
+											{employee.department}
+										</Badge>
+									)}
+									{employee.departmentCode && (
+										<span className="text-[11px] font-mono uppercase tracking-wide text-muted-foreground">代码 {employee.departmentCode}</span>
+									)}
 								</div>
-							</td>
-						</tr>
-					))}
-				</tbody>
-			</table>
-		</div>
+							) : (
+								<span className="text-xs text-muted-foreground">—</span>
+							)}
+						</TableCell>
+						<TableCell className="px-4 py-4 text-muted-foreground">
+							<div className="flex flex-col gap-1">
+								<span>{employee.jobTitle ?? '—'}</span>
+								{employee.jobGrade && (
+									<Badge variant="outline" className="w-fit border-dashed text-xs font-normal text-muted-foreground">
+										{employee.jobGrade}
+										{employee.jobGradeLevel != null ? ` · L${employee.jobGradeLevel}` : ''}
+									</Badge>
+								)}
+							</div>
+						</TableCell>
+						<TableCell className="px-4 py-4">
+							<EmployeeStatusBadge status={employee.employmentStatus} />
+						</TableCell>
+						<TableCell className="px-4 py-4 text-muted-foreground">
+							{formatDate(employee.hireDate)}
+						</TableCell>
+						{(canEdit || canDelete || canAssignRoles) && (
+							<TableCell className="px-4 py-4 text-right">
+								<DropdownMenu>
+									<DropdownMenuTrigger asChild>
+										<Button variant="ghost" size="icon" className="h-8 w-8">
+											<MoreHorizontal className="h-4 w-4" />
+											<span className="sr-only">打开操作菜单</span>
+										</Button>
+									</DropdownMenuTrigger>
+									<DropdownMenuContent align="end" className="w-44">
+										{canAssignRoles && onAssignRoles && (
+											<DropdownMenuItem
+												onSelect={(event) => {
+													event.preventDefault();
+													onAssignRoles(employee);
+												}}
+												className="cursor-pointer"
+											>
+												<ShieldCheck className="mr-2 h-4 w-4" /> 设置角色
+											</DropdownMenuItem>
+										)}
+										{canEdit && (
+											<DropdownMenuItem
+												onSelect={(event) => {
+													event.preventDefault();
+													onEdit(employee);
+												}}
+												className="cursor-pointer"
+											>
+												<Pencil className="mr-2 h-4 w-4" /> 编辑
+											</DropdownMenuItem>
+										)}
+										{canDelete && (
+											<DropdownMenuItem
+												onSelect={(event) => {
+													event.preventDefault();
+													onDelete(employee);
+												}}
+												className="cursor-pointer text-destructive focus:text-destructive"
+											>
+												<Trash2 className="mr-2 h-4 w-4" /> 删除
+											</DropdownMenuItem>
+										)}
+									</DropdownMenuContent>
+								</DropdownMenu>
+							</TableCell>
+						)}
+					</TableRow>
+				))}
+			</TableBody>
+		</Table>
 	);
 }

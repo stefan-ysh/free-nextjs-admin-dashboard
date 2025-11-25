@@ -6,8 +6,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useModal } from "../../hooks/useModal";
 import Input from "../form/input/InputField";
 import Label from "../form/Label";
-import Button from "../ui/button/Button";
-import { Modal } from "../ui/modal";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import type { ProfileData } from "./types";
 
 type SocialKey = "facebook" | "x" | "linkedin" | "instagram" | "website";
@@ -292,8 +292,8 @@ export default function UserMetaCard({ profile, onProfileUpdate, onAvatarUpdate,
         className="hidden"
         onChange={handleAvatarChange}
       />
-      <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[640px] m-4">
-        <div className="no-scrollbar relative w-full max-w-[640px] overflow-y-auto rounded-3xl bg-white p-4 dark:bg-gray-900 lg:p-9">
+      <Dialog open={isOpen} onOpenChange={(nextOpen) => (nextOpen ? openModal() : closeModal())}>
+        <DialogContent className="no-scrollbar max-w-[640px] overflow-y-auto rounded-3xl border-0 bg-white p-4 text-left shadow-none dark:bg-gray-900 lg:p-9">
           <div className="px-2">
             <h4 className="mb-2 text-2xl font-semibold text-gray-800 dark:text-white/90">编辑个人信息</h4>
             <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">填写社交链接与展示信息，方便团队识别。</p>
@@ -354,8 +354,8 @@ export default function UserMetaCard({ profile, onProfileUpdate, onAvatarUpdate,
               </Button>
             </div>
           </form>
-        </div>
-      </Modal>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

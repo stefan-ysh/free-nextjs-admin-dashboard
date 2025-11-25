@@ -2,22 +2,35 @@ import { NextResponse } from 'next/server';
 
 import { SESSION_COOKIE_NAME } from '@/lib/auth/constants';
 import { detectDeviceType, hashUserAgent } from '@/lib/auth/device';
-import { createSession, invalidateSessionsForDeviceType, revokeExpiredSessions } from '@/lib/auth/session';
-import { findUserByEmail } from '@/lib/auth/user';
 import { verifyPassword } from '@/lib/auth/password';
+import { createSession, invalidateSessionsForDeviceType, revokeExpiredSessions } from '@/lib/auth/session';
+import { findUserByEmail, findUserById } from '@/lib/auth/user';
+import { findUserByEmployeeCode } from '@/lib/users';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+    const identifierRaw =
+      typeof body.email === 'string'
+        ? body.email
+        : typeof body.account === 'string'
+          ? body.account
+          : '';
+    const identifier = identifierRaw.trim().toLowerCase();
     const password = typeof body.password === 'string' ? body.password : '';
     const rememberMe = Boolean(body.rememberMe);
 
-    if (!email || !password) {
-      return NextResponse.json({ success: false, error: '邮箱与密码不能为空' }, { status: 400 });
+    if (!identifier || !password) {
+      return NextResponse.json({ success: false, error: '账号与密码不能为空' }, { status: 400 });
     }
 
-    const user = await findUserByEmail(email);
+    let user = await findUserByEmail(identifier);
+    if (!user && !identifier.includes('@')) {
+      const bizUser = await findUserByEmployeeCode(identifierRaw.trim());
+      if (bizUser) {
+        user = await findUserById(bizUser.id);
+      }
+    }
     if (!user) {
       return NextResponse.json({ success: false, error: '账号或密码错误' }, { status: 401 });
     }

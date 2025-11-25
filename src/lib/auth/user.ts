@@ -1,14 +1,20 @@
 import { randomUUID } from 'crypto';
+import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 
-import { sql } from '@/lib/postgres';
+import { mysqlPool, mysqlQuery } from '@/lib/mysql';
 import { ensureAuthSchema } from './schema';
 import { hashPassword } from './password';
+import { AUTH_ROLE_VALUES, AuthUserRole } from './roles';
 
-export type UserRole = 'finance_admin' | 'staff';
+export const AUTH_USER_ROLES = AUTH_ROLE_VALUES;
+
+export type UserRole = AuthUserRole;
 
 export type SocialLinks = Record<string, string | null>;
 
-type RawUserRow = {
+const pool = mysqlPool();
+
+type RawUserRow = RowDataPacket & {
   id: string;
   email: string;
   password_hash: string;
@@ -36,6 +42,23 @@ export type UserRecord = Omit<RawUserRow, 'social_links'> & {
 
 export type UserProfile = Omit<UserRecord, 'password_hash'>;
 
+function parseJsonObject(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch (error) {
+      console.warn('Failed to parse auth_users.social_links JSON', error);
+    }
+  }
+  return {};
+}
+
 function normalizeSocialLinks(input: unknown): SocialLinks {
   if (!input || typeof input !== 'object') {
     return {};
@@ -57,7 +80,7 @@ function mapUser(row: RawUserRow | undefined): UserRecord | null {
   if (!row) return null;
   return {
     ...row,
-    social_links: normalizeSocialLinks(row.social_links),
+    social_links: normalizeSocialLinks(parseJsonObject(row.social_links)),
   };
 }
 
@@ -78,18 +101,20 @@ function cleanSocialLinks(links: SocialLinks | null | undefined): Record<string,
 
 export async function findUserByEmail(email: string): Promise<UserRecord | null> {
   await ensureAuthSchema();
-  const result = await sql<RawUserRow>`
-    SELECT * FROM auth_users WHERE email = ${email.toLowerCase()} LIMIT 1
-  `;
-  return mapUser(result.rows[0]);
+  const [rows] = await pool.query<RawUserRow[]>(
+    'SELECT * FROM auth_users WHERE email = ? LIMIT 1',
+    [email.toLowerCase()]
+  );
+  return mapUser(rows[0]);
 }
 
 export async function findUserById(id: string): Promise<UserRecord | null> {
   await ensureAuthSchema();
-  const result = await sql<RawUserRow>`
-    SELECT * FROM auth_users WHERE id = ${id} LIMIT 1
-  `;
-  return mapUser(result.rows[0]);
+  const [rows] = await pool.query<RawUserRow[]>(
+    'SELECT * FROM auth_users WHERE id = ? LIMIT 1',
+    [id]
+  );
+  return mapUser(rows[0]);
 }
 
 export async function createUser(params: {
@@ -110,19 +135,18 @@ export async function createUser(params: {
   const role = params.role ?? 'staff';
   const displayName = params.displayName?.trim() || email.split('@')[0];
 
-  const result = await sql<RawUserRow>`
+  await mysqlQuery`
     INSERT INTO auth_users (id, email, password_hash, role, display_name)
     VALUES (${id}, ${email}, ${passwordHash}, ${role}, ${displayName})
-    RETURNING *
   `;
 
-  return mapUser(result.rows[0])!;
+  return (await findUserById(id))!;
 }
 
 export async function updateUserPassword(userId: string, password: string): Promise<void> {
   await ensureAuthSchema();
   const passwordHash = await hashPassword(password);
-  await sql`
+  await mysqlQuery`
     UPDATE auth_users
     SET password_hash = ${passwordHash}, password_updated_at = NOW(), updated_at = NOW()
     WHERE id = ${userId}
@@ -166,37 +190,56 @@ export async function updateUserProfile(userId: string, input: UpdateUserProfile
     socialLinks: cleanSocialLinks(input.socialLinks ?? null),
   };
 
-  const result = await sql<RawUserRow>`
-    UPDATE auth_users
-    SET
-      first_name = ${payload.firstName},
-      last_name = ${payload.lastName},
-      display_name = ${payload.displayName},
-      job_title = ${payload.jobTitle},
-      phone = ${payload.phone},
-      bio = ${payload.bio},
-      country = ${payload.country},
-      city = ${payload.city},
-      postal_code = ${payload.postalCode},
-      tax_id = ${payload.taxId},
-      social_links = ${JSON.stringify(payload.socialLinks)},
-      updated_at = NOW()
-    WHERE id = ${userId}
-    RETURNING *
-  `;
+  const [result] = await pool.query<ResultSetHeader>(
+    `UPDATE auth_users
+      SET
+        first_name = ?,
+        last_name = ?,
+        display_name = ?,
+        job_title = ?,
+        phone = ?,
+        bio = ?,
+        country = ?,
+        city = ?,
+        postal_code = ?,
+        tax_id = ?,
+        social_links = ?,
+        updated_at = NOW()
+      WHERE id = ?`,
+    [
+      payload.firstName,
+      payload.lastName,
+      payload.displayName,
+      payload.jobTitle,
+      payload.phone,
+      payload.bio,
+      payload.country,
+      payload.city,
+      payload.postalCode,
+      payload.taxId,
+      JSON.stringify(payload.socialLinks),
+      userId,
+    ]
+  );
 
-  return mapUser(result.rows[0])!;
+  if (result.affectedRows === 0) {
+    throw new Error('USER_NOT_FOUND');
+  }
+
+  return (await findUserById(userId))!;
 }
 
 export async function updateUserAvatar(userId: string, avatarUrl: string | null): Promise<UserRecord> {
   await ensureAuthSchema();
   const sanitized = sanitizeNullableText(avatarUrl);
-  const result = await sql<RawUserRow>`
-    UPDATE auth_users
-    SET avatar_url = ${sanitized}, updated_at = NOW()
-    WHERE id = ${userId}
-    RETURNING *
-  `;
+  const [result] = await pool.query<ResultSetHeader>(
+    'UPDATE auth_users SET avatar_url = ?, updated_at = NOW() WHERE id = ?',
+    [sanitized, userId]
+  );
 
-  return mapUser(result.rows[0])!;
+  if (result.affectedRows === 0) {
+    throw new Error('USER_NOT_FOUND');
+  }
+
+  return (await findUserById(userId))!;
 }

@@ -1,268 +1,358 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
-import Image from 'next/image';
+import { useEffect, useMemo, useState } from 'react';
+import { ChevronsUpDown, Loader2, RefreshCw, XCircle } from 'lucide-react';
 
-type Employee = {
-  id: string;
-  displayName: string;
-  avatarUrl: string | null;
-  employeeCode: string | null;
-  department: string | null;
-  email: string;
+import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { toast } from '@/components/ui/sonner';
+import type { EmployeeRecord } from '@/lib/hr/employees';
+
+type EmployeesResponse = {
+	success: boolean;
+	data: {
+		items: EmployeeRecord[];
+		total: number;
+		page: number;
+		pageSize: number;
+	};
+	error?: string;
+};
+
+type EmployeeDetailResponse = {
+	success: boolean;
+	data?: EmployeeRecord;
+	error?: string;
 };
 
 type EmployeeSelectorProps = {
-  value?: string; // selected employee id
-  onChange: (employeeId: string | null, employee: Employee | null) => void;
-  placeholder?: string;
-  disabled?: boolean;
-  className?: string;
-  label?: string;
-  required?: boolean;
+	value: string;
+	onChange: (userId: string, employee?: EmployeeRecord | null) => void;
+	disabled?: boolean;
+	helperText?: string;
 };
 
-export default function EmployeeSelector({
-  value,
-  onChange,
-  placeholder = '选择员工',
-  disabled = false,
-  className = '',
-  label,
-  required = false,
-}: EmployeeSelectorProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+const PAGE_SIZE = 20;
+const SEARCH_DEBOUNCE_MS = 400;
 
-  // Fetch employees list
-  useEffect(() => {
-    const fetchEmployees = async () => {
-      setLoading(true);
-      try {
-        const params = new URLSearchParams({ pageSize: '100' });
-        if (search) params.set('search', search);
-        
-        const response = await fetch(`/api/employees?${params.toString()}`);
-        if (response.ok) {
-          const result = await response.json();
-          if (result.success) {
-            setEmployees(result.data.items || []);
-          }
-        }
-      } catch (error) {
-        console.error('加载员工列表失败', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+const statusLabels: Record<EmployeeRecord['employmentStatus'], string> = {
+	active: '在职',
+	on_leave: '休假',
+	terminated: '已离职',
+};
 
-    if (isOpen) {
-      fetchEmployees();
-    }
-  }, [isOpen, search]);
+const statusClasses: Record<EmployeeRecord['employmentStatus'], string> = {
+	active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-100',
+	on_leave: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-100',
+	terminated: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-100',
+};
 
-  // Fetch selected employee details
-  useEffect(() => {
-    if (value && !selectedEmployee) {
-      const fetchEmployee = async () => {
-        try {
-          const response = await fetch(`/api/employees/${value}`);
-          if (response.ok) {
-            const result = await response.json();
-            if (result.success) {
-              setSelectedEmployee(result.data);
-            }
-          }
-        } catch (error) {
-          console.error('加载员工信息失败', error);
-        }
-      };
-      fetchEmployee();
-    }
-  }, [value, selectedEmployee]);
+function getEmployeeName(employee: EmployeeRecord): string {
+	if (employee.displayName) return employee.displayName;
+	const fullName = `${employee.lastName ?? ''}${employee.firstName ?? ''}`.trim();
+	if (fullName) return fullName;
+	if (employee.email) return employee.email;
+	return employee.id;
+}
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
+export default function EmployeeSelector({ value, onChange, disabled = false, helperText }: EmployeeSelectorProps) {
+	const [search, setSearch] = useState('');
+	const [debouncedSearch, setDebouncedSearch] = useState('');
+	const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
+	const [loading, setLoading] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [refreshKey, setRefreshKey] = useState(0);
+	const [selectedEmployee, setSelectedEmployee] = useState<EmployeeRecord | null>(null);
+	const [resolvingSelection, setResolvingSelection] = useState(false);
+	const [open, setOpen] = useState(false);
+	const [bindingEmployeeId, setBindingEmployeeId] = useState<string | null>(null);
 
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isOpen]);
+useEffect(() => {
+		const timer = window.setTimeout(() => {
+			setDebouncedSearch(search.trim());
+		}, SEARCH_DEBOUNCE_MS);
+		return () => window.clearTimeout(timer);
+	}, [search]);
 
-  const handleSelect = (employee: Employee) => {
-    setSelectedEmployee(employee);
-    onChange(employee.id, employee);
-    setIsOpen(false);
-    setSearch('');
-  };
+	useEffect(() => {
+		let aborted = false;
 
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedEmployee(null);
-    onChange(null, null);
-  };
+		async function loadEmployees() {
+			setLoading(true);
+			setError(null);
+			try {
+				const params = new URLSearchParams();
+				params.set('page', '1');
+				params.set('pageSize', String(PAGE_SIZE));
+				params.set('status', 'active');
+				params.set('sortBy', 'updatedAt');
+				params.set('sortOrder', 'desc');
+				if (debouncedSearch) {
+					params.set('search', debouncedSearch);
+				}
+				const response = await fetch(`/api/employees?${params.toString()}`, {
+					cache: 'no-store',
+				});
+				const payload = (await response.json()) as EmployeesResponse;
+				if (!response.ok || !payload.success) {
+					throw new Error(payload.error ?? '加载员工失败');
+				}
+				if (aborted) return;
+				setEmployees(payload.data.items);
+			} catch (employeeError) {
+				if (aborted) return;
+				setError(employeeError instanceof Error ? employeeError.message : '加载员工失败');
+				setEmployees([]);
+			} finally {
+				if (!aborted) setLoading(false);
+			}
+		}
 
-  const getInitials = (name: string) => {
-    const chars = name.trim().slice(0, 2);
-    return /^[A-Za-z]+$/.test(chars) ? chars.toUpperCase() : chars;
-  };
+		loadEmployees();
+		return () => {
+			aborted = true;
+		};
+	}, [debouncedSearch, refreshKey]);
 
-  return (
-    <div className={className}>
-      {label && (
-        <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-          {label}
-          {required && <span className="ml-1 text-red-500">*</span>}
-        </label>
-      )}
-      
-      <div ref={containerRef} className="relative">
-        {/* Trigger Button */}
-        <button
-          type="button"
-          onClick={() => !disabled && setIsOpen(!isOpen)}
-          disabled={disabled}
-          className={`flex h-11 w-full items-center justify-between rounded-lg border bg-white px-4 py-2.5 text-left text-sm shadow-theme-xs transition-colors focus:outline-hidden focus:ring-3 ${
-            disabled
-              ? 'cursor-not-allowed bg-gray-50 text-gray-400 dark:bg-gray-800'
-              : 'border-gray-300 text-gray-800 hover:border-gray-400 focus:border-brand-300 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:hover:border-gray-600 dark:focus:border-brand-800'
-          }`}
-        >
-          <div className="flex items-center gap-2 overflow-hidden">
-            {selectedEmployee ? (
-              <>
-                {selectedEmployee.avatarUrl ? (
-                  <Image
-                    src={selectedEmployee.avatarUrl}
-                    alt={selectedEmployee.displayName}
-                    width={24}
-                    height={24}
-                    className="rounded-full"
-                  />
-                ) : (
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-100 text-xs font-medium text-brand-700 dark:bg-brand-900/30 dark:text-brand-400">
-                    {getInitials(selectedEmployee.displayName)}
-                  </div>
-                )}
-                <span className="truncate">{selectedEmployee.displayName}</span>
-                {selectedEmployee.department && (
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    ({selectedEmployee.department})
-                  </span>
-                )}
-              </>
-            ) : (
-              <span className="text-gray-400 dark:text-gray-500">{placeholder}</span>
-            )}
-          </div>
-          
-          <div className="flex items-center gap-1">
-            {selectedEmployee && !disabled && (
-              <button
-                type="button"
-                onClick={handleClear}
-                className="rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-            <svg
-              className={`h-5 w-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
-        </button>
+		useEffect(() => {
+			if (!value) {
+				setSelectedEmployee(null);
+				setResolvingSelection(false);
+				return;
+			}
 
-        {/* Dropdown */}
-        {isOpen && (
-          <div className="absolute z-50 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
-            {/* Search */}
-            <div className="border-b border-gray-200 p-2 dark:border-gray-700">
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="搜索员工..."
-                className="h-9 w-full rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-800 placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-2 focus:ring-brand-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-white/90"
-                autoFocus
-              />
-            </div>
+			const matched = employees.find((employee) => employee.userId === value);
+			if (matched) {
+				setSelectedEmployee(matched);
+				setResolvingSelection(false);
+				return;
+			}
 
-            {/* List */}
-            <div className="max-h-60 overflow-y-auto p-1">
-              {loading ? (
-                <div className="flex items-center justify-center py-4 text-sm text-gray-500">
-                  加载中...
-                </div>
-              ) : employees.length === 0 ? (
-                <div className="flex items-center justify-center py-4 text-sm text-gray-500">
-                  暂无员工
-                </div>
-              ) : (
-                employees.map((employee) => (
-                  <button
-                    key={employee.id}
-                    type="button"
-                    onClick={() => handleSelect(employee)}
-                    className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                      value === employee.id ? 'bg-brand-50 dark:bg-brand-900/20' : ''
-                    }`}
-                  >
-                    {employee.avatarUrl ? (
-                      <Image
-                        src={employee.avatarUrl}
-                        alt={employee.displayName}
-                        width={32}
-                        height={32}
-                        className="rounded-full"
-                      />
-                    ) : (
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-sm font-medium text-brand-700 dark:bg-brand-900/30 dark:text-brand-400">
-                        {getInitials(employee.displayName)}
-                      </div>
-                    )}
-                    <div className="flex-1 overflow-hidden">
-                      <div className="truncate font-medium text-gray-900 dark:text-white">
-                        {employee.displayName}
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                        {employee.employeeCode && <span>{employee.employeeCode}</span>}
-                        {employee.department && (
-                          <>
-                            {employee.employeeCode && <span>•</span>}
-                            <span>{employee.department}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    {value === employee.id && (
-                      <svg className="h-5 w-5 text-brand-600 dark:text-brand-400" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+			let aborted = false;
+			setResolvingSelection(true);
+
+			async function resolveEmployee(userId: string) {
+				try {
+					const response = await fetch(`/api/employees/by-user/${userId}`, {
+						cache: 'no-store',
+					});
+					const payload = (await response.json()) as EmployeeDetailResponse;
+					if (!response.ok || !payload.success || !payload.data) {
+						throw new Error(payload.error ?? '无法加载负责人信息');
+					}
+					if (aborted) return;
+					setSelectedEmployee(payload.data);
+				} catch (detailError) {
+					if (aborted) return;
+					console.warn('无法解析负责人 userId', detailError);
+					setSelectedEmployee(null);
+				} finally {
+					if (!aborted) setResolvingSelection(false);
+				}
+			}
+
+			resolveEmployee(value);
+			return () => {
+				aborted = true;
+			};
+		}, [value, employees]);
+
+	const helper = helperText ?? '支持按姓名、邮箱搜索；首次选择将自动为员工生成账号（账号/初始密码=员工编号）。';
+
+	const emptyStateText = useMemo(() => {
+		if (error) return error;
+		if (debouncedSearch) return '未找到匹配的员工，尝试更换关键字';
+		return '暂无可用员工或缺少查看权限';
+	}, [debouncedSearch, error]);
+
+	const handleSelect = async (employee: EmployeeRecord) => {
+			if (disabled || bindingEmployeeId) return;
+			let targetUserId = employee.userId;
+			let updatedEmployee = employee;
+
+			if (!targetUserId) {
+				setBindingEmployeeId(employee.id);
+				try {
+					const response = await fetch('/api/employees/auto-bind', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ employeeId: employee.id }),
+					});
+					const payload = await response.json();
+					if (!response.ok || !payload.success || !payload.data?.userId) {
+						throw new Error(payload.error ?? '无法生成账号');
+					}
+					targetUserId = payload.data.userId as string;
+					updatedEmployee = { ...employee, userId: targetUserId };
+					setEmployees((prev) => prev.map((item) => (item.id === employee.id ? updatedEmployee : item)));
+					toast('已为员工生成账号', {
+						description: `账号：${payload.data.loginAccount}（初始密码同账号）`,
+					});
+				} catch (bindingError) {
+					toast.error('生成账号失败', {
+						description: bindingError instanceof Error ? bindingError.message : '请稍后再试',
+					});
+					return;
+				} finally {
+					setBindingEmployeeId(null);
+				}
+			}
+
+			if (!targetUserId) {
+				toast.error('无法选择负责人', { description: '系统账号创建失败，请稍后再试' });
+				return;
+			}
+
+			setSelectedEmployee(updatedEmployee);
+			onChange(targetUserId, updatedEmployee);
+			setOpen(false);
+		};
+
+		const handleClear = () => {
+			if (disabled) return;
+			setSelectedEmployee(null);
+			onChange('', null);
+			setOpen(false);
+		};
+
+		const triggerLabel = selectedEmployee ? getEmployeeName(selectedEmployee) : value ? `用户 ID：${value}` : '请选择负责人';
+		const triggerSubLabel = selectedEmployee?.jobTitle ?? selectedEmployee?.department ?? '';
+
+		return (
+			<div className="space-y-3">
+				<Popover open={open} onOpenChange={(nextOpen) => !disabled && setOpen(nextOpen)}>
+					<PopoverTrigger asChild>
+						<Button
+							type="button"
+							variant="outline"
+							role="combobox"
+							aria-expanded={open}
+							disabled={disabled}
+							className="w-full justify-between"
+						>
+							<div className="flex flex-col text-left">
+								<span className={cn('truncate text-sm', !value && 'text-muted-foreground')}>{triggerLabel}</span>
+								{triggerSubLabel && <span className="text-xs text-muted-foreground">{triggerSubLabel}</span>}
+							</div>
+							<ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+						</Button>
+					</PopoverTrigger>
+					<PopoverContent className="w-[420px] p-3" align="start">
+						<div className="space-y-3">
+							<div className="flex gap-2">
+								<Input
+									type="search"
+									value={search}
+									onChange={(event) => setSearch(event.target.value)}
+									placeholder="搜索姓名、邮箱"
+									className="flex-1"
+									autoFocus
+								/>
+								<Button
+									type="button"
+									variant="outline"
+									size="icon"
+									onClick={() => setRefreshKey((prev) => prev + 1)}
+									disabled={loading}
+								>
+									<RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+								</Button>
+								<Button type="button" variant="ghost" size="icon" onClick={handleClear} disabled={!value}>
+									<XCircle className="h-4 w-4" />
+								</Button>
+							</div>
+							<div className="rounded-xl border">
+								{loading && (
+									<div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
+										<Loader2 className="h-4 w-4 animate-spin" /> 正在加载员工...
+									</div>
+								)}
+								{!loading && employees.length === 0 && (
+									<div className="px-4 py-3 text-sm text-muted-foreground">{emptyStateText}</div>
+								)}
+								{employees.length > 0 && (
+									<ScrollArea className="max-h-72">
+										<div className="divide-y">
+											{employees.map((employee) => {
+												const isSelected = Boolean(value && employee.userId === value);
+												const name = getEmployeeName(employee);
+												const isBinding = bindingEmployeeId === employee.id;
+												return (
+													<button
+														key={employee.id}
+														type="button"
+														onClick={() => void handleSelect(employee)}
+														className={cn(
+															'flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60',
+															isSelected && 'bg-primary/5'
+														)}
+														disabled={isBinding}
+													>
+														<Avatar className="h-10 w-10 border">
+															<AvatarImage src={employee.avatarUrl ?? undefined} alt={name} />
+															<AvatarFallback>{name.slice(0, 2).toUpperCase()}</AvatarFallback>
+														</Avatar>
+														<div className="flex flex-1 flex-col">
+															<div className="flex flex-wrap items-center gap-2">
+																<p className="text-sm font-medium">{name}</p>
+																{employee.jobTitle && <span className="text-xs text-muted-foreground">{employee.jobTitle}</span>}
+															</div>
+															<p className="text-xs text-muted-foreground">
+																{employee.department || '未分配部门'}
+																{employee.email ? ` · ${employee.email}` : ''}
+															</p>
+														</div>
+														<div className="flex flex-col items-end gap-1 text-xs">
+															<span className={`rounded-full px-2 py-0.5 ${statusClasses[employee.employmentStatus]}`}>
+																{statusLabels[employee.employmentStatus]}
+															</span>
+															{isBinding ? (
+																<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+															) : (
+																!employee.userId && (
+																	<span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700 dark:bg-amber-500/20 dark:text-amber-100">未绑定账号</span>
+																)
+															)}
+														</div>
+													</button>
+												);
+											})}
+									</div>
+								</ScrollArea>
+							)}
+						</div>
+					</div>
+				</PopoverContent>
+			</Popover>
+
+			{value && resolvingSelection && (
+				<div className="rounded-xl border border-muted-foreground/20 bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
+					正在同步负责人信息...
+				</div>
+			)}
+
+			{selectedEmployee && (
+				<div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 text-sm text-primary">
+					<div className="flex flex-wrap items-center justify-between gap-2">
+						<div>
+							<p className="font-semibold text-foreground">{getEmployeeName(selectedEmployee)}</p>
+							{selectedEmployee.jobTitle && <p className="text-xs text-muted-foreground">{selectedEmployee.jobTitle}</p>}
+						</div>
+						<span className={`rounded-full px-2 py-0.5 text-xs ${statusClasses[selectedEmployee.employmentStatus]}`}>
+							{statusLabels[selectedEmployee.employmentStatus]}
+						</span>
+					</div>
+					<p className="mt-2 text-xs text-muted-foreground">
+						部门：{selectedEmployee.department || '未分配'} · 用户 ID：{selectedEmployee.userId ?? '未绑定'}
+					</p>
+				</div>
+			)}
+
+			<p className="text-xs text-muted-foreground">{helper}</p>
+		</div>
+	);
 }

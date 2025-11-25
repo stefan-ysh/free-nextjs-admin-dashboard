@@ -1,7 +1,12 @@
 "use client";
 import React from "react";
-import Badge from "../ui/badge/Badge";
-import { ArrowDownIcon, ArrowUpIcon, BoxIconLine, GroupIcon } from "@/icons";
+import { Badge } from "@/components/ui/badge";
+import {
+  ArrowDownRight as ArrowDownIcon,
+  ArrowUpRight as ArrowUpIcon,
+  Package as BoxIconLine,
+  Users as GroupIcon,
+} from "lucide-react";
 
 export const EcommerceMetrics = () => {
   return (
@@ -21,8 +26,8 @@ export const EcommerceMetrics = () => {
               3,782
             </h4>
           </div>
-          <Badge color="success">
-            <ArrowUpIcon />
+          <Badge className="gap-1 border-transparent bg-success-50 text-success-600 dark:bg-success-500/10 dark:text-success-200">
+            <ArrowUpIcon className="text-success-500" />
             11.01%
           </Badge>
         </div>
@@ -44,7 +49,7 @@ export const EcommerceMetrics = () => {
             </h4>
           </div>
 
-          <Badge color="error">
+          <Badge className="gap-1 border-transparent bg-error-50 text-error-600 dark:bg-error-500/10 dark:text-error-200">
             <ArrowDownIcon className="text-error-500" />
             9.05%
           </Badge>

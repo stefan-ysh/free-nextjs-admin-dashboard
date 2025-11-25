@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 
 import { requireCurrentUser } from '@/lib/auth/current-user';
+import { toPermissionUser } from '@/lib/auth/permission-user';
 import {
   deleteEmployee,
   EmploymentStatus,
   getEmployeeById,
   updateEmployee,
 } from '@/lib/hr/employees';
+import { checkPermission, Permissions } from '@/lib/permissions';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -30,7 +32,9 @@ export async function GET(
 ) {
   try {
     const context = await requireCurrentUser();
-    if (context.user.role !== 'finance_admin') {
+    const permissionUser = await toPermissionUser(context.user);
+    const perm = await checkPermission(permissionUser, Permissions.USER_VIEW_ALL);
+    if (!perm.allowed) {
       return forbiddenResponse();
     }
 
@@ -56,7 +60,9 @@ export async function PUT(
 ) {
   try {
     const context = await requireCurrentUser();
-    if (context.user.role !== 'finance_admin') {
+    const permissionUser = await toPermissionUser(context.user);
+    const perm = await checkPermission(permissionUser, Permissions.USER_UPDATE);
+    if (!perm.allowed) {
       return forbiddenResponse();
     }
 
@@ -67,6 +73,7 @@ export async function PUT(
     }
 
     const payload = {
+      userId: body.userId,
       employeeCode: body.employeeCode,
       firstName: body.firstName,
       lastName: body.lastName,
@@ -74,16 +81,24 @@ export async function PUT(
       email: body.email,
       phone: body.phone,
       department: body.department,
+      departmentId: body.departmentId,
       jobTitle: body.jobTitle,
+      jobGradeId: body.jobGradeId,
+      nationalId: body.nationalId,
+      gender: body.gender,
+      address: body.address,
+      organization: body.organization,
+      educationBackground: body.educationBackground,
       employmentStatus: body.employmentStatus as EmploymentStatus | undefined,
       hireDate: body.hireDate,
       terminationDate: body.terminationDate,
       managerId: body.managerId,
       location: body.location,
       customFields: body.customFields,
+      statusChangeNote: body.statusChangeNote,
     };
 
-  const updated = await updateEmployee(employeeId, payload);
+    const updated = await updateEmployee(employeeId, payload);
     if (!updated) {
       return notFoundResponse();
     }
@@ -103,6 +118,9 @@ export async function PUT(
       if (error.message === 'INVALID_STATUS') {
         return badRequestResponse('无效的员工状态');
       }
+      if (error.message === 'USER_NOT_FOUND') {
+        return badRequestResponse('关联的用户不存在');
+      }
     }
     console.error('更新员工失败', error);
     return NextResponse.json({ success: false, error: '服务器错误' }, { status: 500 });
@@ -115,7 +133,9 @@ export async function DELETE(
 ) {
   try {
     const context = await requireCurrentUser();
-    if (context.user.role !== 'finance_admin') {
+    const permissionUser = await toPermissionUser(context.user);
+    const perm = await checkPermission(permissionUser, Permissions.USER_DELETE);
+    if (!perm.allowed) {
       return forbiddenResponse();
     }
 
@@ -125,7 +145,7 @@ export async function DELETE(
       return notFoundResponse();
     }
 
-  await deleteEmployee(employeeId);
+    await deleteEmployee(employeeId);
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHENTICATED') {

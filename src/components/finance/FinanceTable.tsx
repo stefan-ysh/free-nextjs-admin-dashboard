@@ -1,12 +1,27 @@
 'use client';
 
+import DataState from '@/components/common/DataState';
 import { FinanceRecord, TransactionType, InvoiceStatus, PaymentType } from '@/types/finance';
+import { formatDateTimeLocal } from '@/lib/dates';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { useConfirm } from '@/hooks/useConfirm';
 
 interface FinanceTableProps {
   records: FinanceRecord[];
   onEdit: (record: FinanceRecord) => void;
   onDelete: (id: string) => void;
   loading?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
 export default function FinanceTable({
@@ -14,14 +29,24 @@ export default function FinanceTable({
   onEdit,
   onDelete,
   loading = false,
+  canEdit = true,
+  canDelete = true,
 }: FinanceTableProps) {
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
+  const confirm = useConfirm();
+
+  const handleDelete = async (record: FinanceRecord) => {
+    const confirmed = await confirm({
+      title: '确定要删除这条记录吗？',
+      description: '此操作无法撤销。',
+      confirmText: '删除',
+      cancelText: '取消',
     });
+    if (confirmed) {
+      onDelete(record.id);
+    }
+  };
+  const formatDate = (dateString: string) => {
+    return formatDateTimeLocal(dateString) ?? dateString;
   };
 
   const getPaymentTypeLabel = (type: PaymentType) => {
@@ -40,142 +65,149 @@ export default function FinanceTable({
     return status === InvoiceStatus.ISSUED ? '已开票' : '待开票';
   };
 
-  const getInvoiceStatusColor = (status?: InvoiceStatus) => {
-    if (!status || status === InvoiceStatus.NOT_REQUIRED) return 'text-gray-500';
-    return status === InvoiceStatus.ISSUED 
-      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' 
-      : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
-  };
+
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="text-gray-500 dark:text-gray-400">加载中...</div>
+      <div className="p-6">
+        <DataState
+          variant="loading"
+          title="正在加载财务记录"
+          description="稍等一下，数据很快就绪"
+          className="min-h-[200px]"
+        />
       </div>
     );
   }
 
   if (records.length === 0) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="text-center text-gray-500 dark:text-gray-400">
-          <p className="text-lg">暂无记录</p>
-          <p className="mt-2 text-sm">点击上方按钮添加第一条财务记录</p>
-        </div>
+      <div className="p-6">
+        <DataState
+          variant="empty"
+          title="暂无财务记录"
+          description="点击“添加记录”开始录入第一条数据"
+          className="min-h-[200px]"
+        />
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
-        <thead className="bg-gray-50 text-xs uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-400">
-          <tr>
-            <th scope="col" className="px-6 py-3">日期</th>
-            <th scope="col" className="px-6 py-3">名称</th>
-            <th scope="col" className="px-6 py-3">类型</th>
-            <th scope="col" className="px-6 py-3">分类</th>
-            <th scope="col" className="px-6 py-3">合同金额</th>
-            <th scope="col" className="px-6 py-3">手续费</th>
-            <th scope="col" className="px-6 py-3">总金额</th>
-            <th scope="col" className="px-6 py-3">款项类型</th>
-            <th scope="col" className="px-6 py-3">发票状态</th>
-            <th scope="col" className="px-6 py-3">操作</th>
-          </tr>
-        </thead>
-        <tbody>
+    <div className="rounded-none border-primary-200 dark:border-primary-700">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>日期</TableHead>
+            <TableHead>名称</TableHead>
+            <TableHead>类型</TableHead>
+            <TableHead>分类</TableHead>
+            <TableHead>数量</TableHead>
+            <TableHead>合同金额</TableHead>
+            <TableHead>手续费</TableHead>
+            <TableHead>总金额</TableHead>
+            <TableHead>支付方式</TableHead>
+            <TableHead>代付/流水</TableHead>
+            <TableHead>款项类型</TableHead>
+            <TableHead>发票状态</TableHead>
+            <TableHead className="text-right">操作</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {records.map((record) => {
             const totalAmount = record.contractAmount + record.fee;
             return (
-              <tr
-                key={record.id}
-                className="border-b bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-600"
-              >
-                <td className="px-6 py-4 whitespace-nowrap">{formatDate(record.date)}</td>
-                <td className="px-6 py-4">
-                  <div className="max-w-[200px] truncate font-medium text-gray-900 dark:text-white" title={record.name}>
+              <TableRow key={record.id} className='border-none'>
+                <TableCell>{formatDate(record.date)}</TableCell>
+                <TableCell className="font-medium">
+                  <div className="max-w-[200px] truncate" title={record.name}>
                     {record.name}
                   </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span
-                    className={`rounded px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${
-                      record.type === TransactionType.INCOME
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                        : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-                    }`}
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    variant={record.type === TransactionType.INCOME ? 'default' : 'destructive'}
+                    className={record.type === TransactionType.INCOME ? 'bg-green-600 hover:bg-green-700' : ''}
                   >
                     {record.type === TransactionType.INCOME ? '收入' : '支出'}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">{record.category}</td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    ¥{record.contractAmount.toFixed(2)}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="text-gray-600 dark:text-gray-400">
-                    ¥{record.fee.toFixed(2)}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span
-                    className={`font-semibold ${
-                      record.type === TransactionType.INCOME
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-red-600 dark:text-red-400'
-                    }`}
-                  >
-                    ¥{totalAmount.toFixed(2)}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="text-gray-700 dark:text-gray-300">
-                    {getPaymentTypeLabel(record.paymentType)}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                  </Badge>
+                </TableCell>
+                <TableCell>{record.category}</TableCell>
+                <TableCell>{record.quantity ?? 1}</TableCell>
+                <TableCell>¥{record.contractAmount.toFixed(2)}</TableCell>
+                <TableCell className="text-muted-foreground">¥{record.fee.toFixed(2)}</TableCell>
+                <TableCell className={record.type === TransactionType.INCOME ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
+                  ¥{totalAmount.toFixed(2)}
+                </TableCell>
+                <TableCell>{record.paymentChannel || '-'}</TableCell>
+                <TableCell>
+                  {record.payer || record.transactionNo ? (
+                    <div className="space-y-1">
+                      {record.payer && <div className="text-sm text-foreground">{record.payer}</div>}
+                      {record.transactionNo && (
+                        <div className="text-xs text-muted-foreground" title={record.transactionNo}>
+                          流水: {record.transactionNo}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
+                <TableCell>{getPaymentTypeLabel(record.paymentType)}</TableCell>
+                <TableCell>
                   {record.invoice?.status && record.invoice.status !== InvoiceStatus.NOT_REQUIRED ? (
                     <div className="flex items-center gap-2">
-                      <span className={`rounded px-2.5 py-0.5 text-xs font-medium ${getInvoiceStatusColor(record.invoice.status)}`}>
+                      <Badge variant="outline" className={
+                        record.invoice.status === InvoiceStatus.ISSUED
+                          ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/30 dark:text-green-400'
+                          : 'border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                      }>
                         {getInvoiceStatusLabel(record.invoice.status)}
-                      </span>
+                      </Badge>
                       {record.invoice.status === InvoiceStatus.ISSUED && record.invoice.attachments && record.invoice.attachments.length > 0 && (
-                        <span className="text-xs text-gray-500 dark:text-gray-400" title={`${record.invoice.attachments.length}个附件`}>
+                        <span className="text-xs text-muted-foreground" title={`${record.invoice.attachments.length}个附件`}>
                           📎 {record.invoice.attachments.length}
                         </span>
                       )}
                     </div>
                   ) : (
-                    <span className="text-gray-400">-</span>
+                    <span className="text-muted-foreground">-</span>
                   )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => onEdit(record)}
-                      className="font-medium text-blue-600 hover:underline dark:text-blue-500"
-                    >
-                      编辑
-                    </button>
-                    <button
-                      onClick={() => {
-                      if (window.confirm('确定要删除这条记录吗?')) {
-                        onDelete(record.id);
-                      }
-                    }}
-                    className="font-medium text-red-600 hover:underline dark:text-red-500"
-                  >
-                    删除
-                  </button>
-                </div>
-              </td>
-            </tr>
+                </TableCell>
+                <TableCell className="text-right">
+                  {canEdit || canDelete ? (
+                    <div className="flex justify-end gap-2">
+                      {canEdit && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onEdit(record)}
+                          className="h-8 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        >
+                          编辑
+                        </Button>
+                      )}
+                      {canDelete && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(record)}
+                          className="h-8 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          删除
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">无权限</span>
+                  )}
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

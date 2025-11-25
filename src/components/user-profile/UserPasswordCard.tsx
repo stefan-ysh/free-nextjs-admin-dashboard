@@ -4,7 +4,8 @@ import React, { useMemo, useState } from "react";
 
 import Input from "../form/input/InputField";
 import Label from "../form/Label";
-import Button from "../ui/button/Button";
+import { Button } from "@/components/ui/button";
+import { formatDateTimeLocal } from "@/lib/dates";
 
 type PasswordPayload = {
   currentPassword: string;
@@ -20,11 +21,7 @@ type UserPasswordCardProps = {
 
 function formatPasswordUpdatedAt(timestamp: string | null) {
   if (!timestamp) return "尚未更新过密码";
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) {
-    return "上次更新时间未知";
-  }
-  return date.toLocaleString();
+  return formatDateTimeLocal(timestamp) ?? "上次更新时间未知";
 }
 
 export default function UserPasswordCard({ passwordUpdatedAt, onChangePassword, loading = false }: UserPasswordCardProps) {

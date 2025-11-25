@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 
 import { requireCurrentUser } from '@/lib/auth/current-user';
+import { toPermissionUser } from '@/lib/auth/permission-user';
 import {
   createEmployee,
   EmploymentStatus,
   listEmployees,
   ListEmployeesParams,
 } from '@/lib/hr/employees';
+import { checkPermission, Permissions } from '@/lib/permissions';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -32,13 +34,17 @@ function normalizeStatusParam(value: string | null): ListEmployeesParams['status
 export async function GET(request: Request) {
   try {
     const context = await requireCurrentUser();
-    if (context.user.role !== 'finance_admin') {
+    const permissionUser = await toPermissionUser(context.user);
+    const perm = await checkPermission(permissionUser, Permissions.USER_VIEW_ALL);
+    if (!perm.allowed) {
       return forbiddenResponse();
     }
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') ?? undefined;
     const department = searchParams.get('department') ?? undefined;
+    const departmentId = searchParams.get('departmentId') ?? undefined;
+    const jobGradeId = searchParams.get('jobGradeId') ?? undefined;
     const status = normalizeStatusParam(searchParams.get('status'));
     const page = Number.parseInt(searchParams.get('page') ?? '', 10);
     const pageSize = Number.parseInt(searchParams.get('pageSize') ?? '', 10);
@@ -61,6 +67,8 @@ export async function GET(request: Request) {
     const result = await listEmployees({
       search,
       department,
+      departmentId,
+      jobGradeId,
       status,
       page: Number.isNaN(page) ? undefined : page,
       pageSize: Number.isNaN(pageSize) ? undefined : pageSize,
@@ -81,7 +89,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const context = await requireCurrentUser();
-    if (context.user.role !== 'finance_admin') {
+    const permissionUser = await toPermissionUser(context.user);
+    const perm = await checkPermission(permissionUser, Permissions.USER_CREATE);
+    if (!perm.allowed) {
       return forbiddenResponse();
     }
 
@@ -91,6 +101,7 @@ export async function POST(request: Request) {
     }
 
     const result = await createEmployee({
+      userId: body.userId,
       employeeCode: body.employeeCode,
       firstName: body.firstName,
       lastName: body.lastName,
@@ -98,7 +109,14 @@ export async function POST(request: Request) {
       email: body.email,
       phone: body.phone,
       department: body.department,
+      departmentId: body.departmentId,
       jobTitle: body.jobTitle,
+      jobGradeId: body.jobGradeId,
+      nationalId: body.nationalId,
+      gender: body.gender,
+      address: body.address,
+      organization: body.organization,
+      educationBackground: body.educationBackground,
       employmentStatus: body.employmentStatus,
       hireDate: body.hireDate,
       terminationDate: body.terminationDate,
@@ -121,6 +139,9 @@ export async function POST(request: Request) {
       }
       if (error.message === 'INVALID_STATUS') {
         return badRequestResponse('无效的员工状态');
+      }
+      if (error.message === 'USER_NOT_FOUND') {
+        return badRequestResponse('关联的用户不存在');
       }
     }
     console.error('创建员工失败', error);

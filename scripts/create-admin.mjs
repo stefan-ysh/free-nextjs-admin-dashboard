@@ -4,48 +4,59 @@ import path from 'node:path';
 import dotenv from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { Pool } from 'pg';
-
-function exitIf(condition, message) {
-  if (condition) {
-    console.error(message);
-    process.exit(1);
-  }
-}
+import mysql from 'mysql2/promise';
 
 const cwd = process.cwd();
 
 dotenv.config({ path: path.join(cwd, '.env.local') });
 dotenv.config({ path: path.join(cwd, '.env') });
 
-exitIf(
-  !process.env.POSTGRES_URL_NON_POOLING &&
-    !process.env.DATABASE_URL_UNPOOLED &&
-    !process.env.POSTGRES_URL &&
-    !process.env.DATABASE_URL,
-  '缺少数据库连接字符串，请在 .env.local 中配置 POSTGRES_URL_NON_POOLING、DATABASE_URL_UNPOOLED、POSTGRES_URL 或 DATABASE_URL'
-);
+function resolvePoolOptions() {
+  const connectionLimit = Number(process.env.MYSQL_POOL_SIZE ?? '10');
+  const url = process.env.MYSQL_URL || process.env.DATABASE_URL;
 
-const connectionString =
-  process.env.POSTGRES_URL_NON_POOLING ||
-  process.env.DATABASE_URL_UNPOOLED ||
-  process.env.POSTGRES_URL ||
-  process.env.DATABASE_URL;
+  if (url && url.trim()) {
+    const parsed = new URL(url);
+    return {
+      host: parsed.hostname,
+      port: Number(parsed.port || '3306'),
+      user: decodeURIComponent(parsed.username || 'root'),
+      password: decodeURIComponent(parsed.password || ''),
+      database: decodeURIComponent(parsed.pathname.replace(/^\//, '') || 'tailadmin_local'),
+      waitForConnections: true,
+      connectionLimit,
+      decimalNumbers: true,
+      timezone: 'Z'
+    };
+  }
 
-const pool = new Pool({ connectionString, max: 5 });
+  const host = process.env.MYSQL_HOST?.trim() || '127.0.0.1';
+  const port = Number(process.env.MYSQL_PORT ?? '3306');
+  const user = process.env.MYSQL_USER?.trim() || 'root';
+  const password = process.env.MYSQL_PASSWORD ?? '';
+  const database = process.env.MYSQL_DATABASE?.trim() || 'tailadmin_local';
 
-function rowsFrom(result) {
-  if (!result) return [];
-  if (Array.isArray(result.rows)) return result.rows;
-  return [];
+  return {
+    host,
+    port,
+    user,
+    password,
+    database,
+    waitForConnections: true,
+    connectionLimit,
+    decimalNumbers: true,
+    timezone: 'Z'
+  };
 }
+
+const pool = mysql.createPool(resolvePoolOptions());
 
 function buildQueryText(strings, valuesLength) {
   let query = '';
   for (let index = 0; index < strings.length; index += 1) {
     query += strings[index];
     if (index < valuesLength) {
-      query += `$${index + 1}`;
+      query += '?';
     }
   }
   return query;
@@ -56,74 +67,88 @@ async function sql(strings, ...values) {
   return pool.query(text, values);
 }
 
+const ROLE_VALUES = [
+  'super_admin',
+  'admin',
+  'finance_admin',
+  'finance',
+  'hr',
+  'department_manager',
+  'staff',
+  'employee'
+];
+const ROLE_ENUM_SQL = ROLE_VALUES.map((role) => `'${role}'`).join(',');
+
 async function ensureAuthSchema() {
-  await sql`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS auth_users (
-      id UUID PRIMARY KEY,
-      email TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'staff',
-      first_name TEXT,
-      last_name TEXT,
-      display_name TEXT,
-      job_title TEXT,
-      phone TEXT,
+      id CHAR(36) NOT NULL PRIMARY KEY,
+      email VARCHAR(255) NOT NULL UNIQUE,
+      password_hash VARCHAR(255) NOT NULL,
+      role ENUM(${ROLE_ENUM_SQL}) NOT NULL DEFAULT 'staff',
+      first_name VARCHAR(120),
+      last_name VARCHAR(120),
+      display_name VARCHAR(255),
+      job_title VARCHAR(120),
+      phone VARCHAR(60),
       bio TEXT,
-      country TEXT,
-      city TEXT,
-      postal_code TEXT,
-      tax_id TEXT,
+      country VARCHAR(120),
+      city VARCHAR(120),
+      postal_code VARCHAR(40),
+      tax_id VARCHAR(120),
       avatar_url TEXT,
-      social_links JSONB NOT NULL DEFAULT '{}'::jsonb,
-      password_updated_at TIMESTAMPTZ,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
+      social_links JSON NOT NULL DEFAULT (JSON_OBJECT()),
+      password_updated_at DATETIME(3),
+      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
 
-  await sql`
+  await pool.query(
+    `ALTER TABLE auth_users MODIFY COLUMN role ENUM(${ROLE_ENUM_SQL}) NOT NULL DEFAULT 'staff'`
+  );
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS auth_sessions (
-      id UUID PRIMARY KEY,
-      user_id UUID NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-      session_token TEXT NOT NULL UNIQUE,
-      device_type TEXT NOT NULL,
-      user_agent_hash TEXT NOT NULL,
+      id CHAR(36) NOT NULL PRIMARY KEY,
+      user_id CHAR(36) NOT NULL,
+      session_token CHAR(64) NOT NULL UNIQUE,
+      device_type VARCHAR(32) NOT NULL,
+      user_agent_hash CHAR(64) NOT NULL,
       user_agent TEXT,
-      remember_me BOOLEAN NOT NULL DEFAULT FALSE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      expires_at TIMESTAMPTZ NOT NULL,
-      last_active TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
+      remember_me TINYINT(1) NOT NULL DEFAULT 0,
+      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      expires_at DATETIME(3) NOT NULL,
+      last_active DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      CONSTRAINT fk_auth_sessions_user FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
 
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS first_name TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS last_name TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS display_name TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS job_title TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS phone TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS bio TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS country TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS city TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS postal_code TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS tax_id TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS avatar_url TEXT`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS social_links JSONB NOT NULL DEFAULT '{}'::jsonb`;
-  await sql`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS password_updated_at TIMESTAMPTZ`;
-  await sql`ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS user_agent TEXT`;
+  try {
+    await pool.query('CREATE INDEX idx_auth_sessions_user ON auth_sessions(user_id)');
+  } catch (error) {
+    if (error?.code !== 'ER_DUP_KEYNAME') {
+      throw error;
+    }
+  }
 }
 
 async function createAdmin(email, password, role) {
   const id = randomUUID();
   const normalizedEmail = email.trim().toLowerCase();
   const passwordHash = await bcrypt.hash(password, 12);
-  const userRole = role || 'finance_admin';
+  const normalizedRole = role?.trim().toLowerCase();
+  if (normalizedRole && !ROLE_VALUES.includes(normalizedRole)) {
+    throw new Error(
+      `角色 ${normalizedRole} 无效，可选值: ${ROLE_VALUES.join(', ')}`
+    );
+  }
+  const userRole = normalizedRole || 'finance_admin';
   const displayName = normalizedEmail.split('@')[0];
 
-  const existing = rowsFrom(
-    await sql`
+  const [existing] = await sql`
       SELECT id FROM auth_users WHERE email = ${normalizedEmail} LIMIT 1
-    `
-  );
+    `;
 
   if (existing.length > 0) {
     throw new Error(`邮箱 ${normalizedEmail} 已存在`);
@@ -143,7 +168,9 @@ async function main() {
     const [, , email, password, role] = process.argv;
 
     if (!email || !password) {
-      console.error('用法: npm run seed:admin -- <email> <password> [role]');
+      console.error(
+        `用法: npm run seed:admin -- <email> <password> [role]\n可选角色: ${ROLE_VALUES.join(', ')}`
+      );
       exitCode = 1;
       return;
     }

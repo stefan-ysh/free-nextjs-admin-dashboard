@@ -23,7 +23,7 @@
   - 发票开票日期选择
 
 ### 3. ✅ 发票附件上传
-- **新增组件**: `src/components/finance/FileUpload.tsx`
+- **复用组件**: `src/components/common/FileUpload.tsx`
 - **功能**:
   - 拖拽上传支持
   - 文件预览(图片和PDF)
@@ -33,7 +33,6 @@
 - **集成**:
   - 当发票状态选择"已开票"时,自动显示上传区域
   - 附件存储在`invoice.attachments`字段
-- **注意**: 当前使用base64编码,生产环境建议迁移到Vercel Blob存储
 
 ### 4. ✅ 更新业务分类
 - **位置**: `src/lib/db/finance.ts` - `getCategories()`
@@ -158,7 +157,7 @@
 
 ## 后续优化建议
 
-1. **文件存储**: 将`FileUpload`组件的base64编码改为Vercel Blob API
+1. **文件存储**: 将`FileUpload`组件改为调用 `/api/files/upload` 或自建对象存储，避免在前端持有 base64
 2. **批量操作**: 添加批量删除、批量导出功能
 3. **高级筛选**: 按款项类型、发票状态筛选
 4. **数据导出**: 导出Excel功能,包含所有字段
@@ -188,8 +187,8 @@
 - **Next.js 15**: App Router + Server Components
 - **TypeScript**: 完整类型安全
 - **Tailwind CSS V4**: 响应式设计
-- **Vercel KV**: Redis数据存储
-- **自定义组件**: DatePicker, FileUpload
+- **MySQL + 本地存储**: 财务数据写入 MySQL, 附件保存在 `LOCAL_STORAGE_ROOT`
+- **自定义组件**: DatePicker, FileUpload(通用组件)
 
 ## 相关文件
 

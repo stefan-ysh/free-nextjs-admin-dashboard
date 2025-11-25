@@ -1,6 +1,8 @@
 'use client';
 
+import DataState from '@/components/common/DataState';
 import { FinanceStats } from '@/types/finance';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface FinanceStatsCardsProps {
   stats: FinanceStats | null;
@@ -10,49 +12,49 @@ interface FinanceStatsCardsProps {
 export default function FinanceStatsCards({ stats, loading = false }: FinanceStatsCardsProps) {
   if (loading) {
     return (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div
-            key={i}
-            className="animate-pulse rounded-lg border border-gray-200 bg-white p-6 shadow dark:border-gray-700 dark:bg-gray-800"
-          >
-            <div className="h-4 w-24 rounded bg-gray-300 dark:bg-gray-600"></div>
-            <div className="mt-3 h-8 w-32 rounded bg-gray-300 dark:bg-gray-600"></div>
-          </div>
-        ))}
-      </div>
+      <DataState
+        variant="loading"
+        title="统计概览加载中"
+        description="我们正在刷新收入与支出指标"
+        className="min-h-[200px]"
+      />
     );
   }
 
-  if (!stats) return null;
+  if (!stats) {
+    return (
+      <DataState
+        variant="empty"
+        title="暂无可用统计"
+        description="点击“立即刷新”获取最新的财务指标"
+        className="min-h-[200px]"
+      />
+    );
+  }
 
   const cards = [
     {
       title: '总收入',
       value: stats.totalIncome,
       color: 'text-green-600 dark:text-green-400',
-      bgColor: 'bg-green-50 dark:bg-green-900/20',
       icon: '↑',
     },
     {
       title: '总支出',
       value: stats.totalExpense,
       color: 'text-red-600 dark:text-red-400',
-      bgColor: 'bg-red-50 dark:bg-red-900/20',
       icon: '↓',
     },
     {
       title: '净收支',
       value: stats.balance,
       color: stats.balance >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400',
-      bgColor: stats.balance >= 0 ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-orange-50 dark:bg-orange-900/20',
       icon: '=',
     },
     {
       title: '记录数',
       value: stats.recordCount,
       color: 'text-purple-600 dark:text-purple-400',
-      bgColor: 'bg-purple-50 dark:bg-purple-900/20',
       icon: '#',
       isCount: true,
     },
@@ -61,22 +63,19 @@ export default function FinanceStatsCards({ stats, loading = false }: FinanceSta
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {cards.map((card) => (
-        <div
-          key={card.title}
-          className="rounded-lg border border-gray-200 bg-white p-6 shadow transition-shadow hover:shadow-lg dark:border-gray-700 dark:bg-gray-800"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{card.title}</p>
-              <p className={`mt-2 text-3xl font-bold ${card.color}`}>
-                {card.isCount ? card.value : `¥${card.value.toFixed(2)}`}
-              </p>
+        <Card key={card.title} className="border-none">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              {card.title}
+            </CardTitle>
+            <span className={`text-2xl ${card.color}`}>{card.icon}</span>
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${card.color}`}>
+              {card.isCount ? card.value : `¥${card.value.toFixed(2)}`}
             </div>
-            <div className={`flex h-12 w-12 items-center justify-center rounded-full ${card.bgColor} text-2xl ${card.color}`}>
-              {card.icon}
-            </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       ))}
     </div>
   );

@@ -1,3 +1,7 @@
+import { PaymentType, InvoiceStatus, InvoiceType as FinanceInvoiceType } from '@/types/finance';
+
+export { PaymentType, InvoiceStatus } from '@/types/finance';
+
 /**
  * 购买渠道
  */
@@ -6,20 +10,31 @@ export type PurchaseChannel = 'online' | 'offline';
 /**
  * 付款方式
  */
-export type PaymentMethod = 
-  | 'wechat'              // 微信
-  | 'alipay'              // 支付宝
-  | 'bank_transfer'       // 银行转账
-  | 'corporate_transfer'  // 对公转账
-  | 'cash';               // 现金
+export type PaymentMethod =
+  | 'wechat' // 微信
+  | 'alipay' // 支付宝
+  | 'bank_transfer' // 银行转账
+  | 'corporate_transfer' // 对公转账
+  | 'cash'; // 现金
 
 /**
- * 发票类型
+ * 发票类型(沿用财务模块枚举)
  */
-export type InvoiceType = 
-  | 'special'   // 专票
-  | 'general'   // 普票
-  | 'none';     // 无发票
+export type InvoiceType = FinanceInvoiceType;
+
+export const PAYMENT_TYPES: readonly PaymentType[] = [
+  PaymentType.DEPOSIT,
+  PaymentType.FULL_PAYMENT,
+  PaymentType.INSTALLMENT,
+  PaymentType.BALANCE,
+  PaymentType.OTHER,
+] as const;
+
+export const INVOICE_STATUSES: readonly InvoiceStatus[] = [
+  InvoiceStatus.PENDING,
+  InvoiceStatus.ISSUED,
+  InvoiceStatus.NOT_REQUIRED,
+] as const;
 
 /**
  * 采购状态
@@ -46,6 +61,7 @@ export interface PurchaseRecord {
   quantity: number;
   unitPrice: number;
   totalAmount: number;
+  feeAmount: number;
   
   // 购买信息
   purchaseChannel: PurchaseChannel;
@@ -55,10 +71,17 @@ export interface PurchaseRecord {
   
   // 付款信息
   paymentMethod: PaymentMethod;
+  paymentType: PaymentType;
+  paymentChannel: string | null;
+  payerName: string | null;
+  transactionNo: string | null;
   purchaserId: string;
   
   // 发票信息
   invoiceType: InvoiceType;
+  invoiceStatus: InvoiceStatus;
+  invoiceNumber: string | null;
+  invoiceIssueDate: string | null;
   invoiceImages: string[];
   receiptImages: string[];
   
@@ -100,6 +123,7 @@ export interface CreatePurchaseInput {
   specification?: string;
   quantity: number;
   unitPrice: number;
+  feeAmount?: number;
   
   purchaseChannel: PurchaseChannel;
   purchaseLocation?: string;  // 线下购买时必填
@@ -107,9 +131,16 @@ export interface CreatePurchaseInput {
   purpose: string;
   
   paymentMethod: PaymentMethod;
+  paymentType: PaymentType;
+  paymentChannel?: string;
+  payerName?: string;
+  transactionNo?: string;
   purchaserId?: string;  // 默认当前用户
   
   invoiceType: InvoiceType;
+  invoiceStatus?: InvoiceStatus;
+  invoiceNumber?: string;
+  invoiceIssueDate?: string;
   invoiceImages?: string[];
   receiptImages?: string[];
   
@@ -129,6 +160,7 @@ export interface UpdatePurchaseInput {
   specification?: string | null;
   quantity?: number;
   unitPrice?: number;
+  feeAmount?: number;
   
   purchaseChannel?: PurchaseChannel;
   purchaseLocation?: string | null;
@@ -136,9 +168,16 @@ export interface UpdatePurchaseInput {
   purpose?: string;
   
   paymentMethod?: PaymentMethod;
+  paymentType?: PaymentType;
+  paymentChannel?: string | null;
+  payerName?: string | null;
+  transactionNo?: string | null;
   purchaserId?: string;
   
   invoiceType?: InvoiceType;
+  invoiceStatus?: InvoiceStatus;
+  invoiceNumber?: string | null;
+  invoiceIssueDate?: string | null;
   invoiceImages?: string[];
   receiptImages?: string[];
   
@@ -166,7 +205,7 @@ export interface ListPurchasesParams {
   includeDeleted?: boolean;
   page?: number;
   pageSize?: number;
-  sortBy?: 'createdAt' | 'updatedAt' | 'purchaseDate' | 'totalAmount' | 'status';
+  sortBy?: 'createdAt' | 'updatedAt' | 'purchaseDate' | 'totalAmount' | 'status' | 'submittedAt';
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -316,6 +355,44 @@ export interface ProjectPurchaseStats {
   budgetUtilization: number | null; // 预算使用率 %
 }
 
+export const PURCHASE_STATUSES: readonly PurchaseStatus[] = ['draft', 'pending_approval', 'approved', 'rejected', 'paid', 'cancelled'] as const;
+export const PURCHASE_CHANNELS: readonly PurchaseChannel[] = ['online', 'offline'] as const;
+export const PAYMENT_METHODS: readonly PaymentMethod[] = ['wechat', 'alipay', 'bank_transfer', 'corporate_transfer', 'cash'] as const;
+export const INVOICE_TYPES: readonly InvoiceType[] = [
+  FinanceInvoiceType.SPECIAL,
+  FinanceInvoiceType.GENERAL,
+  FinanceInvoiceType.NONE,
+] as const;
+export const REIMBURSEMENT_ACTIONS: readonly ReimbursementAction[] = ['submit', 'approve', 'reject', 'pay', 'cancel', 'withdraw'] as const;
+
+export function isPurchaseStatus(value: string | null | undefined): value is PurchaseStatus {
+  return value != null && PURCHASE_STATUSES.includes(value as PurchaseStatus);
+}
+
+export function isPurchaseChannel(value: string | null | undefined): value is PurchaseChannel {
+  return value != null && PURCHASE_CHANNELS.includes(value as PurchaseChannel);
+}
+
+export function isPaymentMethod(value: string | null | undefined): value is PaymentMethod {
+  return value != null && PAYMENT_METHODS.includes(value as PaymentMethod);
+}
+
+export function isInvoiceType(value: string | null | undefined): value is InvoiceType {
+  return value != null && INVOICE_TYPES.includes(value as InvoiceType);
+}
+
+export function isPaymentType(value: string | null | undefined): value is PaymentType {
+  return value != null && PAYMENT_TYPES.includes(value as PaymentType);
+}
+
+export function isInvoiceStatus(value: string | null | undefined): value is InvoiceStatus {
+  return value != null && INVOICE_STATUSES.includes(value as InvoiceStatus);
+}
+
+export function isReimbursementAction(value: string | null | undefined): value is ReimbursementAction {
+  return value != null && REIMBURSEMENT_ACTIONS.includes(value as ReimbursementAction);
+}
+
 /**
  * 辅助函数：判断采购是否可编辑
  */
@@ -335,6 +412,16 @@ export function isPurchaseDeletable(status: PurchaseStatus): boolean {
  */
 export function isPurchaseSubmittable(status: PurchaseStatus): boolean {
   return status === 'draft' || status === 'rejected';
+}
+
+/**
+ * 判断是否具备报销所需的发票凭证
+ */
+export function hasInvoiceEvidence(purchase: Pick<PurchaseRecord, 'invoiceImages' | 'invoiceStatus' | 'invoiceType'>): boolean {
+  if (purchase.invoiceType === 'none') return true;
+  if (purchase.invoiceStatus === InvoiceStatus.NOT_REQUIRED) return true;
+  const files = Array.isArray(purchase.invoiceImages) ? purchase.invoiceImages.filter(Boolean) : [];
+  return files.length > 0;
 }
 
 /**

@@ -1,234 +1,81 @@
-'use client';
+import { requireCurrentUser } from '@/lib/auth/current-user';
+import { toPermissionUser } from '@/lib/auth/permission-user';
+import { checkPermission, Permissions } from '@/lib/permissions';
+import { getRecords, getRecordsCount, getStats, getCategories } from '@/lib/db/finance';
+import { PaymentType, TransactionType } from '@/types/finance';
+import FinanceClient from '@/components/finance/FinanceClient';
 
-import { useState, useEffect } from 'react';
-import { FinanceRecord, TransactionType, FinanceStats } from '@/types/finance';
-import FinanceForm from '@/components/finance/FinanceForm';
-import type { FinanceFormSubmitPayload } from '@/components/finance/FinanceForm';
-import FinanceTable from '@/components/finance/FinanceTable';
-import FinanceStatsCards from '@/components/finance/FinanceStatsCards';
-import PageBreadCrumb from '@/components/common/PageBreadCrumb';
+export default async function FinancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const context = await requireCurrentUser();
+  const permissionUser = await toPermissionUser(context.user);
+  const viewPerm = await checkPermission(permissionUser, Permissions.FINANCE_VIEW_ALL);
+  const managePerm = await checkPermission(permissionUser, Permissions.FINANCE_MANAGE);
 
-export default function FinancePage() {
-  const [records, setRecords] = useState<FinanceRecord[]>([]);
-  const [stats, setStats] = useState<FinanceStats | null>(null);
-  const [categories, setCategories] = useState<{ income: string[]; expense: string[] }>({
-    income: [],
-    expense: [],
-  });
-  const [loading, setLoading] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [editingRecord, setEditingRecord] = useState<FinanceRecord | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const params = await searchParams;
+  const page = Number(params.page) || 1;
+  const limit = Number(params.limit) || 10;
+  const startDate = params.startDate as string | undefined;
+  const endDate = params.endDate as string | undefined;
+  const typeParam = params.type as string | undefined;
+  const category = (params.category as string | undefined) || undefined;
+  const minAmount = params.minAmount ? Number(params.minAmount) : undefined;
+  const maxAmount = params.maxAmount ? Number(params.maxAmount) : undefined;
+  const keyword = (params.keyword as string | undefined)?.trim() || undefined;
+  const paymentParam = params.paymentType as string | undefined;
 
-  // 获取分类
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const [incomeRes, expenseRes] = await Promise.all([
-          fetch(`/api/finance/categories?type=${TransactionType.INCOME}`),
-          fetch(`/api/finance/categories?type=${TransactionType.EXPENSE}`),
-        ]);
+  const effectiveStartDate = startDate;
+  const effectiveEndDate = endDate;
 
-        if (incomeRes.ok && expenseRes.ok) {
-          const incomeData = await incomeRes.json();
-          const expenseData = await expenseRes.json();
-          setCategories({
-            income: incomeData.data || [],
-            expense: expenseData.data || [],
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching categories:', error);
-      }
-    };
+  const offset = (page - 1) * limit;
 
-    fetchCategories();
-  }, []);
+  const typeFilter = [TransactionType.INCOME, TransactionType.EXPENSE].includes(
+    typeParam as TransactionType
+  )
+    ? (typeParam as TransactionType)
+    : undefined;
 
-  // 获取记录列表
-  const fetchRecords = async (page = 1) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/finance/records?page=${page}&limit=10`);
-      if (res.ok) {
-        const data = await res.json();
-        setRecords(data.data || []);
-        setTotalPages(data.pagination?.totalPages || 1);
-        setCurrentPage(page);
-      }
-    } catch (error) {
-      console.error('Error fetching records:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const paymentType = Object.values(PaymentType).includes(paymentParam as PaymentType)
+    ? (paymentParam as PaymentType)
+    : undefined;
 
-  // 获取统计数据
-  const fetchStats = async () => {
-    try {
-      const res = await fetch('/api/finance/stats');
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data.data);
-      }
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-    }
-  };
+  const filters = {
+    startDate: effectiveStartDate,
+    endDate: effectiveEndDate,
+    type: typeFilter,
+    category,
+    minAmount: Number.isFinite(minAmount) ? minAmount : undefined,
+    maxAmount: Number.isFinite(maxAmount) ? maxAmount : undefined,
+    keyword,
+    paymentType,
+  } as const;
 
-  useEffect(() => {
-    fetchRecords();
-    fetchStats();
-  }, []);
-
-  // 创建记录
-  const handleCreate = async (data: FinanceFormSubmitPayload) => {
-    try {
-      const res = await fetch('/api/finance/records', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-
-      if (res.ok) {
-        setShowForm(false);
-        fetchRecords(currentPage);
-        fetchStats();
-      } else {
-        const error = await res.json();
-        alert(error.error || '创建失败');
-      }
-    } catch (error) {
-      console.error('Error creating record:', error);
-      alert('创建失败,请重试');
-    }
-  };
-
-  // 更新记录
-  const handleUpdate = async (data: FinanceFormSubmitPayload) => {
-    if (!editingRecord) return;
-
-    try {
-      const res = await fetch(`/api/finance/records/${editingRecord.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-
-      if (res.ok) {
-        setEditingRecord(null);
-        fetchRecords(currentPage);
-        fetchStats();
-      } else {
-        const error = await res.json();
-        alert(error.error || '更新失败');
-      }
-    } catch (error) {
-      console.error('Error updating record:', error);
-      alert('更新失败,请重试');
-    }
-  };
-
-  // 删除记录
-  const handleDelete = async (id: string) => {
-    try {
-      const res = await fetch(`/api/finance/records/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (res.ok) {
-        fetchRecords(currentPage);
-        fetchStats();
-      } else {
-        alert('删除失败');
-      }
-    } catch (error) {
-      console.error('Error deleting record:', error);
-      alert('删除失败,请重试');
-    }
-  };
-
-  const handleEdit = (record: FinanceRecord) => {
-    setEditingRecord(record);
-    setShowForm(false);
-  };
+  const [records, total, stats, incomeCategories, expenseCategories] = await Promise.all([
+    getRecords({ ...filters, limit, offset }),
+    getRecordsCount(filters),
+    getStats(filters),
+    getCategories(TransactionType.INCOME),
+    getCategories(TransactionType.EXPENSE),
+  ]);
 
   return (
-    <>
-      <PageBreadCrumb pageTitle="财务管理" />
-
-      <div className="space-y-6">
-        {/* 统计卡片 */}
-        <FinanceStatsCards stats={stats} loading={loading && !stats} />
-
-        {/* 表单区域 */}
-        {(showForm || editingRecord) && (
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow dark:border-gray-700 dark:bg-gray-800">
-            <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">
-              {editingRecord ? '编辑记录' : '添加记录'}
-            </h2>
-            <FinanceForm
-              initialData={editingRecord || undefined}
-              onSubmit={editingRecord ? handleUpdate : handleCreate}
-              onCancel={() => {
-                setShowForm(false);
-                setEditingRecord(null);
-              }}
-              incomeCategories={categories.income}
-              expenseCategories={categories.expense}
-            />
-          </div>
-        )}
-
-        {/* 记录列表 */}
-        <div className="rounded-lg border border-gray-200 bg-white shadow dark:border-gray-700 dark:bg-gray-800">
-          <div className="flex items-center justify-between border-b border-gray-200 p-6 dark:border-gray-700">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">财务记录</h2>
-            <button
-              onClick={() => {
-                setShowForm(true);
-                setEditingRecord(null);
-              }}
-              className="rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800"
-            >
-              + 添加记录
-            </button>
-          </div>
-
-          <FinanceTable
-            records={records}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            loading={loading}
-          />
-
-          {/* 分页 */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-gray-200 p-6 dark:border-gray-700">
-              <div className="text-sm text-gray-700 dark:text-gray-400">
-                第 {currentPage} / {totalPages} 页
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => fetchRecords(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-                >
-                  上一页
-                </button>
-                <button
-                  onClick={() => fetchRecords(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-                >
-                  下一页
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </>
+    <FinanceClient
+      records={records}
+      stats={stats}
+      categories={{ income: incomeCategories, expense: expenseCategories }}
+      pagination={{
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      }}
+      permissions={{
+        canView: viewPerm.allowed,
+        canManage: managePerm.allowed,
+      }}
+    />
   );
 }

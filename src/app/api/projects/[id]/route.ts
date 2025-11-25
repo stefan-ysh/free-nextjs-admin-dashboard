@@ -1,202 +1,134 @@
-import { NextRequest, NextResponse } from 'next/server';
-import {
-  findProjectById,
-  updateProject,
-  deleteProject,
-} from '@/lib/db/projects';
-import { checkPermission, Permissions, canEditProject } from '@/lib/permissions';
-import { getCurrentUser } from '@/lib/auth/current-user';
-import type { UpdateProjectInput } from '@/types/project';
-import type { UserProfile } from '@/types/user';
+import { NextResponse } from 'next/server';
 
-/**
- * GET /api/projects/[id]
- * 获取单个项目详情
- */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const context = await getCurrentUser();
-    if (!context) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+import { requireCurrentUser } from '@/lib/auth/current-user';
+import { toPermissionUser } from '@/lib/auth/permission-user';
+import { deleteProject, findProjectById, updateProject } from '@/lib/db/projects';
+import { checkPermission, Permissions } from '@/lib/permissions';
+import { parseUpdateProjectPayload, ProjectValidationError } from '../validators';
 
-    const { id } = await params;
-
-    // Check permission
-  const userForPermission = context.user as unknown as UserProfile;
-  const permissionResult = await checkPermission(userForPermission, Permissions.PROJECT_VIEW_ALL);
-  const canViewAll = permissionResult.allowed;
-    
-    const project = await findProjectById(id);
-    if (!project) {
-      return NextResponse.json(
-        { success: false, error: 'Project not found' },
-        { status: 404 }
-      );
-    }
-
-    // If user can't view all, check if they're the project manager
-  if (!canViewAll && project.projectManagerId !== context.user.id) {
-      return NextResponse.json(
-        { success: false, error: 'Forbidden: No permission to view this project' },
-        { status: 403 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: project,
-    });
-  } catch (error) {
-    console.error('GET /api/projects/[id] error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch project' },
-      { status: 500 }
-    );
-  }
+function unauthorizedResponse() {
+	return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
 }
 
-/**
- * PATCH /api/projects/[id]
- * 更新项目
- */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const context = await getCurrentUser();
-    if (!context) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    const { id } = await params;
-
-    const project = await findProjectById(id);
-    if (!project) {
-      return NextResponse.json(
-        { success: false, error: 'Project not found' },
-        { status: 404 }
-      );
-    }
-
-    // Check permission
-  const userForPermission = context.user as unknown as UserProfile;
-  const canEdit = await canEditProject(userForPermission, project.projectManagerId);
-    if (!canEdit) {
-      return NextResponse.json(
-        { success: false, error: 'Forbidden: No permission to edit this project' },
-        { status: 403 }
-      );
-    }
-
-    // Parse request body
-    const body = await request.json();
-    const input: UpdateProjectInput = {
-      projectName: body.projectName,
-      description: body.description,
-      clientName: body.clientName,
-      contractAmount: body.contractAmount,
-      budget: body.budget,
-      startDate: body.startDate,
-      endDate: body.endDate,
-      expectedEndDate: body.expectedEndDate,
-      projectManagerId: body.projectManagerId,
-      teamMemberIds: body.teamMemberIds,
-      status: body.status,
-      priority: body.priority,
-    };
-
-    // Update project
-    const updatedProject = await updateProject(id, input);
-
-    return NextResponse.json({
-      success: true,
-      data: updatedProject,
-    });
-  } catch (error: unknown) {
-    console.error('PATCH /api/projects/[id] error:', error);
-    
-    if (error instanceof Error && error.message.includes('not found')) {
-      return NextResponse.json(
-        { success: false, error: 'Project not found' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json(
-      { success: false, error: 'Failed to update project' },
-      { status: 500 }
-    );
-  }
+function forbiddenResponse() {
+	return NextResponse.json({ success: false, error: '无权访问' }, { status: 403 });
 }
 
-/**
- * DELETE /api/projects/[id]
- * 删除项目（软删除）
- */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const context = await getCurrentUser();
-    if (!context) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+function notFoundResponse() {
+	return NextResponse.json({ success: false, error: '未找到项目' }, { status: 404 });
+}
 
-    const { id } = await params;
+function badRequestResponse(message: string) {
+	return NextResponse.json({ success: false, error: message }, { status: 400 });
+}
 
-    const project = await findProjectById(id);
-    if (!project) {
-      return NextResponse.json(
-        { success: false, error: 'Project not found' },
-        { status: 404 }
-      );
-    }
+function conflictResponse(message: string) {
+	return NextResponse.json({ success: false, error: message }, { status: 409 });
+}
 
-    // Check permission
-    const userForPermission = context.user as unknown as UserProfile;
-    const canDelete = await checkPermission(userForPermission, Permissions.PROJECT_DELETE);
-    if (!canDelete.allowed) {
-      return NextResponse.json(
-        { success: false, error: 'Forbidden: No permission to delete projects' },
-        { status: 403 }
-      );
-    }
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+	try {
+		const { id: projectId } = await params;
+		const context = await requireCurrentUser();
+		const permissionUser = await toPermissionUser(context.user);
+		const project = await findProjectById(projectId);
+		if (!project || project.isDeleted) {
+			return notFoundResponse();
+		}
 
-    // Delete project (soft delete)
-    await deleteProject(id);
+		const viewAll = await checkPermission(permissionUser, Permissions.PROJECT_VIEW_ALL);
+		const isTeamMember =
+			project.projectManagerId === context.user.id || project.teamMemberIds.includes(context.user.id);
 
-    return NextResponse.json({
-      success: true,
-      message: 'Project deleted successfully',
-    });
-  } catch (error: unknown) {
-    console.error('DELETE /api/projects/[id] error:', error);
-    
-    if (error instanceof Error && error.message.includes('not found')) {
-      return NextResponse.json(
-        { success: false, error: 'Project not found' },
-        { status: 404 }
-      );
-    }
+		if (!viewAll.allowed && !isTeamMember) {
+			return forbiddenResponse();
+		}
 
-    return NextResponse.json(
-      { success: false, error: 'Failed to delete project' },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json({ success: true, data: project });
+	} catch (error) {
+		if (error instanceof Error && error.message === 'UNAUTHENTICATED') {
+			return unauthorizedResponse();
+		}
+		console.error('获取项目详情失败', error);
+		return NextResponse.json({ success: false, error: '服务器错误' }, { status: 500 });
+	}
+}
+
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+	try {
+		const { id: projectId } = await params;
+		const context = await requireCurrentUser();
+		const permissionUser = await toPermissionUser(context.user);
+		const existing = await findProjectById(projectId);
+		if (!existing || existing.isDeleted) {
+			return notFoundResponse();
+		}
+
+		const canUpdate = await checkPermission(permissionUser, Permissions.PROJECT_UPDATE);
+		const isTeamMember =
+			existing.projectManagerId === context.user.id || existing.teamMemberIds.includes(context.user.id);
+		if (!canUpdate.allowed && !isTeamMember) {
+			return forbiddenResponse();
+		}
+
+		const body = await request.json();
+		const payload = parseUpdateProjectPayload(body);
+		if (!Object.keys(payload).length) {
+			return badRequestResponse('没有可更新的字段');
+		}
+
+		const updated = await updateProject(projectId, payload);
+		return NextResponse.json({ success: true, data: updated });
+	} catch (error) {
+		if (error instanceof ProjectValidationError) {
+			return badRequestResponse(error.message);
+		}
+		if (error instanceof Error) {
+			if (error.message === 'PROJECT_MANAGER_NOT_FOUND') {
+				return badRequestResponse('负责人不存在或已被禁用，请选择系统内的有效用户');
+			}
+			if (error.message === 'PROJECT_NOT_FOUND') {
+				return notFoundResponse();
+			}
+			if (error.message === 'CONTRACT_NUMBER_EXISTS') {
+				return conflictResponse('合同编号已存在');
+			}
+			if (error.message === 'UNAUTHENTICATED') {
+				return unauthorizedResponse();
+			}
+		}
+		console.error('更新项目失败', error);
+		return NextResponse.json({ success: false, error: '服务器错误' }, { status: 500 });
+	}
+}
+
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+	try {
+		const { id: projectId } = await params;
+		const context = await requireCurrentUser();
+		const permissionUser = await toPermissionUser(context.user);
+		const existing = await findProjectById(projectId);
+		if (!existing || existing.isDeleted) {
+			return notFoundResponse();
+		}
+
+		const canDelete = await checkPermission(permissionUser, Permissions.PROJECT_DELETE);
+		if (!canDelete.allowed) {
+			return forbiddenResponse();
+		}
+
+		await deleteProject(projectId);
+		return NextResponse.json({ success: true });
+	} catch (error) {
+		if (error instanceof Error) {
+			if (error.message === 'UNAUTHENTICATED') {
+				return unauthorizedResponse();
+			}
+			if (error.message === 'PROJECT_NOT_FOUND') {
+				return notFoundResponse();
+			}
+		}
+		console.error('删除项目失败', error);
+		return NextResponse.json({ success: false, error: '服务器错误' }, { status: 500 });
+	}
 }

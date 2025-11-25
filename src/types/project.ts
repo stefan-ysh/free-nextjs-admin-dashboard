@@ -1,18 +1,64 @@
 /**
  * 项目状态
  */
-export type ProjectStatus = 
-  | 'planning'      // 计划中
-  | 'active'        // 进行中
-  | 'on_hold'       // 暂停
-  | 'completed'     // 已完成
-  | 'archived'      // 已归档
-  | 'cancelled';    // 已取消
+export type ProjectStatus =
+  | 'planning' // 计划中
+  | 'active' // 进行中
+  | 'on_hold' // 暂停
+  | 'completed' // 已完成
+  | 'archived' // 已归档
+  | 'cancelled'; // 已取消
 
 /**
  * 项目优先级
  */
 export type ProjectPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+import type { InvoiceType } from '@/types/finance';
+
+export type ContractType = 'service' | 'purchase' | 'maintenance' | 'consulting' | 'other';
+export type CurrencyCode = 'CNY' | 'USD' | 'HKD' | 'EUR' | 'JPY' | 'GBP' | 'OTHER';
+export type ContractRiskLevel = 'low' | 'medium' | 'high';
+export type MilestoneStatus = 'pending' | 'in_progress' | 'completed' | 'delayed';
+
+export type ProjectPaymentStatus = 'scheduled' | 'invoiced' | 'received' | 'cancelled';
+
+export interface ProjectPaymentInput {
+  title: string;
+  amount: number;
+  expectedDate: string;
+  receivedDate?: string | null;
+  milestoneId?: string | null;
+  description?: string | null;
+  status?: ProjectPaymentStatus;
+  invoiceType?: InvoiceType;
+  invoiceNumber?: string | null;
+  invoiceIssueDate?: string | null;
+  invoiceAttachments?: string[];
+  notes?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ProjectPayment extends ProjectPaymentInput {
+  id: string;
+  projectId: string;
+  invoiceType: InvoiceType;
+  invoiceAttachments: string[];
+  createdBy: string;
+  updatedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  status: ProjectPaymentStatus;
+}
+
+export interface ProjectMilestone {
+  id: string;
+  title: string;
+  description?: string | null;
+  dueDate: string | null;
+  amount: number | null;
+  status: MilestoneStatus;
+}
 
 /**
  * 项目记录
@@ -28,6 +74,19 @@ export interface ProjectRecord {
   contractAmount: number | null;
   budget: number | null;
   actualCost: number;
+  contractNumber: string | null;
+  contractType: ContractType | null;
+  signingDate: string | null;
+  effectiveDate: string | null;
+  expirationDate: string | null;
+  partyA: string | null;
+  partyB: string | null;
+  currency: CurrencyCode;
+  taxRate: number;
+  paymentTerms: string | null;
+  riskLevel: ContractRiskLevel;
+  attachments: string[];
+  milestones: ProjectMilestone[];
   
   // 时间
   startDate: string | null;
@@ -60,6 +119,19 @@ export interface CreateProjectInput {
   clientName?: string;
   contractAmount?: number;
   budget?: number;
+  contractNumber?: string;
+  contractType?: ContractType;
+  signingDate?: string;
+  effectiveDate?: string;
+  expirationDate?: string;
+  partyA?: string;
+  partyB?: string;
+  currency?: CurrencyCode;
+  taxRate?: number;
+  paymentTerms?: string;
+  riskLevel?: ContractRiskLevel;
+  attachments?: string[];
+  milestones?: ProjectMilestone[];
   startDate?: string;
   endDate?: string;
   expectedEndDate?: string;
@@ -78,6 +150,19 @@ export interface UpdateProjectInput {
   clientName?: string | null;
   contractAmount?: number | null;
   budget?: number | null;
+  contractNumber?: string | null;
+  contractType?: ContractType | null;
+  signingDate?: string | null;
+  effectiveDate?: string | null;
+  expirationDate?: string | null;
+  partyA?: string | null;
+  partyB?: string | null;
+  currency?: CurrencyCode;
+  taxRate?: number;
+  paymentTerms?: string | null;
+  riskLevel?: ContractRiskLevel;
+  attachments?: string[];
+  milestones?: ProjectMilestone[];
   startDate?: string | null;
   endDate?: string | null;
   expectedEndDate?: string | null;

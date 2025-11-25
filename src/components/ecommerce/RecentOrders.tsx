@@ -2,10 +2,11 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableHead,
   TableHeader,
   TableRow,
 } from "../ui/table";
-import Badge from "../ui/badge/Badge";
+import { Badge } from "../ui/badge";
 import Image from "next/image";
 
 // Define the TypeScript interface for the table rows
@@ -128,30 +129,21 @@ export default function RecentOrders() {
           {/* Table Header */}
           <TableHeader className="border-gray-100 dark:border-gray-800 border-y">
             <TableRow>
-              <TableCell
-                isHeader
-                className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-              >
+              <TableHead className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                 Products
-              </TableCell>
-              <TableCell
-                isHeader
-                className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-              >
-                Category
-              </TableCell>
-              <TableCell
-                isHeader
-                className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-              >
-                Price
-              </TableCell>
-              <TableCell
-                isHeader
-                className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-              >
-                Status
-              </TableCell>
+              </TableHead>
+              <TableHead className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                Revenues
+              </TableHead>
+              <TableHead className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                Orders
+              </TableHead>
+              <TableHead className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                Total Profit
+              </TableHead>
+              <TableHead className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                Conversion
+              </TableHead>
             </TableRow>
           </TableHeader>
 
@@ -189,13 +181,12 @@ export default function RecentOrders() {
                 </TableCell>
                 <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
                   <Badge
-                    size="sm"
-                    color={
+                    variant={
                       product.status === "Delivered"
                         ? "success"
                         : product.status === "Pending"
-                        ? "warning"
-                        : "error"
+                          ? "warning"
+                          : "destructive"
                     }
                   >
                     {product.status}

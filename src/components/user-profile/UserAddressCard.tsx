@@ -5,8 +5,8 @@ import React, { useEffect, useState } from "react";
 import { useModal } from "../../hooks/useModal";
 import Input from "../form/input/InputField";
 import Label from "../form/Label";
-import Button from "../ui/button/Button";
-import { Modal } from "../ui/modal";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import type { ProfileData } from "./types";
 
 type UserAddressCardProps = {
@@ -105,8 +105,9 @@ export default function UserAddressCard({ profile, onUpdate, loading = false }: 
           </Button>
         </div>
       </div>
-      <Modal isOpen={isOpen} onClose={closeModal} className="max-w-[640px] m-4">
-        <div className="relative w-full p-4 overflow-y-auto bg-white no-scrollbar rounded-3xl dark:bg-gray-900 lg:p-9">
+      <Dialog open={isOpen} onOpenChange={(nextOpen) => (nextOpen ? openModal() : closeModal())}>
+        <DialogContent className="max-w-[640px] border-0 bg-white p-0 text-left shadow-none outline-none dark:bg-gray-900">
+          <div className="relative w-full rounded-3xl p-4 lg:p-9">
           <div className="px-2">
             <h4 className="mb-2 text-2xl font-semibold text-gray-800 dark:text-white/90">编辑地址信息</h4>
             <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">完善联系地址有助于发票、对账等工作。</p>
@@ -161,8 +162,9 @@ export default function UserAddressCard({ profile, onUpdate, loading = false }: 
               </Button>
             </div>
           </form>
-        </div>
-      </Modal>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

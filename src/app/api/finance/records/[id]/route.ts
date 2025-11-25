@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+import { requireCurrentUser } from '@/lib/auth/current-user';
+import { toPermissionUser } from '@/lib/auth/permission-user';
 import { getRecord, updateRecord, deleteRecord } from '@/lib/db/finance';
+import { checkPermission, Permissions } from '@/lib/permissions';
 import { FinanceApiResponse, FinanceRecord } from '@/types/finance';
+
+function unauthorizedResponse() {
+  return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
+}
+
+function forbiddenResponse() {
+  return NextResponse.json({ success: false, error: '无权访问' }, { status: 403 });
+}
 
 /**
  * GET - 获取单条记录
@@ -10,6 +22,13 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const context = await requireCurrentUser();
+    const permissionUser = await toPermissionUser(context.user);
+    const perm = await checkPermission(permissionUser, Permissions.FINANCE_VIEW_ALL);
+    if (!perm.allowed) {
+      return forbiddenResponse();
+    }
+
     const { id } = await params;
     const record = await getRecord(id);
 
@@ -27,6 +46,9 @@ export async function GET(
 
     return NextResponse.json(response);
   } catch (error) {
+    if (error instanceof Error && error.message === 'UNAUTHENTICATED') {
+      return unauthorizedResponse();
+    }
     console.error('Error fetching record:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to fetch record' },
@@ -43,6 +65,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const context = await requireCurrentUser();
+    const permissionUser = await toPermissionUser(context.user);
+    const perm = await checkPermission(permissionUser, Permissions.FINANCE_MANAGE);
+    if (!perm.allowed) {
+      return forbiddenResponse();
+    }
+
     const { id } = await params;
     const body = await request.json();
     
@@ -62,6 +91,9 @@ export async function PATCH(
 
     return NextResponse.json(response);
   } catch (error) {
+    if (error instanceof Error && error.message === 'UNAUTHENTICATED') {
+      return unauthorizedResponse();
+    }
     console.error('Error updating record:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to update record' },
@@ -78,6 +110,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const context = await requireCurrentUser();
+    const permissionUser = await toPermissionUser(context.user);
+    const perm = await checkPermission(permissionUser, Permissions.FINANCE_MANAGE);
+    if (!perm.allowed) {
+      return forbiddenResponse();
+    }
+
     const { id } = await params;
     const success = await deleteRecord(id);
 
@@ -90,6 +129,9 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof Error && error.message === 'UNAUTHENTICATED') {
+      return unauthorizedResponse();
+    }
     console.error('Error deleting record:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to delete record' },

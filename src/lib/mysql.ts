@@ -1,0 +1,74 @@
+import mysql, { Pool, PoolOptions, RowDataPacket } from 'mysql2/promise';
+
+// Use globalThis to prevent multiple pools in development
+const globalForMysql = globalThis as unknown as { mysqlPool: Pool | null };
+
+function resolvePoolOptions(): PoolOptions {
+  const connectionLimit = Number(process.env.MYSQL_POOL_SIZE ?? '10');
+  const url = process.env.MYSQL_URL || process.env.DATABASE_URL;
+
+  if (url && url.trim()) {
+    const parsed = new URL(url);
+    return {
+      host: parsed.hostname,
+      port: Number(parsed.port || '3306'),
+      user: decodeURIComponent(parsed.username || 'root'),
+      password: decodeURIComponent(parsed.password || ''),
+      database: decodeURIComponent(parsed.pathname.replace(/^\//, '') || 'tailadmin_local'),
+      waitForConnections: true,
+      connectionLimit,
+      decimalNumbers: true,
+      timezone: 'Z',
+    } satisfies PoolOptions;
+  }
+
+  const host = process.env.MYSQL_HOST?.trim() || '127.0.0.1';
+  const port = Number(process.env.MYSQL_PORT ?? '3306');
+  const user = process.env.MYSQL_USER?.trim() || 'root';
+  const password = process.env.MYSQL_PASSWORD ?? '';
+  const database = process.env.MYSQL_DATABASE?.trim() || 'tailadmin_local';
+
+  return {
+    host,
+    port,
+    user,
+    password,
+    database,
+    waitForConnections: true,
+    connectionLimit,
+    decimalNumbers: true,
+    timezone: 'Z',
+  } satisfies PoolOptions;
+}
+
+function getPool(): Pool {
+  if (!globalForMysql.mysqlPool) {
+    globalForMysql.mysqlPool = mysql.createPool(resolvePoolOptions());
+  }
+  return globalForMysql.mysqlPool;
+}
+
+function buildQuery(strings: TemplateStringsArray, values: unknown[]) {
+  let sql = '';
+  for (let i = 0; i < strings.length; i += 1) {
+    sql += strings[i];
+    if (i < values.length) {
+      sql += '?';
+    }
+  }
+  return { sql, values };
+}
+
+export type MysqlQueryResult<T> = { rows: T[] };
+
+export async function mysqlQuery<T extends RowDataPacket = RowDataPacket>(
+  strings: TemplateStringsArray,
+  ...values: unknown[]
+): Promise<MysqlQueryResult<T>> {
+  const poolInstance = getPool();
+  const { sql, values: params } = buildQuery(strings, values);
+  const [rows] = await poolInstance.query<T[]>(sql, params);
+  return { rows };
+}
+
+export { getPool as mysqlPool };

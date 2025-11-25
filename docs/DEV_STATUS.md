@@ -6,7 +6,7 @@
 
 - ✅ 服务器成功启动在 `http://localhost:3000`
 - ✅ 财务管理页面可访问: `/finance`
-- ✅ Mock数据模式运行正常
+- ✅ 本地 MySQL 连接正常，自动建表已通过
 - ✅ 所有API端点正常响应
 - ✅ UI组件完整加载
 
@@ -34,58 +34,32 @@
 - 发票附件数量图标显示
 - 响应式设计,支持深色模式
 
-## 🔧 Mock模式说明
+### 6. 采购审批工作台 ✅
+- `/purchases/approvals` 页面重新上线，聚合所有 `pending_approval` 采购单
+- 新增 `/api/purchases/approvals` 列表接口与 `/api/purchases/[id]/workflow-handler` 共用校验逻辑
+- UI 文案替换“报销”为“采购”，与权限 (`PURCHASE_APPROVE/REJECT/PAY`) 打通
+- 采购侧边栏新增“采购审批”子菜单，便于审批角色快速入口
 
-当前运行在**Mock模式**,因为未配置Vercel KV环境变量:
+### 7. 财务自动化服务(首阶段) ✅
+- 新建 `src/lib/services/finance-automation.ts`，并在打款流程中调用 `createPurchaseExpense`
+- `finance_records` 表新增 `status(draft|cleared)`、`metadata_json` 字段，`source_type` 扩展 `inventory/project_payment`
+- 所有 Finance DAO/类型/校验已同步新增字段，API 创建记录时默认 `status='draft'`
+- 采购打款会将流水记为 `sourceType=purchase`、`status=cleared`，并记录 `purchaseNumber/purchaserId/payedBy` 等 metadata
 
-### 特性
-- ✅ 数据存储在内存中
-- ✅ 包含3条示例数据
-- ✅ 支持完整CRUD操作
-- ⚠️ 服务器重启后数据重置
+## 🔧 本地数据库模式
 
-### Mock数据示例
-```typescript
-[
-  {
-    name: '办公室装修',
-    type: 'expense',
-    category: '装修费用',
-    contractAmount: 50000,
-    fee: 500,
-    totalAmount: 50500,
-    paymentType: 'deposit',
-    invoice: { status: 'issued', attachments: [] }
-  },
-  {
-    name: '员工聚餐',
-    type: 'expense',
-    category: '餐费',
-    contractAmount: 1200,
-    fee: 0,
-    totalAmount: 1200,
-    paymentType: 'full'
-  },
-  {
-    name: '项目收入',
-    type: 'income',
-    category: '收入',
-    contractAmount: 100000,
-    fee: 1000,
-    totalAmount: 101000,
-    paymentType: 'full',
-    invoice: { status: 'pending' }
-  }
-]
-```
+- MySQL: `finance_records / finance_categories / projects / purchases / auth_users / reimbursement_logs` 已通过 `ensure*Schema` 自动创建
+- 附件: 写入 `LOCAL_STORAGE_ROOT` (默认 `~/Documents/free-nextjs-admin-storage`)
+
+> 若数据库不可用,API 会抛出 `ECONNREFUSED` 或 `ER_NO_SUCH_TABLE`,请先确认 `.env.local` 与服务状态。
 
 ## 🚀 测试功能
 
 访问 `http://localhost:3000/finance` 可以:
 
 1. **查看记录列表**
-   - 显示3条Mock数据
-   - 查看所有新字段(合同金额、手续费、总金额等)
+   - 默认展示数据库中的最新记录
+   - 可验证所有字段(合同金额、手续费、总金额、发票状态等)
 
 2. **添加新记录**
    - 点击"添加记录"按钮
@@ -97,7 +71,7 @@
    - 修改数据后保存
 
 4. **删除记录**
-   - 点击"删除"按钮确认删除
+   - 点击"删除"按钮确认删除，同时删除本地附件
 
 5. **查看统计**
    - 页面顶部显示总收入、总支出、净收支、记录数
@@ -120,19 +94,11 @@ invoice: {
 }
 ```
 
-## 🔄 切换到生产模式
+## 🔄 部署建议
 
-配置Vercel KV后,系统自动切换到持久化存储:
-
-1. 创建Vercel KV数据库
-2. 配置环境变量:
-   ```bash
-   KV_REST_API_URL=https://xxx.kv.vercel-storage.com
-   KV_REST_API_TOKEN=xxx
-   ```
-3. 重启服务器
-
-详见: `docs/VERCEL_KV_SETUP.md`
+1. 按照 `.env.example` 配置本地/服务器上的数据库连接
+2. 运行 `npm run build && npm run start` 或参考 [docs/DEPLOYMENT.md](./DEPLOYMENT.md)
+3. 通过备份脚本定期导出 MySQL 与 `LOCAL_STORAGE_ROOT`
 
 ## ⚠️ VS Code错误提示
 
@@ -180,15 +146,15 @@ GET    /api/finance/categories       # 获取分类列表
    - 修复: 更新API路由参数类型为`Promise<{ id: string }>`
 
 2. **文件上传** - 需要优化
-   - 当前: 使用base64编码
-   - 建议: 生产环境迁移到Vercel Blob
+   - 当前: 前端暂存 base64，再由 API 写入 `LOCAL_STORAGE_ROOT`
+   - 建议: 直接走流式上传接口，或接入自建对象存储
 
 ## 📚 相关文档
 
 - `docs/FINANCE_MODULE.md` - 模块功能说明
 - `docs/FINANCE_UI_UPDATE.md` - UI更新详情
-- `docs/VERCEL_KV_SETUP.md` - KV数据库配置
-- `docs/DEPLOYMENT.md` - 部署指南
+- `docs/LOCAL_STORAGE_SETUP.md` - 本地文件目录配置
+- `docs/DEPLOYMENT.md` - 本地/自托管部署指南
 
 ---
 

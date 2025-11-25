@@ -1,37 +1,45 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { financeRecordSchema, FinanceRecordFormValues } from '@/lib/validations/finance';
+import { FinanceRecord, TransactionType, PaymentType, InvoiceType, InvoiceStatus } from '@/types/finance';
+import { Button } from '@/components/ui/button';
 import {
-  FinanceRecord,
-  TransactionType,
-  PaymentType,
-  InvoiceType,
-  InvoiceStatus,
-} from '@/types/finance';
-import FileUpload from './FileUpload';
-import DatePicker from '../ui/DatePicker';
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import DatePicker from '@/components/ui/DatePicker';
+import FileUpload from '@/components/common/FileUpload';
+import { Label } from '@/components/ui/label';
+import { getCategoryGroups } from '@/constants/finance-categories';
 
 interface FinanceFormProps {
   initialData?: Partial<FinanceRecord>;
-  onSubmit: (data: FinanceFormSubmitPayload) => Promise<void>;
+  onSubmit: (data: FinanceRecordFormValues) => Promise<void>;
   onCancel?: () => void;
   incomeCategories: string[];
   expenseCategories: string[];
 }
 
-export type FinanceFormSubmitPayload = Omit<FinanceRecord, 'id' | 'createdAt' | 'updatedAt' | 'totalAmount'>;
-
-type FormInvoiceState = {
-  type: InvoiceType;
-  status: InvoiceStatus;
-  number: string;
-  issueDate: string;
-  attachments: string[];
-};
-
-type FinanceFormState = Omit<FinanceFormSubmitPayload, 'invoice'> & {
-  invoice: FormInvoiceState;
-};
+export type FinanceFormSubmitPayload = FinanceRecordFormValues;
 
 export default function FinanceForm({
   initialData,
@@ -41,13 +49,21 @@ export default function FinanceForm({
   expenseCategories,
 }: FinanceFormProps) {
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState<FinanceFormState>({
+  const isEditing = Boolean(initialData?.id);
+  const paymentChannelOptions = ['公对公', '公对私', '银行转账', '支付宝', '微信', '现金', '其他'];
+  const categorySelectId = useId();
+
+  const defaultValues: Partial<FinanceRecordFormValues> = {
     name: initialData?.name ?? '',
     type: initialData?.type ?? TransactionType.EXPENSE,
     contractAmount: initialData?.contractAmount ?? 0,
     fee: initialData?.fee ?? 0,
+    quantity: initialData?.quantity ?? 1,
     category: initialData?.category ?? '',
     paymentType: initialData?.paymentType ?? PaymentType.FULL_PAYMENT,
+    paymentChannel: initialData?.paymentChannel ?? '',
+    payer: initialData?.payer ?? '',
+    transactionNo: initialData?.transactionNo ?? '',
     date: initialData?.date?.split('T')[0] ?? new Date().toISOString().split('T')[0],
     description: initialData?.description ?? '',
     tags: initialData?.tags ?? [],
@@ -58,318 +74,419 @@ export default function FinanceForm({
       issueDate: initialData?.invoice?.issueDate?.split('T')[0] ?? '',
       attachments: initialData?.invoice?.attachments ?? [],
     },
+  };
+
+  const form = useForm<FinanceRecordFormValues>({
+    resolver: zodResolver(financeRecordSchema),
+    defaultValues,
   });
 
-  // 根据类型获取当前分类列表
-  const currentCategories = formData.type === TransactionType.INCOME 
-    ? incomeCategories 
-    : expenseCategories;
+  const { watch, setValue } = form;
+  const type = watch('type');
+  const contractAmount = watch('contractAmount') || 0;
+  const fee = watch('fee') || 0;
+  const invoiceType = watch('invoice.type');
+  const invoiceStatus = watch('invoice.status');
 
-  // 计算总金额
-  const totalAmount = formData.contractAmount + formData.fee;
+  const currentCategories = type === TransactionType.INCOME ? incomeCategories : expenseCategories;
+  const totalAmount = contractAmount + fee;
+  const categoryGroups = useMemo(() => {
+    const labels = currentCategories.length ? currentCategories : undefined;
+    return getCategoryGroups(type, labels);
+  }, [currentCategories, type]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (data: FinanceRecordFormValues) => {
     setLoading(true);
-
     try {
-      const payload: FinanceFormSubmitPayload = {
-        ...formData,
-        date: new Date(formData.date).toISOString(),
-        invoice:
-          formData.invoice.type === InvoiceType.NONE
-            ? undefined
-            : {
-                ...formData.invoice,
-                attachments: formData.invoice.attachments.length
-                  ? formData.invoice.attachments
-                  : undefined,
-                issueDate: formData.invoice.issueDate
-                  ? new Date(formData.invoice.issueDate).toISOString()
-                  : undefined,
-              },
-      };
-
-      await onSubmit(payload);
+      await onSubmit(data);
     } catch (error) {
       console.error('Error submitting form:', error);
-      alert('提交失败,请重试');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {/* 基本信息 */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {/* 明细名称 */}
-        <div className="md:col-span-2">
-          <label className="mb-2 block text-sm font-medium text-gray-900 dark:text-white">
-            明细名称 <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            required
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-            placeholder="例如:办公室装修、员工工资"
-          />
-        </div>
-
-        {/* 类型选择 */}
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-900 dark:text-white">
-            收支类型 <span className="text-red-500">*</span>
-          </label>
-          <div className="flex gap-4">
-            <label className="flex items-center">
-              <input
-                type="radio"
-                value={TransactionType.INCOME}
-                checked={formData.type === TransactionType.INCOME}
-                onChange={(e) => setFormData({ 
-                  ...formData, 
-                  type: e.target.value as TransactionType,
-                  category: '' // 切换类型时重置分类
-                })}
-                className="mr-2"
-              />
-              <span className="text-green-600 dark:text-green-400">收入</span>
-            </label>
-            <label className="flex items-center">
-              <input
-                type="radio"
-                value={TransactionType.EXPENSE}
-                checked={formData.type === TransactionType.EXPENSE}
-                onChange={(e) => setFormData({ 
-                  ...formData, 
-                  type: e.target.value as TransactionType,
-                  category: '' // 切换类型时重置分类
-                })}
-                className="mr-2"
-              />
-              <span className="text-red-600 dark:text-red-400">支出</span>
-            </label>
-          </div>
-        </div>
-
-        {/* 分类 */}
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-900 dark:text-white">
-            分类 <span className="text-red-500">*</span>
-          </label>
-          <select
-            required
-            value={formData.category}
-            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-          >
-            <option value="">请选择分类</option>
-            {currentCategories.map((cat) => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* 金额信息 */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-900 dark:text-white">
-            合同金额 (元) <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            required
-            value={formData.contractAmount}
-            onChange={(e) => setFormData({ ...formData, contractAmount: parseFloat(e.target.value) || 0 })}
-            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-            placeholder="0.00"
-          />
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-900 dark:text-white">
-            手续费 (元) <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            required
-            value={formData.fee}
-            onChange={(e) => setFormData({ ...formData, fee: parseFloat(e.target.value) || 0 })}
-            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-            placeholder="0.00"
-          />
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-900 dark:text-white">
-            总金额 (元)
-          </label>
-          <div className="flex h-[42px] items-center rounded-lg border border-gray-300 bg-gray-50 px-4 dark:border-gray-600 dark:bg-gray-800">
-            <span className="font-semibold text-gray-900 dark:text-white">¥{totalAmount.toFixed(2)}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 款项和日期 */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-900 dark:text-white">
-            款项类型 <span className="text-red-500">*</span>
-          </label>
-          <select
-            required
-            value={formData.paymentType}
-            onChange={(e) => setFormData({ ...formData, paymentType: e.target.value as PaymentType })}
-            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-          >
-            <option value={PaymentType.DEPOSIT}>定金</option>
-            <option value={PaymentType.FULL_PAYMENT}>全款</option>
-            <option value={PaymentType.INSTALLMENT}>分期</option>
-            <option value={PaymentType.BALANCE}>尾款</option>
-            <option value={PaymentType.OTHER}>其他</option>
-          </select>
-        </div>
-
-        <DatePicker
-          label="日期"
-          required
-          value={formData.date}
-          onChange={(date) => setFormData({ ...formData, date })}
-        />
-      </div>
-
-      {/* 发票信息 */}
-      <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-        <h3 className="mb-3 text-sm font-medium text-gray-900 dark:text-white">发票信息</h3>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              发票类型
-            </label>
-            <select
-              value={formData.invoice.type}
-              onChange={(e) => setFormData({ 
-                ...formData, 
-                invoice: { ...formData.invoice, type: e.target.value as InvoiceType }
-              })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-            >
-              <option value={InvoiceType.NONE}>无需发票</option>
-              <option value={InvoiceType.GENERAL}>普通发票</option>
-              <option value={InvoiceType.SPECIAL}>增值税专用发票</option>
-            </select>
-          </div>
-
-          {formData.invoice.type !== InvoiceType.NONE && (
-            <>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  开票状态
-                </label>
-                <select
-                  value={formData.invoice.status}
-                  onChange={(e) => setFormData({ 
-                    ...formData, 
-                    invoice: { ...formData.invoice, status: e.target.value as InvoiceStatus }
-                  })}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                >
-                  <option value={InvoiceStatus.PENDING}>待开票</option>
-                  <option value={InvoiceStatus.ISSUED}>已开票</option>
-                </select>
-              </div>
-
-              {formData.invoice.status === InvoiceStatus.ISSUED && (
-                <>
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      发票号码
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.invoice.number}
-                      onChange={(e) => setFormData({ 
-                        ...formData, 
-                        invoice: { ...formData.invoice, number: e.target.value }
-                      })}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                      placeholder="发票号码"
-                    />
-                  </div>
-
-                  <DatePicker
-                    label="开票日期"
-                    value={formData.invoice.issueDate}
-                    onChange={(date) => setFormData({ 
-                      ...formData, 
-                      invoice: { ...formData.invoice, issueDate: date }
-                    })}
-                  />
-
-                  {/* 发票附件上传 */}
-                  <div className="md:col-span-2">
-                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      发票附件
-                    </label>
-                    <FileUpload
-                      files={formData.invoice.attachments || []}
-                      onChange={(files) => setFormData({
-                        ...formData,
-                        invoice: { ...formData.invoice, attachments: files }
-                      })}
-                      maxFiles={5}
-                      accept="image/*,.pdf"
-                    />
-                  </div>
-                </>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* 备注 */}
-      <div>
-        <label className="mb-2 block text-sm font-medium text-gray-900 dark:text-white">
-          备注
-        </label>
-        <textarea
-          rows={3}
-          value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-          placeholder="补充说明..."
-        />
-      </div>
-
-      {/* 按钮 */}
-      <div className="flex justify-end gap-3">
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={loading}
-            className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-          >
-            取消
-          </button>
-        )}
-        <button
-          type="submit"
-          disabled={loading}
-          className="rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300 disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800"
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+        <Tabs
+          value={type}
+          onValueChange={(val) => {
+            setValue('type', val as TransactionType);
+            setValue('category', ''); // Reset category on type change
+          }}
+          className="w-full"
         >
-          {loading ? '提交中...' : initialData ? '更新' : '添加'}
-        </button>
-      </div>
-    </form>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value={TransactionType.INCOME} className="data-[state=active]:bg-green-100 data-[state=active]:text-green-900 dark:data-[state=active]:bg-green-900 dark:data-[state=active]:text-green-100">收入</TabsTrigger>
+            <TabsTrigger value={TransactionType.EXPENSE} className="data-[state=active]:bg-red-100 data-[state=active]:text-red-900 dark:data-[state=active]:bg-red-900 dark:data-[state=active]:text-red-100">支出</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel>明细名称 <span className="text-red-500">*</span></FormLabel>
+                <FormControl>
+                  <Input placeholder="例如:办公室装修、员工工资" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="category"
+            render={({ field }) => (
+              <FormItem>
+                <Label htmlFor={categorySelectId} className="text-sm font-medium">
+                  分类 <span className="text-red-500">*</span>
+                </Label>
+                <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger id={categorySelectId} className="w-full">
+                      <SelectValue placeholder="请选择分类" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent className="max-h-72 overflow-y-auto">
+                    {categoryGroups.map((group) => (
+                      <SelectGroup key={`${type}-${group.label}`}>
+                        <SelectLabel className="text-xs text-muted-foreground">
+                          {group.label}
+                        </SelectLabel>
+                        {group.options.map((option) => (
+                          <SelectItem key={option.label} value={option.label}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="date"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>日期 <span className="text-red-500">*</span></FormLabel>
+                <FormControl>
+                  <DatePicker
+                    value={field.value}
+                    onChange={field.onChange}
+                    required
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <FormField
+            control={form.control}
+            name="quantity"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>数量</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    {...field}
+                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="contractAmount"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>合同金额 (元) <span className="text-red-500">*</span></FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    {...field}
+                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="fee"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>手续费 (元) <span className="text-red-500">*</span></FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    {...field}
+                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">总金额 (元)</label>
+            <div className="flex h-10 items-center rounded-md border border-input bg-muted px-3 text-sm ring-offset-background">
+              <span className="font-semibold">¥{totalAmount.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <FormField
+            control={form.control}
+            name="paymentType"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>款项类型 <span className="text-red-500">*</span></FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择款项类型" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value={PaymentType.DEPOSIT}>定金</SelectItem>
+                    <SelectItem value={PaymentType.FULL_PAYMENT}>全款</SelectItem>
+                    <SelectItem value={PaymentType.INSTALLMENT}>分期</SelectItem>
+                    <SelectItem value={PaymentType.BALANCE}>尾款</SelectItem>
+                    <SelectItem value={PaymentType.OTHER}>其他</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="paymentChannel"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>支付方式</FormLabel>
+                <FormControl>
+                  <div>
+                    <Input
+                      placeholder="如：公对公、公对私"
+                      list="payment-channel-options"
+                      {...field}
+                    />
+                    <datalist id="payment-channel-options">
+                      {paymentChannelOptions.map((option) => (
+                        <option key={option} value={option} />
+                      ))}
+                    </datalist>
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <FormField
+            control={form.control}
+            name="payer"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>代付人</FormLabel>
+                <FormControl>
+                  <Input placeholder="可选，如有代付同事" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="transactionNo"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>流水号</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder={isEditing ? '银行/支付平台流水号' : '保存后系统自动生成'}
+                    readOnly={!isEditing}
+                    {...field}
+                  />
+                </FormControl>
+                {!isEditing && (
+                  <p className="text-xs text-muted-foreground">保存后系统自动生成</p>
+                )}
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="rounded-lg border p-4">
+          <h3 className="mb-3 text-sm font-medium">发票信息</h3>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="invoice.type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>发票类型</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="选择发票类型" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={InvoiceType.NONE}>无需发票</SelectItem>
+                      <SelectItem value={InvoiceType.GENERAL}>普通发票</SelectItem>
+                      <SelectItem value={InvoiceType.SPECIAL}>增值税专用发票</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {invoiceType !== InvoiceType.NONE && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="invoice.status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>开票状态</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="选择状态" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value={InvoiceStatus.PENDING}>待开票</SelectItem>
+                          <SelectItem value={InvoiceStatus.ISSUED}>已开票</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {invoiceStatus === InvoiceStatus.ISSUED && (
+                  <>
+                    <FormField
+                      control={form.control}
+                      name="invoice.number"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>发票号码</FormLabel>
+                          <FormControl>
+                            <Input placeholder="发票号码" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="invoice.issueDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>开票日期</FormLabel>
+                          <FormControl>
+                            <DatePicker
+                              value={field.value}
+                              onChange={field.onChange}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="md:col-span-2">
+                      <FormField
+                        control={form.control}
+                        name="invoice.attachments"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>发票附件</FormLabel>
+                            <FormControl>
+                              <FileUpload
+                                files={field.value || []}
+                                onChange={field.onChange}
+                                maxFiles={5}
+                                accept="image/*,.pdf"
+                                folder="finance/attachments"
+                                prefix="invoice"
+                                buttonLabel="点击上传发票"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>备注</FormLabel>
+              <FormControl>
+                <Textarea placeholder="补充说明..." className="resize-none" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="flex justify-end gap-3">
+          {onCancel && (
+            <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
+              取消
+            </Button>
+          )}
+          <Button type="submit" disabled={loading}>
+            {loading ? '提交中...' : initialData ? '更新' : '添加'}
+          </Button>
+        </div>
+      </form>
+    </Form>
   );
 }

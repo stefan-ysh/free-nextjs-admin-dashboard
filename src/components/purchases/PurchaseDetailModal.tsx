@@ -1,406 +1,250 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import Image from 'next/image';
+import type { ReactNode } from 'react';
+
+import PurchaseApprovalFlow from './PurchaseApprovalFlow';
 import PurchaseStatusBadge from './PurchaseStatusBadge';
-import { 
-  getPaymentMethodText, 
-  getInvoiceTypeText,
-  isPurchaseSubmittable,
-  isPurchaseWithdrawable,
-  PurchaseStatus,
-  PaymentMethod,
-  InvoiceType,
-  PurchaseChannel,
-  ReimbursementLog,
-  ReimbursementAction,
-} from '@/types/purchase';
-
-type PurchaseDetailAction = 'submit' | 'withdraw' | 'approve' | 'reject' | 'pay';
-
-type PurchaseSummaryUser = {
-  id: string;
-  displayName: string;
-  avatarUrl: string | null;
-  employeeCode?: string | null;
-  department?: string | null;
-};
+import type { PurchaseRowPermissions } from './PurchaseTable';
+import type { PurchaseDetail, PurchaseRecord } from '@/types/purchase';
 
 type PurchaseDetailModalProps = {
-  purchaseId: string;
-  isOpen: boolean;
-  onClose: () => void;
-  onAction?: (action: PurchaseDetailAction, data?: unknown) => void;
-  currentUserId?: string;
-  canApprove?: boolean;
+	purchase: PurchaseDetail | null;
+	onClose: () => void;
+	permissions?: PurchaseRowPermissions;
+	busy?: boolean;
+	detailLoading?: boolean;
+	detailError?: string | null;
+	onReloadDetail?: () => void;
+	onSubmit?: (purchase: PurchaseRecord) => void;
+	onWithdraw?: (purchase: PurchaseRecord) => void;
+	onApprove?: (purchase: PurchaseRecord) => void;
+	onReject?: (purchase: PurchaseRecord) => void;
+	onPay?: (purchase: PurchaseRecord) => void;
 };
 
-type PurchaseDetail = {
-  id: string;
-  purchaseNumber: string;
-  purchaseDate: string;
-  itemName: string;
-  specification: string | null;
-  quantity: number;
-  unitPrice: number;
-  totalAmount: number;
-  purchaseChannel: PurchaseChannel;
-  purchaseLocation: string | null;
-  purchaseLink: string | null;
-  purpose: string;
-  paymentMethod: PaymentMethod;
-  invoiceType: InvoiceType;
-  invoiceImages: string[];
-  receiptImages: string[];
-  hasProject: boolean;
-  status: PurchaseStatus;
-  submittedAt: string | null;
-  approvedAt: string | null;
-  rejectedAt: string | null;
-  rejectionReason: string | null;
-  paidAt: string | null;
-  notes: string | null;
-  attachments: string[];
-  createdAt: string;
-  updatedAt: string;
-  createdBy: string;
-  purchaser: PurchaseSummaryUser | null;
-  project: {
-    id: string;
-    projectCode: string;
-    projectName: string;
-  } | null;
-  approver: {
-    id: string;
-    displayName: string;
-  } | null;
-  rejecter: {
-    id: string;
-    displayName: string;
-  } | null;
-  payer: {
-    id: string;
-    displayName: string;
-  } | null;
-  logs: ReimbursementLog[];
+const currencyFormatter = new Intl.NumberFormat('zh-CN', {
+	style: 'currency',
+	currency: 'CNY',
+});
+
+const dateDisplayFormatter = new Intl.DateTimeFormat('zh-CN', {
+	year: 'numeric',
+	month: '2-digit',
+	day: '2-digit',
+});
+
+const CHANNEL_LABELS: Record<PurchaseDetail['purchaseChannel'], string> = {
+	online: '线上',
+	offline: '线下',
 };
 
-function formatDate(value: string | null) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString('zh-CN', { 
-    year: 'numeric', 
-    month: '2-digit', 
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+const PAYMENT_LABELS: Record<PurchaseDetail['paymentMethod'], string> = {
+	wechat: '微信',
+	alipay: '支付宝',
+	bank_transfer: '银行转账',
+	corporate_transfer: '对公转账',
+	cash: '现金',
+};
+
+const PAYMENT_TYPE_LABELS: Record<PurchaseDetail['paymentType'], string> = {
+	deposit: '定金',
+	full: '全款',
+	installment: '分期',
+	balance: '尾款',
+	other: '其他',
+};
+
+const INVOICE_TYPE_LABELS: Record<PurchaseDetail['invoiceType'], string> = {
+	special: '增值税专票',
+	general: '普通发票',
+	none: '无需发票',
+};
+
+const INVOICE_STATUS_LABELS: Record<PurchaseDetail['invoiceStatus'], string> = {
+	issued: '已开票',
+	pending: '待开票',
+	not_required: '无需开票',
+};
+
+function parseDateValue(value: string | null): Date | null {
+	if (!value) return null;
+	const trimmed = value.trim();
+	if (!trimmed) return null;
+	const isoLike = trimmed.includes(' ') && !trimmed.includes('T') ? trimmed.replace(' ', 'T') : trimmed;
+	const parsed = new Date(isoLike);
+	if (!Number.isNaN(parsed.getTime())) {
+		return parsed;
+	}
+	if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+		const fallback = new Date(`${trimmed}T00:00:00`);
+		if (!Number.isNaN(fallback.getTime())) {
+			return fallback;
+		}
+	}
+	return null;
 }
 
-function formatAmount(amount: number) {
-  return `¥${amount.toFixed(2)}`;
+function formatDate(value: string | null): string {
+	const date = parseDateValue(value);
+	if (!date) return value ?? '—';
+	return dateDisplayFormatter.format(date);
 }
 
-const ACTION_LABELS: Record<ReimbursementAction, string> = {
-  submit: '提交审批',
-  approve: '批准',
-  reject: '驳回',
-  pay: '标记已打款',
-  cancel: '取消',
-  withdraw: '撤回',
-};
+function resolveUserName(user: PurchaseDetail['approver'] | PurchaseDetail['rejecter'] | PurchaseDetail['payer']): string {
+	return user?.displayName ?? user?.id ?? '—';
+}
+
+function resolvePurchaser(purchase: PurchaseDetail): string {
+	return purchase.purchaser.displayName || purchase.purchaser.id;
+}
 
 export default function PurchaseDetailModal({
-  purchaseId,
-  isOpen,
-  onClose,
-  onAction,
-  currentUserId,
-  canApprove = false,
+	purchase,
+	onClose,
+	permissions,
+	busy,
+	onSubmit,
+	onWithdraw,
+	onApprove,
+	onReject,
+	onPay,
+	detailLoading,
+	detailError,
+	onReloadDetail,
 }: PurchaseDetailModalProps) {
-  const [detail, setDetail] = useState<PurchaseDetail | null>(null);
-  const [loading, setLoading] = useState(false);
+	if (!purchase) return null;
 
-  const fetchDetail = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/purchases/${purchaseId}?detailed=true`);
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          setDetail(result.data);
-        }
-      }
-    } catch (error) {
-      console.error('加载详情失败', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [purchaseId]);
+	const infoRows: Array<{ label: string; value: string | number | ReactNode }> = [
+		{ label: '采购单号', value: purchase.purchaseNumber },
+		{ label: '采购日期', value: formatDate(purchase.purchaseDate) },
+		{ label: '物品名称', value: purchase.itemName },
+		{ label: '规格/型号', value: purchase.specification ?? '—' },
+		{ label: '数量', value: purchase.quantity },
+		{ label: '单价', value: currencyFormatter.format(purchase.unitPrice) },
+		{ label: '合同金额', value: currencyFormatter.format(purchase.totalAmount) },
+		{ label: '手续费', value: currencyFormatter.format(purchase.feeAmount ?? 0) },
+		{
+			label: '总金额（含手续费）',
+			value: currencyFormatter.format(purchase.totalAmount + (purchase.feeAmount ?? 0)),
+		},
+		{ label: '采购渠道', value: CHANNEL_LABELS[purchase.purchaseChannel] },
+		{ label: '付款方式', value: PAYMENT_LABELS[purchase.paymentMethod] },
+		{ label: '款项类型', value: PAYMENT_TYPE_LABELS[purchase.paymentType] },
+		{ label: '支付方式 / 通道', value: purchase.paymentChannel ?? '—' },
+		{ label: '代付人', value: purchase.payerName ?? '—' },
+		{ label: '支付流水号', value: purchase.transactionNo ?? '—' },
+		{ label: '申请人', value: resolvePurchaser(purchase) },
+		{ label: '申请人部门', value: purchase.purchaser.department ?? '—' },
+		{ label: '申请人工号', value: purchase.purchaser.employeeCode ?? '—' },
+		{ label: '关联项目', value: purchase.project ? `${purchase.project.projectName}（${purchase.project.projectCode}）` : '—' },
+		{ label: '发票类型', value: INVOICE_TYPE_LABELS[purchase.invoiceType] },
+		{ label: '开票状态', value: INVOICE_STATUS_LABELS[purchase.invoiceStatus] },
+		{ label: '发票号码', value: purchase.invoiceNumber ?? '—' },
+		{ label: '开票日期', value: formatDate(purchase.invoiceIssueDate) },
+		{ label: '流程状态', value: <PurchaseStatusBadge status={purchase.status} /> },
+		{ label: '提交时间', value: formatDate(purchase.submittedAt) },
+		{ label: '批准时间', value: formatDate(purchase.approvedAt) },
+		{ label: '审批人', value: resolveUserName(purchase.approver) },
+		{ label: '驳回时间', value: formatDate(purchase.rejectedAt) },
+		{ label: '驳回人', value: resolveUserName(purchase.rejecter) },
+		{ label: '驳回原因', value: purchase.rejectionReason ?? '—' },
+		{ label: '打款时间', value: formatDate(purchase.paidAt) },
+		{ label: '打款人', value: resolveUserName(purchase.payer) },
+		{ label: '备注', value: purchase.notes ?? '—' },
+	];
 
-  useEffect(() => {
-    if (isOpen && purchaseId) {
-      void fetchDetail();
-    }
-  }, [isOpen, purchaseId, fetchDetail]);
-
-  if (!isOpen) return null;
-
-  const isOwner = currentUserId === detail?.createdBy;
-  const canSubmit = Boolean(isOwner && detail && isPurchaseSubmittable(detail.status));
-  const canWithdraw = Boolean(isOwner && detail && isPurchaseWithdrawable(detail.status));
-  const canDoApproval = canApprove && detail?.status === 'pending_approval';
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="relative max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-lg bg-white shadow-xl dark:bg-gray-800">
-        {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 dark:border-gray-700 dark:bg-gray-800">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">采购详情</h2>
-            {detail && (
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {detail.purchaseNumber}
-              </p>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
-          >
-            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-6">
-          {loading ? (
-            <div className="flex h-64 items-center justify-center">
-              <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-400" />
-            </div>
-          ) : !detail ? (
-            <div className="flex h-64 items-center justify-center text-gray-500 dark:text-gray-400">
-              加载失败
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Status and Actions */}
-              <div className="flex items-center justify-between">
-                <PurchaseStatusBadge status={detail.status} />
-                <div className="flex gap-2">
-                  {canSubmit && onAction && (
-                    <button
-                      onClick={() => onAction('submit')}
-                      className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700"
-                    >
-                      提交审批
-                    </button>
-                  )}
-                  {canWithdraw && onAction && (
-                    <button
-                      onClick={() => onAction('withdraw')}
-                      className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-                    >
-                      撤回
-                    </button>
-                  )}
-                  {canDoApproval && onAction && (
-                    <>
-                      <button
-                        onClick={() => onAction('approve')}
-                        className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700"
-                      >
-                        批准
-                      </button>
-                      <button
-                        onClick={() => onAction('reject')}
-                        className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
-                      >
-                        驳回
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Basic Info */}
-              <div className="grid grid-cols-2 gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
-                <div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">物品名称</div>
-                  <div className="mt-1 font-medium text-gray-900 dark:text-white">{detail.itemName}</div>
-                  {detail.specification && (
-                    <div className="text-sm text-gray-500 dark:text-gray-400">{detail.specification}</div>
-                  )}
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">购买日期</div>
-                  <div className="mt-1 text-gray-900 dark:text-white">{formatDate(detail.purchaseDate)}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">数量 × 单价</div>
-                  <div className="mt-1 text-gray-900 dark:text-white">
-                    {detail.quantity} × {formatAmount(detail.unitPrice)}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">总金额</div>
-                  <div className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
-                    {formatAmount(detail.totalAmount)}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">购买渠道</div>
-                  <div className="mt-1 text-gray-900 dark:text-white">
-                    {detail.purchaseChannel === 'online' ? '线上' : '线下'}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {detail.purchaseChannel === 'online' ? '购买链接' : '购买地点'}
-                  </div>
-                  <div className="mt-1 text-gray-900 dark:text-white">
-                    {detail.purchaseChannel === 'online' ? (
-                      <a
-                        href={detail.purchaseLink || '#'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline dark:text-blue-400"
-                      >
-                        查看链接
-                      </a>
-                    ) : (
-                      detail.purchaseLocation
-                    )}
-                  </div>
-                </div>
-                <div className="col-span-2">
-                  <div className="text-xs text-gray-500 dark:text-gray-400">用途说明</div>
-                  <div className="mt-1 text-gray-900 dark:text-white">{detail.purpose}</div>
-                </div>
-              </div>
-
-              {/* Payment Info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">付款方式</div>
-                  <div className="mt-1 text-gray-900 dark:text-white">
-                    {getPaymentMethodText(detail.paymentMethod)}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">发票类型</div>
-                  <div className="mt-1 text-gray-900 dark:text-white">
-                    {getInvoiceTypeText(detail.invoiceType)}
-                  </div>
-                </div>
-                {detail.purchaser && (
-                  <div className="col-span-2">
-                    <div className="text-xs text-gray-500 dark:text-gray-400">付款人</div>
-                    <div className="mt-2 flex items-center gap-2">
-                      {detail.purchaser.avatarUrl ? (
-                        <Image
-                          src={detail.purchaser.avatarUrl}
-                          alt={detail.purchaser.displayName}
-                          width={32}
-                          height={32}
-                          className="rounded-full"
-                        />
-                      ) : (
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-sm font-medium text-brand-700 dark:bg-brand-900/30 dark:text-brand-400">
-                          {detail.purchaser.displayName.slice(0, 2)}
-                        </div>
-                      )}
-                      <div>
-                        <div className="font-medium text-gray-900 dark:text-white">
-                          {detail.purchaser.displayName}
-                        </div>
-                        {detail.purchaser.department && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {detail.purchaser.department}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Images */}
-              {(detail.invoiceImages.length > 0 || detail.receiptImages.length > 0) && (
-                <div className="space-y-4">
-                  {detail.invoiceImages.length > 0 && (
-                    <div>
-                      <div className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">发票图片</div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {detail.invoiceImages.map((url, i) => (
-                          <div key={i} className="relative aspect-square overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-                            <Image src={url} alt={`发票 ${i + 1}`} fill className="object-cover" />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {detail.receiptImages.length > 0 && (
-                    <div>
-                      <div className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">小票图片</div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {detail.receiptImages.map((url, i) => (
-                          <div key={i} className="relative aspect-square overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-                            <Image src={url} alt={`小票 ${i + 1}`} fill className="object-cover" />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Logs Timeline */}
-              {detail.logs.length > 0 && (
-                <div>
-                  <div className="mb-4 text-sm font-medium text-gray-700 dark:text-gray-300">操作日志</div>
-                  <div className="space-y-3">
-                    {detail.logs.map((log, index) => (
-                      <div key={log.id} className="flex gap-3">
-                        <div className="flex flex-col items-center">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 dark:bg-brand-900/30">
-                            <div className="h-2 w-2 rounded-full bg-brand-600 dark:bg-brand-400" />
-                          </div>
-                          {index < detail.logs.length - 1 && (
-                            <div className="h-full w-px bg-gray-200 dark:bg-gray-700" />
-                          )}
-                        </div>
-                        <div className="flex-1 pb-4">
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">
-                            {ACTION_LABELS[log.action] || log.action}
-                          </div>
-                          {log.comment && (
-                            <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">{log.comment}</div>
-                          )}
-                          <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-                            {formatDate(log.createdAt)}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Notes */}
-              {detail.notes && (
-                <div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">备注</div>
-                  <div className="mt-1 text-gray-900 dark:text-white">{detail.notes}</div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+	return (
+		<div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4 py-6">
+			<div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-2xl dark:bg-gray-900">
+				<div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+					<div>
+						<p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">采购详情</p>
+						<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{purchase.itemName}</h3>
+					</div>
+					<button
+						type="button"
+						onClick={onClose}
+						className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300"
+					>
+						关闭
+					</button>
+				</div>
+				<div className="space-y-6 px-6 py-5">
+					{detailLoading && (
+						<div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-200">
+							正在同步最新审批状态...
+						</div>
+					)}
+					{detailError && (
+						<div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
+							<span>{detailError}</span>
+							{onReloadDetail && (
+								<button
+									type="button"
+									onClick={onReloadDetail}
+									className="rounded border border-rose-400 px-2 py-1 text-rose-600 hover:bg-rose-100 dark:border-rose-300 dark:text-rose-100"
+								>
+									重试
+								</button>
+							)}
+						</div>
+					)}
+					<div className="grid gap-6 lg:grid-cols-12">
+						<div className="space-y-6 lg:col-span-7">
+							<div className="grid gap-4 md:grid-cols-2">
+								{infoRows.map((row) => (
+									<div key={row.label} className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+										<p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">{row.label}</p>
+										<div className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">{row.value}</div>
+									</div>
+								))}
+							</div>
+							<div className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+								<p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">采购用途</p>
+								<p className="mt-2 text-sm text-gray-800 dark:text-gray-200">{purchase.purpose}</p>
+							</div>
+							{(purchase.attachments.length || purchase.invoiceImages.length || purchase.receiptImages.length) ? (
+								<div className="grid gap-4 md:grid-cols-3">
+									{[
+										{ label: '附件', items: purchase.attachments },
+										{ label: '发票', items: purchase.invoiceImages },
+										{ label: '收据', items: purchase.receiptImages },
+									].map((group) => (
+										<div key={group.label} className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+											<p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">{group.label}</p>
+											{group.items.length ? (
+												<ul className="mt-2 space-y-1 text-xs text-blue-600 dark:text-blue-300">
+													{group.items.map((item, index) => (
+														<li key={`${group.label}-${index}`} className="truncate">
+															<a href={item} target="_blank" rel="noreferrer" className="hover:underline">
+																{item}
+															</a>
+														</li>
+													))}
+												</ul>
+											) : (
+												<p className="mt-2 text-xs text-gray-500 dark:text-gray-400">暂无</p>
+											)}
+										</div>
+									))}
+								</div>
+							) : null}
+						</div>
+						<div className="lg:col-span-5">
+							<PurchaseApprovalFlow
+								purchase={purchase}
+								permissions={permissions}
+								onSubmit={onSubmit}
+								onWithdraw={onWithdraw}
+								onApprove={onApprove}
+								onReject={onReject}
+								onPay={onPay}
+								busy={busy}
+							/>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
 }
