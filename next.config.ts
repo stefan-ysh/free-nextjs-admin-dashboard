@@ -3,6 +3,7 @@ import type { RuleSetRule } from "webpack";
 
 const nextConfig: NextConfig = {
   productionBrowserSourceMaps: false,
+  output: "standalone",
   reactStrictMode: true,
   turbopack: {
     rules: {
