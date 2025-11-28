@@ -494,68 +494,75 @@ export default function ClientManagementPage() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="border-none">
-          <CardHeader>
-            <CardDescription>客户总数</CardDescription>
-            <CardTitle className="text-2xl">{total}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="border-none">
-          <CardHeader>
-            <CardDescription>活跃客户</CardDescription>
-            <CardTitle className="text-2xl">{stats.active}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="border-none">
-          <CardHeader>
-            <CardDescription>在途额度</CardDescription>
-            <CardTitle className="text-2xl">{formatCurrency(stats.outstanding)}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="border-none">
-          <CardHeader>
-            <CardDescription>授信总额</CardDescription>
-            <CardTitle className="text-2xl">{formatCurrency(stats.totalCredit)}</CardTitle>
-          </CardHeader>
-        </Card>
+      <div className="flex flex-wrap gap-2">
+        <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
+          <span className="font-medium text-foreground">客户总数</span>
+          <span className="font-semibold text-blue-600 dark:text-blue-400">{total}</span>
+        </div>
+        <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
+          <span className="font-medium text-foreground">活跃客户</span>
+          <span className="font-semibold text-emerald-600 dark:text-emerald-400">{stats.active}</span>
+        </div>
+        <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
+          <span className="font-medium text-foreground">在途额度</span>
+          <span className="font-semibold text-amber-600 dark:text-amber-400">{formatCurrency(stats.outstanding)}</span>
+        </div>
+        <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
+          <span className="font-medium text-foreground">授信总额</span>
+          <span className="font-semibold text-purple-600 dark:text-purple-400">{formatCurrency(stats.totalCredit)}</span>
+        </div>
       </div>
 
       <Card className="border-none">
         <CardContent className="space-y-4 pt-6">
-          <div className="flex flex-col gap-3 md:flex-row">
-            <Input
-              placeholder="搜索客户名称/手机号/税号"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="md:flex-1"
-            />
-            <Select value={filterType} onValueChange={(value) => setFilterType(value as 'all' | ClientType)}>
-              <SelectTrigger className="md:w-44">
-                <SelectValue placeholder="客户类型" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部类型</SelectItem>
-                <SelectItem value="personal">个人客户</SelectItem>
-                <SelectItem value="company">企业客户</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as 'all' | ClientStatus)}>
-              <SelectTrigger className="md:w-44">
-                <SelectValue placeholder="状态" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部状态</SelectItem>
-                <SelectItem value="active">正常往来</SelectItem>
-                <SelectItem value="inactive">暂停合作</SelectItem>
-                <SelectItem value="blacklisted">黑名单</SelectItem>
-              </SelectContent>
-            </Select>
-            {canManage && (
-            <Button onClick={handleOpenDialog}>
-              <PlusCircle className="mr-2 h-4 w-4" /> 新增客户
-            </Button>
-          )}
+          <div className="rounded-lg border border-border bg-white p-3 dark:bg-gray-900">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+              <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3 lg:gap-4">
+                <div className="space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground">搜索</span>
+                  <Input
+                    placeholder="搜索客户名称/手机号/税号"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    className="h-9 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground">客户类型</span>
+                  <Select value={filterType} onValueChange={(value) => setFilterType(value as 'all' | ClientType)}>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="全部类型" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部类型</SelectItem>
+                      <SelectItem value="personal">个人客户</SelectItem>
+                      <SelectItem value="company">企业客户</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground">状态</span>
+                  <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as 'all' | ClientStatus)}>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="全部状态" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部状态</SelectItem>
+                      <SelectItem value="active">正常往来</SelectItem>
+                      <SelectItem value="inactive">暂停合作</SelectItem>
+                      <SelectItem value="blacklisted">黑名单</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex items-center pt-1">
+                {canManage && (
+                  <Button onClick={handleOpenDialog} size="sm" className="h-9">
+                    <PlusCircle className="mr-2 h-4 w-4" /> 新增客户
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="rounded-xl border-none">

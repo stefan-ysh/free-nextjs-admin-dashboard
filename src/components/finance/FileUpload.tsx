@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 import FilePreviewDialog from '@/components/common/FilePreviewDialog';
 
@@ -40,9 +41,9 @@ interface FileUploadProps {
   accept?: string;
 }
 
-export default function FileUpload({ 
-  files, 
-  onChange, 
+export default function FileUpload({
+  files,
+  onChange,
   maxFiles = 5,
   accept = 'image/*,.pdf'
 }: FileUploadProps) {
@@ -58,7 +59,7 @@ export default function FileUpload({
     }
 
     if (files.length + selectedFiles.length > maxFiles) {
-      alert(`最多只能上传 ${maxFiles} 个文件`);
+      toast.warning(`最多只能上传 ${maxFiles} 个文件`);
       input.value = '';
       return;
     }
@@ -70,7 +71,7 @@ export default function FileUpload({
 
       for (const file of Array.from(selectedFiles)) {
         if (file.size > MAX_FILE_SIZE) {
-          alert(`${file.name} 超过 5MB 限制，已跳过`);
+          toast.warning(`${file.name} 超过 5MB 限制，已跳过`);
           continue;
         }
 
@@ -98,7 +99,7 @@ export default function FileUpload({
       }
     } catch (error) {
       console.error('Upload error:', error);
-      alert(error instanceof Error ? error.message : '上传失败,请重试');
+      toast.error(error instanceof Error ? error.message : '上传失败,请重试');
     } finally {
       setUploading(false);
       input.value = '';
@@ -123,19 +124,19 @@ export default function FileUpload({
                 className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-700"
               >
                 <div className="flex items-center gap-3">
-                <svg
-                  className="h-5 w-5 text-gray-500 dark:text-gray-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
+                  <svg
+                    className="h-5 w-5 text-gray-500 dark:text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
                   <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
                 </div>
                 <div className="flex items-center gap-3">

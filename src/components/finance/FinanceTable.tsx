@@ -166,9 +166,62 @@ export default function FinanceTable({
                         {getInvoiceStatusLabel(record.invoice.status)}
                       </Badge>
                       {record.invoice.status === InvoiceStatus.ISSUED && record.invoice.attachments && record.invoice.attachments.length > 0 && (
-                        <span className="text-xs text-muted-foreground" title={`${record.invoice.attachments.length}个附件`}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const attachments = record.invoice?.attachments || [];
+                            const firstAttachment = attachments[0];
+                            const isImage = firstAttachment?.startsWith('data:image/') || /\.(png|jpe?g|gif|bmp|webp)$/i.test(firstAttachment || '');
+
+                            // Create a simple preview dialog
+                            const dialog = document.createElement('div');
+                            dialog.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4';
+                            dialog.onclick = () => dialog.remove();
+
+                            const content = document.createElement('div');
+                            content.className = 'bg-white dark:bg-gray-900 rounded-lg p-4 max-w-2xl max-h-[80vh] overflow-auto';
+                            content.onclick = (e) => e.stopPropagation();
+
+                            const header = document.createElement('div');
+                            header.className = 'flex items-center justify-between mb-3';
+                            header.innerHTML = `
+                              <h3 class="text-sm font-semibold">附件预览 (${attachments.length})</h3>
+                              <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" onclick="this.closest('.fixed').remove()">&times;</button>
+                            `;
+
+                            const grid = document.createElement('div');
+                            grid.className = 'grid gap-3 md:grid-cols-2';
+
+                            attachments.forEach((file, idx) => {
+                              const item = document.createElement('div');
+                              const isItemImage = file.startsWith('data:image/') || /\.(png|jpe?g|gif|bmp|webp)$/i.test(file);
+
+                              if (isItemImage) {
+                                item.className = 'space-y-2';
+                                item.innerHTML = `
+                                  <img src="${file}" alt="附件 ${idx + 1}" class="w-full h-40 object-cover rounded border border-border" />
+                                  <a href="${file}" target="_blank" class="text-xs text-blue-600 hover:underline dark:text-blue-400">新窗口查看</a>
+                                `;
+                              } else {
+                                item.className = 'flex items-center justify-between rounded border border-border bg-muted/50 px-3 py-2';
+                                item.innerHTML = `
+                                  <span class="text-xs">附件 ${idx + 1}</span>
+                                  <a href="${file}" target="_blank" class="text-xs text-blue-600 hover:underline dark:text-blue-400">打开</a>
+                                `;
+                              }
+                              grid.appendChild(item);
+                            });
+
+                            content.appendChild(header);
+                            content.appendChild(grid);
+                            dialog.appendChild(content);
+                            document.body.appendChild(dialog);
+                          }}
+                          className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                          title={`点击预览 ${record.invoice.attachments.length} 个附件`}
+                        >
                           📎 {record.invoice.attachments.length}
-                        </span>
+                        </button>
                       )}
                     </div>
                   ) : (

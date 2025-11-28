@@ -1,147 +1,128 @@
 import './load-env';
 
-import process from 'node:process';
-
-import type { ResultSetHeader, RowDataPacket } from 'mysql2';
-
 import { mysqlPool } from '@/lib/mysql';
-import { ensureFinanceSchema } from '@/lib/schema/finance';
+import { FINANCE_CATEGORY_OPTIONS, matchCategoryLabel } from '@/constants/finance-categories';
 import { TransactionType } from '@/types/finance';
-import { getDefaultCategoryLabels } from '@/constants/finance-categories';
+import { RowDataPacket } from 'mysql2';
 
-const pool = mysqlPool();
-
-type CategoryMapping = Record<string, string>;
-
-const incomeMapping: CategoryMapping = {
-  收入: '主营业务收入',
-  销售收入: '主营业务收入',
-  资金注入: '投资及财务收益',
-  银行公户办理相关: '其他收入',
-};
-
-const expenseMapping: CategoryMapping = {
-  装修费用: '办公费（含文具/耗材/印刷/小额场地维修）',
-  办公用品: '办公费（含文具/耗材/印刷/小额场地维修）',
-  办公费: '办公费（含文具/耗材/印刷/小额场地维修）',
-  交通费: '交通费（本地公务出行/通勤补贴/共享出行）',
-  餐费: '业务招待费（餐饮宴请/礼品馈赠/商务娱乐）',
-  团建: '福利费（节日福利/体检/团建/特殊补贴）',
-  发放工资: '薪酬外补贴（通讯/交通/餐补/住房补贴）',
-  工资: '薪酬外补贴（通讯/交通/餐补/住房补贴）',
-  设备购买: '办公设备维修费（电脑/打印机/家电维修）',
-  银行公户办理相关: '财务费用（银行手续费/贷款利息/汇兑损益）',
-  材料费: '原材料检验费（制造业原材料质检）',
-  服务费: '咨询费（服务业律师/会计/顾问咨询）',
-  报销: '差旅费（跨区域交通/住宿/餐饮/签证）',
-  采购支出: '原材料检验费（制造业原材料质检）',
-  其他支出: '税费与规费（印花税/行政规费/公益捐赠）',
-};
-
-function getMapping(type: TransactionType): CategoryMapping {
-  return type === TransactionType.INCOME ? incomeMapping : expenseMapping;
+// 扩展 RowDataPacket 以包含我们需要查询的字段
+interface FinanceRecordRow extends RowDataPacket {
+  id: string;
+  category: string;
+  type: TransactionType;
 }
 
-async function remapFinanceRecords(type: TransactionType, mapping: CategoryMapping) {
-  let updated = 0;
-  for (const [legacy, modern] of Object.entries(mapping)) {
-    const [result] = await pool.query<ResultSetHeader>(
-      'UPDATE finance_records SET category = ? WHERE type = ? AND category = ?',
-      [modern, type, legacy]
+async function migrateCategories() {
+  const pool = mysqlPool();
+
+  console.log('🚀 开始执行财务分类迁移 (MySQL版)...\n');
+
+  try {
+    // 1. 获取所有财务记录
+    // 我们只需要 id, category, type 字段
+    const [rows] = await pool.query<FinanceRecordRow[]>(
+      'SELECT id, category, type FROM finance_records'
     );
-    updated += result.affectedRows ?? 0;
-  }
-  return updated;
-}
 
-async function purgeLegacyCategories(type: TransactionType, mapping: CategoryMapping) {
-  let removed = 0;
-  for (const legacy of Object.keys(mapping)) {
-    const [result] = await pool.query<ResultSetHeader>(
-      'DELETE FROM finance_categories WHERE type = ? AND name = ?',
-      [type, legacy]
-    );
-    removed += result.affectedRows ?? 0;
-  }
-  return removed;
-}
+    console.log(`📊 扫描到 ${rows.length} 条记录`);
 
-async function ensureDefaultCategories(type: TransactionType) {
-  const labels = getDefaultCategoryLabels(type);
-  let inserted = 0;
-  for (const label of labels) {
-    const [result] = await pool.query<ResultSetHeader>(
-      'INSERT IGNORE INTO finance_categories (type, name, is_default) VALUES (?, ?, 1)',
-      [type, label]
-    );
-    inserted += result.affectedRows ?? 0;
-    await pool.query<ResultSetHeader>(
-      'UPDATE finance_categories SET is_default = 1 WHERE type = ? AND name = ?',
-      [type, label]
-    );
-  }
-  return inserted;
-}
+    let migratedCount = 0;
+    let unchangedCount = 0;
+    let errorCount = 0;
+    const changes = new Map<string, { from: string; to: string; count: number }>();
 
-async function collectUnmappedCategories(type: TransactionType, mapping: CategoryMapping) {
-  const allowList = new Set(getDefaultCategoryLabels(type));
-  const mappedLegacy = new Set(Object.keys(mapping));
-  const [rows] = await pool.query<RowDataPacket[]>(
-    'SELECT DISTINCT category FROM finance_records WHERE type = ? ORDER BY category ASC',
-    [type]
-  );
-  return rows
-    .map((row) => String(row.category))
-    .filter((name) => name && !allowList.has(name) && !mappedLegacy.has(name));
-}
+    // 2. 遍历并检查是否需要更新
+    for (const record of rows) {
+      // 使用现有的 matchCategoryLabel 逻辑，它已经包含了 aliases 映射
+      // 注意：matchCategoryLabel 会返回标准化的 label，如果找不到则返回 undefined
+      // 如果返回 undefined，说明这个 category 可能已经是标准名称，或者是不在列表中的未知名称
+      // 我们需要反向检查：如果当前 category 已经在标准列表中，就不需要动
 
-async function migrateType(type: TransactionType) {
-  const mapping = getMapping(type);
-  const updatedRecords = await remapFinanceRecords(type, mapping);
-  const removedCategories = await purgeLegacyCategories(type, mapping);
-  const insertedCategories = await ensureDefaultCategories(type);
-  const unmatched = await collectUnmappedCategories(type, mapping);
+      const currentCategory = record.category;
+      const type = record.type as TransactionType;
 
-  return {
-    type,
-    updatedRecords,
-    removedCategories,
-    insertedCategories,
-    unmatched,
-  };
-}
+      // 检查当前分类是否已经是标准分类
+      const isStandard = FINANCE_CATEGORY_OPTIONS.some(
+        opt => opt.label === currentCategory && opt.type === type
+      );
 
-async function main() {
-  await ensureFinanceSchema();
-  const incomeResult = await migrateType(TransactionType.INCOME);
-  const expenseResult = await migrateType(TransactionType.EXPENSE);
+      if (isStandard) {
+        unchangedCount++;
+        continue;
+      }
 
-  console.table(
-    [incomeResult, expenseResult].map((result) => ({
-      类型: result.type,
-      '更新记录数': result.updatedRecords,
-      '删除旧分类数': result.removedCategories,
-      '新增默认分类数': result.insertedCategories,
-      '仍需人工处理': result.unmatched.length,
-    }))
-  );
+      // 尝试匹配新分类
+      const newCategory = matchCategoryLabel(type, currentCategory);
 
-  if (incomeResult.unmatched.length || expenseResult.unmatched.length) {
-    console.log('\n以下分类未能自动映射，请手动确认：');
-    if (incomeResult.unmatched.length) {
-      console.log(`- 收入: ${incomeResult.unmatched.join(', ')}`);
+      if (newCategory && newCategory !== currentCategory) {
+        try {
+          // 执行更新
+          await pool.query(
+            'UPDATE finance_records SET category = ? WHERE id = ?',
+            [newCategory, record.id]
+          );
+
+          // 记录变更统计
+          const key = `${currentCategory} -> ${newCategory}`;
+          const stat = changes.get(key) || { from: currentCategory, to: newCategory, count: 0 };
+          stat.count++;
+          changes.set(key, stat);
+
+          migratedCount++;
+          // console.log(`✓ 更新: ${currentCategory} -> ${newCategory}`);
+        } catch (err) {
+          console.error(`✗ 更新失败 ID ${record.id}:`, err);
+          errorCount++;
+        }
+      } else {
+        // 无法匹配到新分类，保持原样
+        unchangedCount++;
+      }
     }
-    if (expenseResult.unmatched.length) {
-      console.log(`- 支出: ${expenseResult.unmatched.join(', ')}`);
-    }
-  }
-}
 
-main()
-  .catch((error) => {
-    console.error('财务分类迁移失败:', error);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
+    // 3. 输出总结
+    console.log('\n' + '='.repeat(50));
+    console.log('📈 迁移总结');
+    console.log('='.repeat(50));
+    console.log(`总记录数: ${rows.length}`);
+    console.log(`✓ 成功迁移: ${migratedCount}`);
+    console.log(`- 保持不变: ${unchangedCount}`);
+    console.log(`✗ 更新失败: ${errorCount}`);
+    console.log('='.repeat(50));
+
+    if (changes.size > 0) {
+      console.log('\n📊 变更详情:');
+      const sortedChanges = Array.from(changes.values()).sort((a, b) => b.count - a.count);
+      for (const change of sortedChanges) {
+        console.log(`  ${change.count.toString().padStart(4)} 条: ${change.from} -> ${change.to}`);
+      }
+    }
+
+    // 4. 检查是否有未标准化的残留分类
+    console.log('\n🔍 检查残留的非标准分类...');
+    const [remainingRows] = await pool.query<FinanceRecordRow[]>(
+      'SELECT category, type, COUNT(*) as count FROM finance_records GROUP BY category, type ORDER BY count DESC'
+    );
+
+    const nonStandard = remainingRows.filter(row => {
+      return !FINANCE_CATEGORY_OPTIONS.some(opt => opt.label === row.category && opt.type === row.type);
+    });
+
+    if (nonStandard.length > 0) {
+      console.log('⚠️  以下分类未在标准列表中定义 (可能需要手动处理):');
+      nonStandard.forEach(row => {
+        // @ts-ignore
+        console.log(`  ${row.count} 条: [${row.type}] ${row.category}`);
+      });
+    } else {
+      console.log('✨ 所有记录均已符合标准分类！');
+    }
+
+  } catch (error) {
+    console.error('❌ 脚本执行出错:', error);
+  } finally {
     await pool.end();
-  });
+  }
+}
+
+migrateCategories().catch(console.error);

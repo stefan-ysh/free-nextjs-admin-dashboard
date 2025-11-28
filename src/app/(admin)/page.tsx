@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 
 import { requireCurrentUser } from '@/lib/auth/current-user';
+import { toPermissionUser } from '@/lib/auth/permission-user';
 import { checkPermission, Permissions } from '@/lib/permissions';
 import type { UserProfile } from '@/types/user';
 import { formatDateTimeLocal } from '@/lib/dates';
@@ -63,20 +64,20 @@ function MetricCard({ label, value, helper, icon, tone = 'default' }: MetricCard
     tone === 'positive'
       ? 'text-emerald-600 dark:text-emerald-400'
       : tone === 'negative'
-      ? 'text-rose-600 dark:text-rose-400'
-      : tone === 'info'
-      ? 'text-blue-600 dark:text-blue-400'
-      : 'text-gray-900 dark:text-white';
+        ? 'text-rose-600 dark:text-rose-400'
+        : tone === 'info'
+          ? 'text-blue-600 dark:text-blue-400'
+          : 'text-gray-900 dark:text-white';
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
+    <Card className="shadow-sm">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 pb-1">
+        <CardTitle className="text-xs font-medium text-muted-foreground">{label}</CardTitle>
         {icon}
       </CardHeader>
-      <CardContent>
-        <div className={`text-3xl font-semibold ${toneClass}`}>{value}</div>
-        {helper ? <p className="mt-1 text-xs text-muted-foreground">{helper}</p> : null}
+      <CardContent className="p-3 pt-0">
+        <div className={`text-xl font-semibold ${toneClass}`}>{value}</div>
+        {helper ? <p className="mt-1 text-[10px] text-muted-foreground">{helper}</p> : null}
       </CardContent>
     </Card>
   );
@@ -84,10 +85,10 @@ function MetricCard({ label, value, helper, icon, tone = 'default' }: MetricCard
 
 function DashboardSection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return (
-    <section className="space-y-4">
+    <section className="space-y-3">
       <div>
-        <h2 className="text-xl font-semibold text-foreground">{title}</h2>
-        {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
+        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+        {description ? <p className="mt-0.5 text-xs text-muted-foreground">{description}</p> : null}
       </div>
       {children}
     </section>
@@ -96,7 +97,7 @@ function DashboardSection({ title, description, children }: { title: string; des
 
 export default async function AdminDashboardPage() {
   const { user } = await requireCurrentUser();
-  const profile = user as UserProfile;
+  const profile = await toPermissionUser(user);
 
   const [inventoryPermission, financePermission, hrPermission, clientPermission, projectPermission] = await Promise.all([
     checkPermission(profile, Permissions.INVENTORY_VIEW_DASHBOARD),

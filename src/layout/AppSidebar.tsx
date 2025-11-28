@@ -47,18 +47,18 @@ const navItems: NavItem[] = [
   {
     icon: <DashboardIcon />,
     name: "仪表盘",
-    subItems: [{ name: "电子商务", path: "/", pro: false }],
+    path: "/",
   },
-  {
-    icon: <CalenderIcon />,
-    name: "日历",
-    path: "/calendar",
-  },
-  {
-    icon: <UserCircleIcon />,
-    name: "个人中心",
-    path: "/profile",
-  },
+  // {
+  //   icon: <CalenderIcon />,
+  //   name: "日历",
+  //   path: "/calendar",
+  // },
+  // {
+  //   icon: <UserCircleIcon />,
+  //   name: "个人中心",
+  //   path: "/profile",
+  // },
   {
     icon: <FinanceIcon />,
     name: "财务管理",
@@ -122,16 +122,18 @@ const navItems: NavItem[] = [
         path: "/inventory/warehouses",
         requiredPermission: "INVENTORY_MANAGE_WAREHOUSE",
       },
-      {
-        name: "入库单",
-        path: "/inventory/inbound",
-        requiredPermission: "INVENTORY_OPERATE_INBOUND",
-      },
-      {
-        name: "出库单",
-        path: "/inventory/outbound",
-        requiredPermission: "INVENTORY_OPERATE_OUTBOUND",
-      },
+      // 注释：入库/出库已改为Drawer模式，从侧边栏隐藏（2024-11-27）
+      // 保留页面文件，可通过URL直接访问
+      // {
+      //   name: "入库单",
+      //   path: "/inventory/inbound",
+      //   requiredPermission: "INVENTORY_OPERATE_INBOUND",
+      // },
+      // {
+      //   name: "出库单",
+      //   path: "/inventory/outbound",
+      //   requiredPermission: "INVENTORY_OPERATE_OUTBOUND",
+      // },
       {
         name: "库存流水",
         path: "/inventory/movements",
@@ -351,7 +353,7 @@ const AppSidebar: React.FC = () => {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 z-30 flex h-screen flex-col border-r border-gray-200 bg-white text-gray-900 transition-all duration-300 dark:border-gray-800 dark:bg-gray-900',
+        'fixed left-0 top-0 z-30 flex h-screen flex-col border-r border-border bg-white text-gray-900 transition-all duration-300 dark:border-border dark:bg-gray-900',
         'mt-16 px-5 lg:mt-0',
         isExpanded || isMobileOpen || isHovered ? 'w-[290px]' : 'w-[90px]',
         isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'

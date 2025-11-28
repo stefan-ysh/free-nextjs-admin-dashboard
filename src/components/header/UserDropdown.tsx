@@ -2,7 +2,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useAuth } from "@/app/auth-context";
 import {
   DropdownMenu,
@@ -12,10 +12,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import ProfileDrawer from "@/components/user-profile/ProfileDrawer";
 
 export default function UserDropdown() {
   const router = useRouter();
   const { user, setUser } = useAuth();
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const displayName = useMemo(() => {
     if (!user) return "";
@@ -94,10 +96,15 @@ export default function UserDropdown() {
 
         <DropdownMenuSeparator className="my-3" />
 
-        <div className="flex flex-col gap-1">
-          <DropdownMenuItem asChild className="px-0 py-0">
-            <Link
-              href="/profile"
+        {/* <div className="flex flex-col gap-1">
+          <DropdownMenuItem
+            className="px-0 py-0"
+            onSelect={(e) => {
+              e.preventDefault();
+              setDrawerOpen(true);
+            }}
+          >
+            <button
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-theme-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <svg
@@ -115,8 +122,8 @@ export default function UserDropdown() {
                   fill="currentColor"
                 />
               </svg>
-              Edit profile
-            </Link>
+              Quick edit
+            </button>
           </DropdownMenuItem>
 
           <DropdownMenuItem asChild className="px-0 py-0">
@@ -168,7 +175,7 @@ export default function UserDropdown() {
           </DropdownMenuItem>
         </div>
 
-        <DropdownMenuSeparator className="my-3" />
+        <DropdownMenuSeparator className="my-3" /> */}
 
         <DropdownMenuItem
           className="flex items-center gap-3 rounded-lg px-3 py-2 text-theme-sm font-medium text-destructive hover:text-destructive"
@@ -195,6 +202,8 @@ export default function UserDropdown() {
           Sign out
         </DropdownMenuItem>
       </DropdownMenuContent>
+
+      <ProfileDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
     </DropdownMenu>
   );
 }

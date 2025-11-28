@@ -679,7 +679,7 @@ export default function PurchasesClient() {
 
   if (permissionLoading) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+      <div className="rounded-lg border border-border bg-white p-6 text-sm text-gray-600 shadow-sm dark:border-border dark:bg-gray-900 dark:text-gray-300">
         正在加载权限信息...
       </div>
     );
@@ -695,8 +695,8 @@ export default function PurchasesClient() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900 sm:p-5 !pt-0">
-       
+      <div className="rounded-xl border border-border bg-white p-4 shadow-sm dark:border-border dark:bg-gray-900 sm:p-5 !pt-0">
+
 
         <div className="mt-4 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -704,14 +704,14 @@ export default function PurchasesClient() {
               value={filters.search}
               onChange={(event) => handleFilterChange({ search: event.target.value })}
               placeholder="按单号 / 物品 / 用途检索"
-              className="h-9 min-w-[220px] flex-1 rounded-md border border-gray-300 px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              className="h-9 min-w-[220px] flex-1 rounded-md border border-border px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
             />
 
             <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
               <SheetTrigger asChild>
                 <button
                   type="button"
-                  className="inline-flex h-9 items-center gap-2 rounded-md border border-gray-300 px-3 text-sm text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200"
+                  className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm text-gray-700 hover:bg-gray-100 dark:border-border dark:text-gray-200"
                 >
                   筛选条件
                   {activeFilterChips.length > 0 && (
@@ -720,7 +720,7 @@ export default function PurchasesClient() {
                     </span>
                   )}
                 </button>
-                
+
               </SheetTrigger>
               <SheetContent side="right" className="sm:max-w-xl">
                 <SheetHeader>
@@ -734,7 +734,7 @@ export default function PurchasesClient() {
                       <select
                         value={filters.status}
                         onChange={(event) => handleFilterChange({ status: event.target.value as PurchaseFilters['status'] })}
-                        className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        className="h-10 w-full rounded-md border border-border px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
                       >
                         <option value="all">全部状态</option>
                         {PURCHASE_STATUSES.map((status) => (
@@ -749,7 +749,7 @@ export default function PurchasesClient() {
                       <select
                         value={filters.purchaseChannel}
                         onChange={(event) => handleFilterChange({ purchaseChannel: event.target.value as PurchaseFilters['purchaseChannel'] })}
-                        className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        className="h-10 w-full rounded-md border border-border px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
                       >
                         <option value="all">全部渠道</option>
                         {PURCHASE_CHANNELS.map((channel) => (
@@ -764,7 +764,7 @@ export default function PurchasesClient() {
                       <select
                         value={filters.paymentMethod}
                         onChange={(event) => handleFilterChange({ paymentMethod: event.target.value as PurchaseFilters['paymentMethod'] })}
-                        className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        className="h-10 w-full rounded-md border border-border px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
                       >
                         <option value="all">全部付款方式</option>
                         {PAYMENT_METHODS.map((method) => (
@@ -779,7 +779,7 @@ export default function PurchasesClient() {
                       <select
                         value={sortBy}
                         onChange={(event) => setSortBy(event.target.value as SortField)}
-                        className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        className="h-10 w-full rounded-md border border-border px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
                       >
                         {SORT_FIELDS.map((field) => (
                           <option key={field.value} value={field.value}>
@@ -793,7 +793,7 @@ export default function PurchasesClient() {
                       <select
                         value={sortOrder}
                         onChange={(event) => setSortOrder(event.target.value as SortOrder)}
-                        className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        className="h-10 w-full rounded-md border border-border px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
                       >
                         {SORT_ORDERS.map((item) => (
                           <option key={item.value} value={item.value}>
@@ -821,7 +821,7 @@ export default function PurchasesClient() {
                     />
                   </div>
 
-                  <div className="rounded-lg border border-dashed border-gray-200 p-3 dark:border-gray-700">
+                  <div className="rounded-lg border border-dashed border-border p-3 dark:border-border">
                     <button
                       type="button"
                       onClick={() => setShowAdvancedFilters((prev) => !prev)}
@@ -844,7 +844,7 @@ export default function PurchasesClient() {
                               min={0}
                               value={filters.minAmount ?? ''}
                               onChange={(event) => handleAmountFilterChange('minAmount', event.target.value)}
-                              className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                              className="h-10 w-full rounded-md border border-border px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
                             />
                           </div>
                           <div>
@@ -854,7 +854,7 @@ export default function PurchasesClient() {
                               min={0}
                               value={filters.maxAmount ?? ''}
                               onChange={(event) => handleAmountFilterChange('maxAmount', event.target.value)}
-                              className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                              className="h-10 w-full rounded-md border border-border px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
                             />
                           </div>
                         </div>
@@ -889,7 +889,7 @@ export default function PurchasesClient() {
                       handleResetFilters();
                       setShowAdvancedFilters(false);
                     }}
-                    className="h-10 rounded-md border border-gray-300 px-4 text-sm text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200"
+                    className="h-10 rounded-md border border-border px-4 text-sm text-gray-700 hover:bg-gray-100 dark:border-border dark:text-gray-200"
                   >
                     重置
                   </button>
@@ -906,7 +906,7 @@ export default function PurchasesClient() {
             </Sheet>
             <button
               onClick={handleManualRefresh}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200"
+              className="rounded-lg border border-border px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200"
               disabled={loading}
             >
               刷新
@@ -914,7 +914,7 @@ export default function PurchasesClient() {
             <button
               onClick={handleExport}
               disabled={loading || exporting}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-60 dark:border-gray-600 dark:text-gray-200"
+              className="rounded-lg border border-border px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-60 dark:border-gray-600 dark:text-gray-200"
             >
               {exporting ? '导出中...' : '导出 CSV'}
             </button>
@@ -935,7 +935,7 @@ export default function PurchasesClient() {
                   key={chip.key}
                   type="button"
                   onClick={chip.onRemove}
-                  className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-3 py-1 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300"
+                  className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-gray-700 hover:bg-gray-50 dark:border-border dark:text-gray-300"
                 >
                   {chip.label}
                   <span aria-hidden="true">×</span>
@@ -946,7 +946,7 @@ export default function PurchasesClient() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+      <div className="rounded-lg border border-border bg-white p-6 shadow-sm dark:border-border dark:bg-gray-900">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-gray-900 dark:text-gray-100">实时统计</p>
@@ -958,40 +958,32 @@ export default function PurchasesClient() {
           )}
         </div>
 
-        <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="flex flex-wrap gap-2">
           {stats ? (
             <>
-              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800/50">
-                <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">总采购金额</p>
-                <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                  {amountFormatter.format(stats.totalAmount)}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">共 {stats.totalPurchases} 条记录</p>
+              <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
+                <span className="font-medium text-foreground">总采购金额</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{amountFormatter.format(stats.totalAmount)}</span>
+                <span className="text-[10px] text-muted-foreground/80">共 {stats.totalPurchases} 条</span>
               </div>
-              <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
-                <p className="text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300">待审批</p>
-                <p className="mt-2 text-2xl font-semibold text-amber-800 dark:text-amber-200">
-                  {amountFormatter.format(stats.pendingAmount)}
-                </p>
-                <p className="text-xs text-amber-700/80 dark:text-amber-200/80">{stats.pendingCount} 条待处理</p>
+              <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
+                <span className="font-medium text-foreground">待审批</span>
+                <span className="font-semibold text-amber-600 dark:text-amber-400">{amountFormatter.format(stats.pendingAmount)}</span>
+                <span className="text-[10px] text-muted-foreground/80">{stats.pendingCount} 条</span>
               </div>
-              <div className="rounded-xl border border-sky-100 bg-sky-50 p-4 dark:border-sky-900/40 dark:bg-sky-950/30">
-                <p className="text-xs uppercase tracking-wide text-sky-700 dark:text-sky-200">已批准</p>
-                <p className="mt-2 text-2xl font-semibold text-sky-800 dark:text-sky-100">
-                  {amountFormatter.format(stats.approvedAmount)}
-                </p>
-                <p className="text-xs text-sky-700/80 dark:text-sky-200/80">{stats.approvedCount} 条待打款</p>
+              <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
+                <span className="font-medium text-foreground">已批准</span>
+                <span className="font-semibold text-sky-600 dark:text-sky-400">{amountFormatter.format(stats.approvedAmount)}</span>
+                <span className="text-[10px] text-muted-foreground/80">{stats.approvedCount} 条</span>
               </div>
-              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/30">
-                <p className="text-xs uppercase tracking-wide text-emerald-700 dark:text-emerald-200">已打款</p>
-                <p className="mt-2 text-2xl font-semibold text-emerald-800 dark:text-emerald-100">
-                  {amountFormatter.format(stats.paidAmount)}
-                </p>
-                <p className="text-xs text-emerald-700/80 dark:text-emerald-200/80">{stats.paidCount} 条已完成</p>
+              <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
+                <span className="font-medium text-foreground">已打款</span>
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">{amountFormatter.format(stats.paidAmount)}</span>
+                <span className="text-[10px] text-muted-foreground/80">{stats.paidCount} 条</span>
               </div>
             </>
           ) : (
-            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800/40 dark:text-gray-400">
+            <div className="rounded-full border border-dashed border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground">
               {statsLoading ? '正在加载统计信息…' : '暂无统计数据'}
             </div>
           )}
@@ -1000,7 +992,7 @@ export default function PurchasesClient() {
 
       <div className="grid gap-4 md:grid-cols-3">
         {Object.entries(statusSummary).map(([status, count]) => (
-          <div key={status} className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+          <div key={status} className="rounded-lg border border-border bg-white p-4 dark:border-border dark:bg-gray-900">
             <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
               {getPurchaseStatusText(status as PurchaseStatus)}
             </p>
@@ -1009,7 +1001,7 @@ export default function PurchasesClient() {
         ))}
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+      <div className="rounded-lg border border-border bg-white shadow-sm dark:border-border dark:bg-gray-900">
         <PurchaseTable
           purchases={records}
           loading={loading || isPending}
@@ -1033,7 +1025,7 @@ export default function PurchasesClient() {
             <select
               value={pageSize}
               onChange={(event) => handlePageSizeChange(Number(event.target.value))}
-              className="rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              className="rounded border border-border px-2 py-1 text-sm focus:border-blue-500 focus:outline-none dark:border-border dark:bg-gray-800 dark:text-gray-100"
             >
               {PAGE_SIZE_OPTIONS.map((size) => (
                 <option key={size} value={size}>
@@ -1045,14 +1037,14 @@ export default function PurchasesClient() {
               <button
                 onClick={() => handlePageChange('prev')}
                 disabled={page === 1}
-                className="rounded border border-gray-300 px-3 py-1 text-sm hover:bg-gray-100 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800"
+                className="rounded border border-border px-3 py-1 text-sm hover:bg-gray-100 disabled:opacity-50 dark:border-border dark:bg-gray-800"
               >
                 上一页
               </button>
               <button
                 onClick={() => handlePageChange('next')}
                 disabled={page === totalPages}
-                className="rounded border border-gray-300 px-3 py-1 text-sm hover:bg-gray-100 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800"
+                className="rounded border border-border px-3 py-1 text-sm hover:bg-gray-100 disabled:opacity-50 dark:border-border dark:bg-gray-800"
               >
                 下一页
               </button>

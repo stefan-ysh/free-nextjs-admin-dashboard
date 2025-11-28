@@ -112,11 +112,20 @@ function toFormState(event: CalendarEventRecord): CalendarFormState {
 function normalizeSelection(selectInfo: DateSelectArg): { startDate: string; endDate: string; allDay: boolean } {
   const startDate = formatDateInput(selectInfo.startStr);
   let endDate = formatDateInput(selectInfo.endStr ?? selectInfo.startStr);
-  if (selectInfo.allDay && selectInfo.end) {
-    const actualEnd = new Date(selectInfo.end);
-    actualEnd.setDate(actualEnd.getDate() - 1);
-    endDate = formatDateInput(actualEnd.toISOString());
+
+  // FullCalendar's end date for all-day events is exclusive (next day after selection)
+  // We need to subtract 1 day to get the actual last selected date
+  if (selectInfo.allDay && selectInfo.endStr) {
+    // Use the date string directly to avoid timezone issues
+    const endParts = selectInfo.endStr.split('-');
+    const endDateObj = new Date(Date.UTC(parseInt(endParts[0]), parseInt(endParts[1]) - 1, parseInt(endParts[2])));
+    endDateObj.setUTCDate(endDateObj.getUTCDate() - 1);
+    const year = endDateObj.getUTCFullYear();
+    const month = String(endDateObj.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(endDateObj.getUTCDate()).padStart(2, '0');
+    endDate = `${year}-${month}-${day}`;
   }
+
   return {
     startDate,
     endDate: endDate || startDate,
@@ -395,7 +404,7 @@ const Calendar = () => {
 
   return (
     <TooltipProvider>
-      <div className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
+      <div className="flex h-full flex-col rounded-2xl border border-border bg-white p-5 dark:border-border dark:bg-white/[0.03] md:p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">团队日程</h2>
@@ -502,75 +511,75 @@ const Calendar = () => {
               }
             >
               <div className="space-y-4">
-              <div className="grid gap-2">
-                <Label htmlFor="title">标题</Label>
-                <Input id="title" value={formState.title} onChange={(event) => setFormState((prev) => ({ ...prev, title: event.target.value }))} placeholder="如：成本评审会" />
-              </div>
-
-              <div className="grid gap-2">
-                <div className="flex items-center gap-2">
-                  <Label>类型</Label>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button type="button" aria-label="类型说明" className="text-gray-400 transition hover:text-gray-600 dark:hover:text-gray-200">
-                        <Info className="h-3.5 w-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>标签用于渲染不同的颜色和含义。</TooltipContent>
-                  </Tooltip>
+                <div className="grid gap-2">
+                  <Label htmlFor="title">标题</Label>
+                  <Input id="title" value={formState.title} onChange={(event) => setFormState((prev) => ({ ...prev, title: event.target.value }))} placeholder="如：成本评审会" />
                 </div>
-                <Select value={formState.calendar} onValueChange={(value) => setFormState((prev) => ({ ...prev, calendar: value as CalendarEventCategory }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(palette).map(([value, meta]) => (
-                      <SelectItem key={value} value={value}>
-                        <div className="flex items-center gap-2">
-                          <span className={cn('h-2 w-2 rounded-full', meta.dot)} />
-                          {meta.label}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <DatePicker label="开始日期" value={formState.startDate} onChange={(value) => setFormState((prev) => ({ ...prev, startDate: value, endDate: prev.endDate || value }))} clearable={false} />
-                <DatePicker label="结束日期" value={formState.endDate} onChange={(value) => setFormState((prev) => ({ ...prev, endDate: value }))} clearable={false} />
-              </div>
-
-              <div className="flex items-center justify-between rounded-lg border border-dashed border-gray-200 px-4 py-3 dark:border-gray-700">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">全天日程</p>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button type="button" aria-label="全天日程说明" className="text-gray-400 transition hover:text-gray-600 dark:hover:text-gray-200">
-                        <Info className="h-3.5 w-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>关闭后可设置具体的起止时间</TooltipContent>
-                  </Tooltip>
+                <div className="grid gap-2">
+                  <div className="flex items-center gap-2">
+                    <Label>类型</Label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" aria-label="类型说明" className="text-gray-400 transition hover:text-gray-600 dark:hover:text-gray-200">
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>标签用于渲染不同的颜色和含义。</TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <Select value={formState.calendar} onValueChange={(value) => setFormState((prev) => ({ ...prev, calendar: value as CalendarEventCategory }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(palette).map(([value, meta]) => (
+                        <SelectItem key={value} value={value}>
+                          <div className="flex items-center gap-2">
+                            <span className={cn('h-2 w-2 rounded-full', meta.dot)} />
+                            {meta.label}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Switch checked={formState.allDay} onCheckedChange={(checked) => setFormState((prev) => ({ ...prev, allDay: checked }))} />
-              </div>
 
-              {!formState.allDay ? (
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="grid gap-2">
-                    <Label htmlFor="startTime">开始时间</Label>
-                    <Input id="startTime" type="time" value={formState.startTime} onChange={(event) => setFormState((prev) => ({ ...prev, startTime: event.target.value }))} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="endTime">结束时间</Label>
-                    <Input id="endTime" type="time" value={formState.endTime} onChange={(event) => setFormState((prev) => ({ ...prev, endTime: event.target.value }))} />
-                  </div>
+                  <DatePicker label="开始日期" value={formState.startDate} onChange={(value) => setFormState((prev) => ({ ...prev, startDate: value, endDate: prev.endDate || value }))} clearable={false} />
+                  <DatePicker label="结束日期" value={formState.endDate} onChange={(value) => setFormState((prev) => ({ ...prev, endDate: value }))} clearable={false} />
                 </div>
-              ) : null}
 
-              <div className="grid gap-2">
-                <Label htmlFor="location">地点 (可选)</Label>
-                <Input id="location" value={formState.location} onChange={(event) => setFormState((prev) => ({ ...prev, location: event.target.value }))} placeholder="如：上海总部 3F 大会议室" />
-              </div>
+                <div className="flex items-center justify-between rounded-lg border border-dashed border-border px-4 py-3 dark:border-border">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">全天日程</p>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" aria-label="全天日程说明" className="text-gray-400 transition hover:text-gray-600 dark:hover:text-gray-200">
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>关闭后可设置具体的起止时间</TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <Switch checked={formState.allDay} onCheckedChange={(checked) => setFormState((prev) => ({ ...prev, allDay: checked }))} />
+                </div>
+
+                {!formState.allDay ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="startTime">开始时间</Label>
+                      <Input id="startTime" type="time" value={formState.startTime} onChange={(event) => setFormState((prev) => ({ ...prev, startTime: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="endTime">结束时间</Label>
+                      <Input id="endTime" type="time" value={formState.endTime} onChange={(event) => setFormState((prev) => ({ ...prev, endTime: event.target.value }))} />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="grid gap-2">
+                  <Label htmlFor="location">地点 (可选)</Label>
+                  <Input id="location" value={formState.location} onChange={(event) => setFormState((prev) => ({ ...prev, location: event.target.value }))} placeholder="如：上海总部 3F 大会议室" />
+                </div>
 
                 <div className="grid gap-2">
                   <Label htmlFor="description">描述 (可选)</Label>

@@ -75,6 +75,7 @@ export default function ClientSelector({
 				setOptions(payload.data);
 			} catch (optionError) {
 				if (controller.signal.aborted || aborted) return;
+				if (optionError instanceof DOMException && optionError.name === 'AbortError') return;
 				setError(optionError instanceof Error ? optionError.message : '获取客户失败');
 				setOptions([]);
 			} finally {

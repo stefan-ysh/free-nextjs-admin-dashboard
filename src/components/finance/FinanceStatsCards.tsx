@@ -61,21 +61,18 @@ export default function FinanceStatsCards({ stats, loading = false }: FinanceSta
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="flex flex-wrap gap-2">
       {cards.map((card) => (
-        <Card key={card.title} className="border-none">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              {card.title}
-            </CardTitle>
-            <span className={`text-2xl ${card.color}`}>{card.icon}</span>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${card.color}`}>
-              {card.isCount ? card.value : `¥${card.value.toFixed(2)}`}
-            </div>
-          </CardContent>
-        </Card>
+        <div
+          key={card.title}
+          className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm"
+        >
+          <span className="text-base">{card.icon}</span>
+          <span className="font-medium text-foreground">{card.title}</span>
+          <span className={`font-semibold ${card.color}`}>
+            {card.isCount ? card.value : `¥${card.value.toFixed(2)}`}
+          </span>
+        </div>
       ))}
     </div>
   );

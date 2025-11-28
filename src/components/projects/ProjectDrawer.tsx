@@ -96,6 +96,7 @@ export default function ProjectDrawer({ projectId, onClose, onUpdated }: Props) 
 				}
 			} catch (err) {
 				if (controller.signal.aborted || cancelled) return;
+				if (err instanceof DOMException && err.name === 'AbortError') return;
 				setError(err instanceof Error ? err.message : '加载失败');
 				setProject(null);
 			} finally {

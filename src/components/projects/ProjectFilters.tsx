@@ -55,9 +55,9 @@ export default function ProjectFilters({ value, onChange, disabled }: Props) {
 	const selectedPriority = useMemo(() => value.priority ?? 'all', [value.priority]);
 
 	return (
-		<div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-			<div className="grid gap-4 md:grid-cols-3">
-				<label className="text-sm font-medium text-muted-foreground">
+		<div className="rounded-xl border border-border bg-card p-3 shadow-sm">
+			<div className="flex flex-wrap gap-2">
+				<label className="flex-1 min-w-[200px]">
 					<span className="sr-only">搜索</span>
 					<div className="relative">
 						<Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -66,19 +66,19 @@ export default function ProjectFilters({ value, onChange, disabled }: Props) {
 							placeholder="搜索项目名称、编号、客户..."
 							value={search}
 							onChange={(event) => setSearch(event.target.value)}
-							className="pl-9"
+							className="h-9 pl-9 text-sm"
 							disabled={disabled}
 						/>
 					</div>
 				</label>
 
-				<div>
+				<div className="w-[140px]">
 					<Select
 						value={selectedStatus}
 						onValueChange={(next) => onChange({ ...value, status: next as FilterValue['status'] })}
 						disabled={disabled}
 					>
-						<SelectTrigger>
+						<SelectTrigger className="h-9 text-sm">
 							<SelectValue placeholder="状态" />
 						</SelectTrigger>
 						<SelectContent>
@@ -91,13 +91,13 @@ export default function ProjectFilters({ value, onChange, disabled }: Props) {
 					</Select>
 				</div>
 
-				<div>
+				<div className="w-[140px]">
 					<Select
 						value={selectedPriority}
 						onValueChange={(next) => onChange({ ...value, priority: next === 'all' ? undefined : (next as ProjectPriority) })}
 						disabled={disabled}
 					>
-						<SelectTrigger>
+						<SelectTrigger className="h-9 text-sm">
 							<SelectValue placeholder="优先级" />
 						</SelectTrigger>
 						<SelectContent>

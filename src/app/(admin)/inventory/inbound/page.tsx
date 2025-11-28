@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from 'sonner';
 
 const defaultPayload: InventoryInboundPayload = {
   itemId: '',
@@ -33,7 +34,6 @@ export default function InventoryInboundPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [payload, setPayload] = useState<InventoryInboundPayload>(defaultPayload);
   const [submitting, setSubmitting] = useState(false);
-  const [resultMessage, setResultMessage] = useState<string | null>(null);
 
   const selectedItem = useMemo(
     () => items.find((item) => item.id === payload.itemId),
@@ -85,11 +85,10 @@ export default function InventoryInboundPage() {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canOperate || !payload.itemId || !payload.warehouseId) {
-      setResultMessage('请选择商品与仓库');
+      toast.error('请选择商品与仓库');
       return;
     }
     setSubmitting(true);
-    setResultMessage(null);
     try {
       const res = await fetch('/api/inventory/inbound', {
         method: 'POST',
@@ -98,14 +97,14 @@ export default function InventoryInboundPage() {
       });
       if (!res.ok) {
         const error = await res.json();
-        setResultMessage(error.error ?? '创建失败');
+        toast.error(error.error ?? '创建失败');
       } else {
-        setResultMessage('入库单创建成功');
+        toast.success('入库单创建成功');
         setPayload({ ...defaultPayload });
       }
     } catch (error) {
       console.error('Failed to create inbound record', error);
-      setResultMessage('创建失败，请稍后重试');
+      toast.error('创建失败，请稍后重试');
     } finally {
       setSubmitting(false);
     }
@@ -297,12 +296,6 @@ export default function InventoryInboundPage() {
         <Button type="submit" disabled={submitting} className="w-full" size="lg">
           {submitting ? '提交中...' : '创建入库单'}
         </Button>
-
-        {resultMessage && (
-          <div className="rounded-xl border border-dashed border-gray-200 p-3 text-sm text-gray-600 dark:border-gray-700 dark:text-gray-300">
-            {resultMessage}
-          </div>
-        )}
       </form>
     </div>
   );

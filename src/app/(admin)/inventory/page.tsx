@@ -1,6 +1,19 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { Package, PackagePlus, PackageMinus, Warehouse } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import InventoryInboundForm from '@/components/inventory/InventoryInboundForm';
+import InventoryOutboundForm from '@/components/inventory/InventoryOutboundForm';
 
 import InventoryStatsCards from '@/components/inventory/InventoryStatsCards';
 import InventoryLowStockList from '@/components/inventory/InventoryLowStockList';
@@ -26,6 +39,8 @@ export default function InventoryOverviewPage() {
   const [movements, setMovements] = useState<InventoryMovementRow[]>([]);
   const [statsLoading, setStatsLoading] = useState(false);
   const [movementsLoading, setMovementsLoading] = useState(false);
+  const [inboundDrawerOpen, setInboundDrawerOpen] = useState(false);
+  const [outboundDrawerOpen, setOutboundDrawerOpen] = useState(false);
 
   useEffect(() => {
     if (!canViewDashboard) return;
@@ -89,10 +104,45 @@ export default function InventoryOverviewPage() {
         </div>
         <div className="lg:col-span-2 space-y-4">
           <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5 text-sm text-blue-900 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-100">
-            <p className="font-semibold">快速操作</p>
-            <p className="mt-1 text-xs opacity-80">
-              使用左侧导航进入商品、仓库、入库、出库等页面完成日常任务。
-            </p>
+            <p className="font-semibold mb-4">快速操作</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                variant="outline"
+                className="h-auto flex-col gap-2 py-4 bg-white/60 hover:bg-white border-blue-200 text-blue-700 hover:text-blue-800 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 dark:border-blue-800 dark:text-blue-300 dark:hover:text-blue-100"
+                onClick={() => setInboundDrawerOpen(true)}
+              >
+                <PackagePlus className="h-6 w-6" />
+                <span>入库作业</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-auto flex-col gap-2 py-4 bg-white/60 hover:bg-white border-blue-200 text-blue-700 hover:text-blue-800 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 dark:border-blue-800 dark:text-blue-300 dark:hover:text-blue-100"
+                onClick={() => setOutboundDrawerOpen(true)}
+              >
+                <PackageMinus className="h-6 w-6" />
+                <span>出库作业</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-auto flex-col gap-2 py-4 bg-white/60 hover:bg-white border-blue-200 text-blue-700 hover:text-blue-800 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 dark:border-blue-800 dark:text-blue-300 dark:hover:text-blue-100"
+                asChild
+              >
+                <Link href="/inventory/items">
+                  <Package className="h-6 w-6" />
+                  <span>商品管理</span>
+                </Link>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-auto flex-col gap-2 py-4 bg-white/60 hover:bg-white border-blue-200 text-blue-700 hover:text-blue-800 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 dark:border-blue-800 dark:text-blue-300 dark:hover:text-blue-100"
+                asChild
+              >
+                <Link href="/inventory/warehouses">
+                  <Warehouse className="h-6 w-6" />
+                  <span>仓库管理</span>
+                </Link>
+              </Button>
+            </div>
           </div>
           {canViewMovements ? (
             <InventoryMovementsTable
@@ -107,6 +157,42 @@ export default function InventoryOverviewPage() {
           )}
         </div>
       </div>
+
+      {/* Inbound Drawer */}
+      <Sheet open={inboundDrawerOpen} onOpenChange={setInboundDrawerOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>创建入库单</SheetTitle>
+            <SheetDescription>
+              填写入库信息，提交后将同步更新库存数据。
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-6">
+            <InventoryInboundForm
+              onSuccess={() => setInboundDrawerOpen(false)}
+              onCancel={() => setInboundDrawerOpen(false)}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Outbound Drawer */}
+      <Sheet open={outboundDrawerOpen} onOpenChange={setOutboundDrawerOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>创建出库单</SheetTitle>
+            <SheetDescription>
+              选择商品和客户信息，提交后将同步更新库存数据。
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-6">
+            <InventoryOutboundForm
+              onSuccess={() => setOutboundDrawerOpen(false)}
+              onCancel={() => setOutboundDrawerOpen(false)}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

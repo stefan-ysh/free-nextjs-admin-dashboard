@@ -1,9 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { CheckSquare, Square } from 'lucide-react';
 
 import InventorySpecSummary from '@/components/inventory/InventorySpecSummary';
 import InventoryItemFormDialog from '@/components/inventory/InventoryItemFormDialog';
+import QuoteGeneratorDialog from '@/components/inventory/QuoteGeneratorDialog';
 import DataState from '@/components/common/DataState';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +27,7 @@ export default function InventoryItemsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const confirm = useConfirm();
 
   const fetchItems = useCallback(async () => {
@@ -81,6 +84,28 @@ export default function InventoryItemsPage() {
     setDialogOpen(true);
   };
 
+  const isAllSelected = items.length > 0 && selectedIds.size === items.length;
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(items.map(i => i.id)));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const selectedItems = items.filter(i => selectedIds.has(i.id));
+
   if (permissionLoading) {
     return (
       <div className="space-y-6">
@@ -112,10 +137,21 @@ export default function InventoryItemsPage() {
               <Badge variant="secondary" className="rounded-full px-2 py-0 text-[11px] font-medium">
                 {items.length} 条
               </Badge>
+              {selectedIds.size > 0 && (
+                <Badge variant="outline" className="ml-2 text-blue-600 border-blue-200 bg-blue-50">
+                  已选 {selectedIds.size} 项
+                </Badge>
+              )}
             </div>
             <p className="text-xs text-gray-500">当前使用中的商品信息，支持快速编辑</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {selectedIds.size > 0 && (
+              <QuoteGeneratorDialog
+                selectedItems={selectedItems}
+                onOpenChange={(open) => !open && setSelectedIds(new Set())}
+              />
+            )}
             <Button
               onClick={fetchItems}
               variant="outline"
@@ -135,6 +171,11 @@ export default function InventoryItemsPage() {
           <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
             <thead className="bg-gray-50 text-[11px] uppercase text-gray-500 dark:bg-gray-800 dark:text-gray-400">
               <tr>
+                <th className="px-3 py-2.5 w-10">
+                  <button onClick={toggleSelectAll} className="flex items-center justify-center text-gray-400 hover:text-gray-600">
+                    {isAllSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                  </button>
+                </th>
                 <th className="px-3 py-2.5 text-left">SKU</th>
                 <th className="px-3 py-2.5 text-left">名称</th>
                 <th className="px-3 py-2.5 text-left">类别</th>
@@ -151,7 +192,7 @@ export default function InventoryItemsPage() {
               {loading ? (
                 Array.from({ length: 5 }).map((_, idx) => (
                   <tr key={idx} className="animate-pulse bg-gray-50/80 dark:bg-gray-800/40">
-                    {Array.from({ length: 10 }).map((__, cellIdx) => (
+                    {Array.from({ length: 11 }).map((__, cellIdx) => (
                       <td key={cellIdx} className="px-4 py-3">
                         <span className="inline-block h-4 w-full rounded bg-gray-200 dark:bg-gray-700" />
                       </td>
@@ -159,48 +200,59 @@ export default function InventoryItemsPage() {
                   </tr>
                 ))
               ) : items.length ? (
-                items.map((item) => (
-                  <tr key={item.id}>
-                    <td className="px-3 py-2.5 font-mono text-xs text-gray-500">{item.sku}</td>
-                    <td className="px-3 py-2.5 text-gray-900 dark:text-white">{item.name}</td>
-                    <td className="px-3 py-2.5 text-gray-600 dark:text-gray-300">
-                      {item.category ? <Badge variant="secondary">{item.category}</Badge> : '—'}
-                    </td>
-                    <td className="px-3 py-2.5 text-gray-600 dark:text-gray-300">{item.unit}</td>
-                    <td className="px-3 py-2.5 text-gray-900 dark:text-white">
-                      ¥{item.unitPrice.toLocaleString()} / {item.unit}
-                    </td>
-                    <td className="px-3 py-2.5 text-gray-900 dark:text-white">
-                      ¥{item.salePrice.toLocaleString()} / {item.unit}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <InventorySpecSummary item={item} />
-                    </td>
-                    <td className="px-3 py-2.5 text-gray-600 dark:text-gray-300">{item.safetyStock}</td>
-                    <td className="px-3 py-2.5 text-gray-500">
-                      {formatDateTimeLocal(item.createdAt) ?? item.createdAt}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex flex-wrap gap-2">
-                        <Button size="sm" variant="secondary" className="h-8 px-3" onClick={() => openEditDialog(item)}>
-                          编辑
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          className="h-8 px-3"
-                          onClick={() => handleDelete(item)}
-                          disabled={deletingId === item.id}
+                items.map((item) => {
+                  const isSelected = selectedIds.has(item.id);
+                  return (
+                    <tr key={item.id} className={isSelected ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}>
+                      <td className="px-3 py-2.5">
+                        <button
+                          onClick={() => toggleSelect(item.id)}
+                          className={`flex items-center justify-center ${isSelected ? 'text-blue-600' : 'text-gray-300 hover:text-gray-500'}`}
                         >
-                          {deletingId === item.id ? '删除中...' : '删除'}
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          {isSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                        </button>
+                      </td>
+                      <td className="px-3 py-2.5 font-mono text-xs text-gray-500">{item.sku}</td>
+                      <td className="px-3 py-2.5 text-gray-900 dark:text-white">{item.name}</td>
+                      <td className="px-3 py-2.5 text-gray-600 dark:text-gray-300">
+                        {item.category ? <Badge variant="secondary">{item.category}</Badge> : '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-gray-600 dark:text-gray-300">{item.unit}</td>
+                      <td className="px-3 py-2.5 text-gray-900 dark:text-white">
+                        ¥{item.unitPrice.toLocaleString()} / {item.unit}
+                      </td>
+                      <td className="px-3 py-2.5 text-gray-900 dark:text-white">
+                        ¥{item.salePrice.toLocaleString()} / {item.unit}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <InventorySpecSummary item={item} />
+                      </td>
+                      <td className="px-3 py-2.5 text-gray-600 dark:text-gray-300">{item.safetyStock}</td>
+                      <td className="px-3 py-2.5 text-gray-500">
+                        {formatDateTimeLocal(item.createdAt) ?? item.createdAt}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex flex-wrap gap-2">
+                          <Button size="sm" variant="secondary" className="h-8 px-3" onClick={() => openEditDialog(item)}>
+                            编辑
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="h-8 px-3"
+                            onClick={() => handleDelete(item)}
+                            disabled={deletingId === item.id}
+                          >
+                            {deletingId === item.id ? '删除中...' : '删除'}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
-                  <td colSpan={10} className="px-3 py-6">
+                  <td colSpan={11} className="px-3 py-6">
                     <DataState
                       variant="empty"
                       title="暂无商品数据"

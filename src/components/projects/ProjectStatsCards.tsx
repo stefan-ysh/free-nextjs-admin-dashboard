@@ -43,18 +43,18 @@ const cards = [
 
 export default function ProjectStatsCards({ stats, loading }: Props) {
 	return (
-		<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+		<div className="flex flex-wrap gap-2">
 			{cards.map((card) => {
 				const value = stats ? (stats[card.key] as number) : 0;
 				return (
-					<div key={card.key} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-						<div className="text-sm text-muted-foreground">{card.title}</div>
-						<div className={`mt-3 text-3xl font-semibold ${card.accent}`}>
-							{loading ? <Skeleton className="h-8 w-24" /> : card.format ? card.format(value) : `${card.prefix}${value}`}
-						</div>
-						<div className={`mt-4 rounded-xl px-3 py-2 text-xs text-muted-foreground ${card.bg}`}>
-							更新于 {stats ? formatDateTimeLocal(new Date()) ?? '--' : '--'}
-						</div>
+					<div
+						key={card.key}
+						className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm"
+					>
+						<span className="font-medium text-foreground">{card.title}</span>
+						<span className={`font-semibold ${card.accent}`}>
+							{loading ? <Skeleton className="h-3 w-12" /> : card.format ? card.format(value) : `${card.prefix}${value}`}
+						</span>
 					</div>
 				);
 			})}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { FinanceRecord, FinanceStats } from '@/types/finance';
 import FinanceTable from './FinanceTable';
@@ -69,7 +70,17 @@ export default function FinanceClient({
         setKeywordInput(keywordParam);
         setMinAmountInput(minAmountParam);
         setMaxAmountInput(maxAmountParam);
-    }, [keywordParam, minAmountParam, maxAmountParam]);
+
+        // Handle quick create action from URL
+        if (searchParams.get('action') === 'new') {
+            setIsDrawerOpen(true);
+            setEditingRecord(null);
+            // Optional: Clean up the URL after opening
+            const newParams = new URLSearchParams(searchParams.toString());
+            newParams.delete('action');
+            router.replace(`${pathname}?${newParams.toString()}`);
+        }
+    }, [keywordParam, minAmountParam, maxAmountParam, searchParams, pathname, router]);
 
     const categoryGroups = useMemo(() => {
         if (selectedType === TransactionType.INCOME) {
@@ -220,16 +231,17 @@ export default function FinanceClient({
 
             if (!res.ok) {
                 const error = await res.json();
-                alert(error.error || '操作失败');
+                toast.error(error.error || '操作失败');
                 return;
             }
 
+            toast.success(editingRecord ? '记录更新成功' : '记录添加成功');
             setIsDrawerOpen(false);
             setEditingRecord(null);
             router.refresh();
         } catch (error) {
             console.error(error);
-            alert('操作失败');
+            toast.error('操作失败');
         }
     };
 
@@ -237,13 +249,14 @@ export default function FinanceClient({
         try {
             const res = await fetch(`/api/finance/records/${id}`, { method: 'DELETE' });
             if (res.ok) {
+                toast.success('删除成功');
                 router.refresh();
             } else {
-                alert('删除失败');
+                toast.error('删除失败');
             }
         } catch (error) {
             console.error(error);
-            alert('删除失败');
+            toast.error('删除失败');
         }
     };
 
@@ -258,117 +271,112 @@ export default function FinanceClient({
     return (
         <div className="space-y-6 p-0">
             {/* Stats Section */}
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-2">
-                    <Select value={currentRange} onValueChange={handleRangeChange}>
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="时间范围" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="30d">近 30 天</SelectItem>
-                            <SelectItem value="90d">近 90 天</SelectItem>
-                            <SelectItem value="ytd">本年度</SelectItem>
-                            <SelectItem value="all">全部数据</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
+
 
             <FinanceStatsCards stats={stats} />
 
             {/* Filters */}
-            <div className="space-y-4 rounded-lg bg-white p-4 shadow-sm dark-gray-800 dark:bg-gray-900">
-                <div className="flex flex-col gap-2">
-                    <span className="text-sm font-medium text-muted-foreground">收支类型</span>
-                    <Tabs value={selectedType} onValueChange={handleTypeChange} className="w-full">
-                        <TabsList className="grid w-full grid-cols-3">
-                            <TabsTrigger value="all">全部</TabsTrigger>
-                            <TabsTrigger value={TransactionType.INCOME}>仅收入</TabsTrigger>
-                            <TabsTrigger value={TransactionType.EXPENSE}>仅支出</TabsTrigger>
-                        </TabsList>
-                    </Tabs>
-                </div>
+            <div className="rounded-lg border border-border bg-white p-3 dark:bg-gray-900">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+                    <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 lg:gap-4">
+                        <div className="space-y-1">
+                            <span className="text-xs font-medium text-muted-foreground">时间范围</span>
+                            <Select value={currentRange} onValueChange={handleRangeChange}>
+                                <SelectTrigger className="h-9 w-full">
+                                    <SelectValue placeholder="时间范围" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="30d">近 30 天</SelectItem>
+                                    <SelectItem value="90d">近 90 天</SelectItem>
+                                    <SelectItem value="ytd">本年度</SelectItem>
+                                    <SelectItem value="all">全部数据</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
-                    <div className="space-y-2">
-                        <span className="text-sm font-medium text-muted-foreground">分类</span>
-                        <Select value={categoryValue} onValueChange={handleCategoryChange}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="全部分类" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-72 overflow-y-auto">
-                                <SelectItem value="all">全部分类</SelectItem>
-                                {categoryGroups.map((group) => (
-                                    <SelectGroup key={`filter-${group.label}`}>
-                                        <SelectLabel className="text-xs text-muted-foreground">
-                                            {group.label}
-                                        </SelectLabel>
-                                        {group.options.map((option) => (
-                                            <SelectItem key={`${group.label}-${option.label}`} value={option.label}>
-                                                {option.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectGroup>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <div className="space-y-1">
+                            <span className="text-xs font-medium text-muted-foreground">收支类型</span>
+                            <Select value={selectedType} onValueChange={handleTypeChange}>
+                                <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="全部" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">全部</SelectItem>
+                                    <SelectItem value={TransactionType.INCOME}>仅收入</SelectItem>
+                                    <SelectItem value={TransactionType.EXPENSE}>仅支出</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-1">
+                            <span className="text-xs font-medium text-muted-foreground">分类</span>
+                            <Select value={categoryValue} onValueChange={handleCategoryChange}>
+                                <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="全部分类" />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-72 overflow-y-auto">
+                                    <SelectItem value="all">全部分类</SelectItem>
+                                    {categoryGroups.map((group) => (
+                                        <SelectGroup key={`filter-${group.label}`}>
+                                            <SelectLabel className="text-xs text-muted-foreground">
+                                                {group.label}
+                                            </SelectLabel>
+                                            {group.options.map((option) => (
+                                                <SelectItem key={`${group.label}-${option.label}`} value={option.label}>
+                                                    {option.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectGroup>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-1">
+                            <span className="text-xs font-medium text-muted-foreground">金额范围</span>
+                            <div className="flex items-center gap-1">
+                                <Input
+                                    type="number"
+                                    inputMode="decimal"
+                                    placeholder="Min"
+                                    className="h-9 px-2 text-xs"
+                                    value={minAmountInput}
+                                    onChange={(e) => setMinAmountInput(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()}
+                                />
+                                <span className="text-muted-foreground">-</span>
+                                <Input
+                                    type="number"
+                                    inputMode="decimal"
+                                    placeholder="Max"
+                                    className="h-9 px-2 text-xs"
+                                    value={maxAmountInput}
+                                    onChange={(e) => setMaxAmountInput(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1">
+                            <span className="text-xs font-medium text-muted-foreground">搜索</span>
+                            <Input
+                                placeholder="搜索名称/备注"
+                                className="h-9"
+                                value={keywordInput}
+                                onChange={(e) => setKeywordInput(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()}
+                            />
+                        </div>
                     </div>
 
-                    <div className="space-y-2">
-                        <span className="text-sm font-medium text-muted-foreground">最小金额</span>
-                        <Input
-                            type="number"
-                            inputMode="decimal"
-                            placeholder="¥"
-                            value={minAmountInput}
-                            onChange={(e) => setMinAmountInput(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    handleApplyFilters();
-                                }
-                            }}
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <span className="text-sm font-medium text-muted-foreground">最大金额</span>
-                        <Input
-                            type="number"
-                            inputMode="decimal"
-                            placeholder="¥"
-                            value={maxAmountInput}
-                            onChange={(e) => setMaxAmountInput(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    handleApplyFilters();
-                                }
-                            }}
-                        />
-                    </div>
-                </div>
-
-                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div className="flex flex-1 items-center gap-2">
-                        <Input
-                            placeholder="搜索名称或备注"
-                            value={keywordInput}
-                            onChange={(e) => setKeywordInput(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    handleApplyFilters();
-                                }
-                            }}
-                        />
-                        <Button variant="secondary" onClick={handleApplyFilters}>
-                            应用筛选
+                    <div className="flex items-center gap-2 pt-1">
+                        <Button variant="secondary" size="sm" onClick={handleApplyFilters} className="h-9">
+                            查询
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={handleResetFilters} className="h-9 px-2 text-muted-foreground">
+                            重置
                         </Button>
                     </div>
-                    <Button variant="ghost" onClick={handleResetFilters}>
-                        重置条件
-                    </Button>
                 </div>
             </div>
 

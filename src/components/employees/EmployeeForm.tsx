@@ -1,8 +1,7 @@
 'use client';
 
-import Image from 'next/image';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useEffect, useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -34,6 +33,9 @@ import {
 	EMPLOYMENT_STATUS_LABELS,
 	JobGradeOption,
 } from './types';
+import AvatarUpload from './AvatarUpload';
+import CustomFields from './CustomFields';
+import { useEmployeeOptions } from './useEmployeeOptions';
 
 type EmployeeFormProps = {
 	initialData?: Employee | null;
@@ -50,7 +52,6 @@ type CustomFieldRow = {
 
 const STATUS_OPTIONS = ['active', 'on_leave', 'terminated'] as const;
 const GENDER_OPTIONS = ['male', 'female', 'other'] as const;
-const MAX_AVATAR_SIZE = 1_572_864; // 1.5MB
 
 const sanitizeText = (value?: string | null) => {
 	if (!value) return null;
@@ -150,13 +151,13 @@ const employeeSchema = z.object({
 type EmployeeFormValues = z.infer<typeof employeeSchema>;
 
 export default function EmployeeForm({ initialData, onSubmit, onCancel, departmentOptions, jobGradeOptions }: EmployeeFormProps) {
-	const [avatarPreview, setAvatarPreview] = useState<string | null>(initialData?.avatarUrl ?? null);
 	const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
 	const [removeAvatar, setRemoveAvatar] = useState(false);
-	const [avatarError, setAvatarError] = useState<string | null>(null);
-	const fileInputRef = useRef<HTMLInputElement>(null);
-	const [availableDepartments, setAvailableDepartments] = useState<DepartmentOption[]>(departmentOptions ?? []);
-	const [availableJobGrades, setAvailableJobGrades] = useState<JobGradeOption[]>(jobGradeOptions ?? []);
+
+	const { departments: availableDepartments, jobGrades: availableJobGrades } = useEmployeeOptions({
+		initialDepartments: departmentOptions,
+		initialJobGrades: jobGradeOptions,
+	});
 
 	const form = useForm<EmployeeFormValues>({
 		resolver: zodResolver(employeeSchema),
@@ -164,74 +165,13 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 	});
 
 	const { control, reset, handleSubmit, formState } = form;
-	const { fields, append, remove } = useFieldArray({ control, name: 'customFields' });
 	const watchedStatus = form.watch('employmentStatus');
 	const statusChanged = initialData ? watchedStatus !== initialData.employmentStatus : false;
 
 	useEffect(() => {
-		if (departmentOptions?.length) {
-			setAvailableDepartments(departmentOptions);
-		}
-	}, [departmentOptions]);
-
-	useEffect(() => {
-		if (jobGradeOptions?.length) {
-			setAvailableJobGrades(jobGradeOptions);
-		}
-	}, [jobGradeOptions]);
-
-	useEffect(() => {
-		if (departmentOptions?.length) {
-			return;
-		}
-		let cancelled = false;
-		async function fetchDepartments() {
-			try {
-				const response = await fetch('/api/employees/departments');
-				if (!response.ok) return;
-				const data = await response.json();
-				if (!cancelled && data.success && Array.isArray(data.data)) {
-					setAvailableDepartments(data.data);
-				}
-			} catch (error) {
-				console.error('加载部门列表失败', error);
-			}
-		}
-		fetchDepartments();
-		return () => {
-			cancelled = true;
-		};
-	}, [departmentOptions]);
-
-	useEffect(() => {
-		if (jobGradeOptions?.length) {
-			return;
-		}
-		let cancelled = false;
-		async function fetchJobGrades() {
-			try {
-				const response = await fetch('/api/employees/job-grades');
-				if (!response.ok) return;
-				const data = await response.json();
-				if (!cancelled && data.success && Array.isArray(data.data)) {
-					setAvailableJobGrades(data.data);
-				}
-			} catch (error) {
-				console.error('加载职级列表失败', error);
-			}
-		}
-		fetchJobGrades();
-		return () => {
-			cancelled = true;
-		};
-	}, [jobGradeOptions]);
-
-	useEffect(() => {
 		reset(buildDefaultValues(initialData));
-		setAvatarPreview(initialData?.avatarUrl ?? null);
 		setAvatarDataUrl(null);
 		setRemoveAvatar(false);
-		setAvatarError(null);
 	}, [initialData, reset]);
 
 	useEffect(() => {
@@ -296,82 +236,26 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 		await onSubmit(payload);
 	});
 
-	const handlePickAvatar = () => {
-		fileInputRef.current?.click();
-	};
-
-	const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-		const file = event.target.files?.[0];
-		event.target.value = '';
-		if (!file) return;
-
-		if (file.size > MAX_AVATAR_SIZE) {
-			setAvatarError('请选择 1.5MB 以下的图片');
-			return;
-		}
-
-		setAvatarError(null);
-		const reader = new FileReader();
-		reader.onload = () => {
-			if (typeof reader.result === 'string') {
-				setAvatarPreview(reader.result);
-				setAvatarDataUrl(reader.result);
-				setRemoveAvatar(false);
-			}
-		};
-		reader.onerror = () => {
-			setAvatarError('读取图片失败，请重试');
-		};
-		reader.readAsDataURL(file);
+	const handleAvatarChange = (dataUrl: string | null) => {
+		setAvatarDataUrl(dataUrl);
+		setRemoveAvatar(false);
 	};
 
 	const handleAvatarRemove = () => {
-		setAvatarPreview(null);
 		setAvatarDataUrl(null);
 		setRemoveAvatar(true);
-		setAvatarError(null);
 	};
-
-	const resolvedAvatar = removeAvatar ? null : avatarPreview ?? initialData?.avatarUrl ?? null;
 
 	return (
 		<Form {...form}>
 			<form onSubmit={handleFormSubmit} className="space-y-6">
-				<input
-					type="file"
-					accept="image/*"
-					ref={fileInputRef}
-					className="hidden"
-					onChange={handleAvatarChange}
+				<AvatarUpload
+					initialAvatarUrl={initialData?.avatarUrl}
+					onAvatarChange={handleAvatarChange}
+					onAvatarRemove={handleAvatarRemove}
+					disabled={formState.isSubmitting}
 				/>
 
-				<div className="flex items-center gap-4 rounded-2xl border border-border bg-muted/20 p-4">
-					<div className="relative h-20 w-20 overflow-hidden rounded-full border border-border">
-						<Image
-							src={resolvedAvatar ?? '/images/user/owner.jpg'}
-							alt="员工头像预览"
-							width={80}
-							height={80}
-							className="object-cover"
-							unoptimized
-						/>
-					</div>
-					<div className="flex flex-1 flex-col gap-2 text-sm">
-						<div className="font-medium text-foreground">头像</div>
-						<p className="text-xs text-muted-foreground">支持 PNG/JPG/GIF，建议 400×400 像素以内，最大 1.5MB。</p>
-						<div className="flex flex-wrap gap-2">
-							<Button type="button" size="sm" onClick={handlePickAvatar} disabled={formState.isSubmitting}>
-								{resolvedAvatar ? '更换头像' : '上传头像'}
-							</Button>
-							{resolvedAvatar && (
-								<Button type="button" variant="outline" size="sm" onClick={handleAvatarRemove} disabled={formState.isSubmitting}>
-									移除
-								</Button>
-							)}
-						</div>
-						{avatarError && <p className="text-xs text-destructive">{avatarError}</p>}
-					</div>
-				</div>
 				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 					<FormField
 						control={control}
@@ -753,67 +637,16 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 					/>
 				</div>
 
-				<div className="rounded-2xl border border-dashed border-border p-4">
-					<div className="mb-3 flex items-center justify-between">
-						<h3 className="text-sm font-medium text-foreground">自定义字段</h3>
-						<Button type="button" variant="ghost" size="sm" onClick={() => append({ key: '', value: '' })}>
-							+ 添加字段
-						</Button>
-					</div>
-					<div className="space-y-3">
-						{fields.map((field, index) => (
-							<div key={field.id} className="grid grid-cols-1 gap-3 md:grid-cols-2">
-								<FormField
-									control={control}
-									name={`customFields.${index}.key` as const}
-									render={({ field: fieldProps }) => (
-										<FormItem>
-											<FormLabel>字段名</FormLabel>
-											<FormControl>
-												<Input placeholder="例如 员工编号2" {...fieldProps} />
-											</FormControl>
-											<FormMessage />
-										</FormItem>
-									)}
-								/>
-								<div className="flex gap-2">
-									<FormField
-										control={control}
-										name={`customFields.${index}.value` as const}
-										render={({ field: fieldProps }) => (
-											<FormItem className="flex-1">
-												<FormLabel>字段值</FormLabel>
-												<FormControl>
-													<Input placeholder="字段值" {...fieldProps} />
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-									{fields.length > 1 && (
-										<Button
-											type="button"
-											variant="ghost"
-											className="shrink-0"
-											onClick={() => remove(index)}
-										>
-											删除
-										</Button>
-									)}
-								</div>
-							</div>
-						))}
-					</div>
-				</div>
+				<CustomFields control={control} name="customFields" disabled={formState.isSubmitting} />
 
-				<div className="flex justify-end gap-3">
+				<div className="flex justify-end gap-4">
 					{onCancel && (
 						<Button type="button" variant="outline" onClick={onCancel} disabled={formState.isSubmitting}>
 							取消
 						</Button>
 					)}
 					<Button type="submit" disabled={formState.isSubmitting}>
-						{formState.isSubmitting ? '保存中...' : initialData ? '更新' : '创建'}
+						{formState.isSubmitting ? '保存中...' : '保存'}
 					</Button>
 				</div>
 			</form>

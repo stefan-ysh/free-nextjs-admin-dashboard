@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Plus, RefreshCcw, Search, ChevronLeft, ChevronRight, Download, Upload, FileJson } from 'lucide-react';
+import { toast } from 'sonner';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import Papa from 'papaparse';
 import EmployeeForm from './EmployeeForm';
 import EmployeeStatusHistory from './EmployeeStatusHistory';
@@ -344,11 +346,16 @@ export default function EmployeeClient({
   const [roleTarget, setRoleTarget] = useState<Employee | null>(null);
   const [roleSaving, setRoleSaving] = useState(false);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
-  const { loading: permissionLoading, hasPermission } = usePermissions();
+  const { hasPermission, loading: permissionLoading } = usePermissions();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const confirm = useConfirm();
   const hasFetchedInitial = useRef(initialData.length > 0);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSearchTermRef = useRef(DEFAULT_FILTERS.search);
+
+
 
   const permissionFlags = useMemo(() => {
     if (permissionLoading) {
@@ -488,7 +495,7 @@ export default function EmployeeClient({
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('导出员工失败', error);
-      alert(error instanceof Error ? error.message : '导出失败');
+      toast.error(error instanceof Error ? error.message : '导出失败');
     } finally {
       setExporting(false);
     }
@@ -692,7 +699,7 @@ export default function EmployeeClient({
 
   const handleCreate = useCallback(async (payload: EmployeeFormSubmitPayload) => {
     if (!canCreateEmployee) {
-      alert('当前账户无权创建员工记录');
+      toast.error('当前账户无权创建员工记录');
       return;
     }
     try {
@@ -705,11 +712,12 @@ export default function EmployeeClient({
       if (!response.ok || !data.success) {
         throw new Error(data.error || '创建失败');
       }
+      toast.success('员工创建成功');
       setIsFormOpen(false);
       refreshList();
     } catch (err) {
       console.error('创建员工失败', err);
-      alert(err instanceof Error ? err.message : '创建失败');
+      toast.error(err instanceof Error ? err.message : '创建失败');
     }
   }, [refreshList, canCreateEmployee]);
 
@@ -717,7 +725,7 @@ export default function EmployeeClient({
     async (payload: EmployeeFormSubmitPayload) => {
       if (!selectedEmployee) return;
       if (!canUpdateEmployee) {
-        alert('当前账户无权更新员工记录');
+        toast.error('当前账户无权更新员工记录');
         return;
       }
       try {
@@ -735,10 +743,13 @@ export default function EmployeeClient({
         }
         setIsEditMode(false);
         setStatusHistoryRefreshSignal((value) => value + 1);
+        setIsEditMode(false);
+        setStatusHistoryRefreshSignal((value) => value + 1);
+        toast.success('员工信息更新成功');
         refreshList();
       } catch (err) {
         console.error('更新员工失败', err);
-        alert(err instanceof Error ? err.message : '更新失败');
+        toast.error(err instanceof Error ? err.message : '更新失败');
       }
     },
     [selectedEmployee, refreshList, canUpdateEmployee]
@@ -747,7 +758,7 @@ export default function EmployeeClient({
   const handleDelete = useCallback(
     async (employee: Employee) => {
       if (!canDeleteEmployee) {
-        alert('当前账户无权删除员工记录');
+        toast.error('当前账户无权删除员工记录');
         return;
       }
       const confirmed = await confirm({
@@ -764,10 +775,14 @@ export default function EmployeeClient({
         if (!response.ok || !data.success) {
           throw new Error(data.error || '删除失败');
         }
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || '删除失败');
+        }
+        toast.success('员工已删除');
         refreshList();
       } catch (err) {
         console.error('删除员工失败', err);
-        alert(err instanceof Error ? err.message : '删除失败');
+        toast.error(err instanceof Error ? err.message : '删除失败');
       }
     },
     [refreshList, canDeleteEmployee, confirm]
@@ -776,7 +791,7 @@ export default function EmployeeClient({
   const handleEdit = useCallback(
     (employee: Employee) => {
       if (!canUpdateEmployee) {
-        alert('当前账户无权编辑员工记录');
+        toast.error('当前账户无权编辑员工记录');
         return;
       }
       setSelectedEmployee(employee);
@@ -788,7 +803,7 @@ export default function EmployeeClient({
 
   const handleCreateClick = useCallback(() => {
     if (!canCreateEmployee) {
-      alert('当前账户无权创建员工记录');
+      toast.error('当前账户无权创建员工记录');
       return;
     }
     setSelectedEmployee(null);
@@ -816,11 +831,11 @@ export default function EmployeeClient({
   const handleRoleAssignClick = useCallback(
     (employee: Employee) => {
       if (!canAssignRoles) {
-        alert('当前账户无权设置角色');
+        toast.error('当前账户无权设置角色');
         return;
       }
       if (!employee.userId) {
-        alert('该员工尚未绑定系统账号，无法设置角色');
+        toast.error('该员工尚未绑定系统账号，无法设置角色');
         return;
       }
       setRoleTarget(employee);
@@ -840,7 +855,7 @@ export default function EmployeeClient({
     async ({ roles, primaryRole }: RoleAssignmentPayload) => {
       if (!roleTarget) return;
       if (!canAssignRoles) {
-        alert('当前账户无权设置角色');
+        toast.error('当前账户无权设置角色');
         return;
       }
       setRoleSaving(true);
@@ -866,7 +881,7 @@ export default function EmployeeClient({
         setRoleTarget(null);
       } catch (error) {
         console.error('设置角色失败', error);
-        alert(error instanceof Error ? error.message : '设置角色失败');
+        toast.error(error instanceof Error ? error.message : '设置角色失败');
       } finally {
         setRoleSaving(false);
       }
@@ -887,6 +902,18 @@ export default function EmployeeClient({
     if (permissionLoading || !canViewEmployees) {
       return;
     }
+
+    // Handle quick create action from URL
+    if (searchParams.get('action') === 'new' && canCreateEmployee) {
+      setSelectedEmployee(null);
+      setIsEditMode(false);
+      setIsFormOpen(true);
+      // Clean up URL
+      const newParams = new URLSearchParams(searchParams.toString());
+      newParams.delete('action');
+      router.replace(`${pathname}?${newParams.toString()}`);
+    }
+
     if (hasFetchedInitial.current) {
       return;
     }
@@ -895,7 +922,7 @@ export default function EmployeeClient({
       console.error('初始化员工列表失败', err);
       hasFetchedInitial.current = false;
     });
-  }, [permissionLoading, canViewEmployees, initialPage, initialPageSize, refreshList]);
+  }, [permissionLoading, canViewEmployees, initialPage, initialPageSize, refreshList, searchParams, canCreateEmployee, pathname, router]);
 
   const activeCount = useMemo(() => employees.filter((emp) => emp.employmentStatus === 'active').length, [employees]);
   const onLeaveCount = useMemo(() => employees.filter((emp) => emp.employmentStatus === 'on_leave').length, [employees]);
@@ -917,7 +944,7 @@ export default function EmployeeClient({
 
   if (permissionLoading) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+      <div className="rounded-lg border border-border bg-white p-6 text-sm text-gray-600 shadow-sm dark:border-border dark:bg-gray-900 dark:text-gray-300">
         正在加载权限信息...
       </div>
     );

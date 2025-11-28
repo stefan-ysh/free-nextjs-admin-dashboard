@@ -67,8 +67,21 @@ export async function mysqlQuery<T extends RowDataPacket = RowDataPacket>(
 ): Promise<MysqlQueryResult<T>> {
   const poolInstance = getPool();
   const { sql, values: params } = buildQuery(strings, values);
-  const [rows] = await poolInstance.query<T[]>(sql, params);
-  return { rows };
+
+  const start = performance.now();
+  try {
+    const [rows] = await poolInstance.query<T[]>(sql, params);
+    const duration = performance.now() - start;
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[MySQL] ${duration.toFixed(2)}ms - ${sql}`);
+    }
+
+    return { rows };
+  } catch (error) {
+    console.error('[MySQL Error]', sql, error);
+    throw error;
+  }
 }
 
 export { getPool as mysqlPool };

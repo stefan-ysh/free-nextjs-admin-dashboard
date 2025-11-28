@@ -69,6 +69,9 @@ export default function CustomerPicker({ value, onChange, disabled, helperText, 
         if (!aborted) setClients(payload.data.items ?? []);
       } catch (error) {
         if (controller.signal.aborted || aborted) return;
+        // Ignore abort errors
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+
         console.warn('加载客户失败', error);
         setClients([]);
       } finally {
@@ -104,6 +107,9 @@ export default function CustomerPicker({ value, onChange, disabled, helperText, 
         if (!aborted) setSelected(payload.data as Client);
       } catch (error) {
         if (controller.signal.aborted || aborted) return;
+        // Ignore abort errors
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+
         console.warn('resolve client failed', error);
         setSelected(null);
       }

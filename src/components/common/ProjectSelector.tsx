@@ -167,14 +167,14 @@ export default function ProjectSelector({ value, onChange, disabled = false, hel
 					onChange={(event) => setSearch(event.target.value)}
 					disabled={disabled}
 					placeholder="搜索项目名称、编号或客户"
-					className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+					className="w-full rounded-lg border border-border bg-white px-4 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
 				/>
 				<div className="flex gap-2">
 					<button
 						type="button"
 						onClick={() => setRefreshKey((prev) => prev + 1)}
 						disabled={disabled || loading}
-						className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+						className="rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
 					>
 						刷新列表
 					</button>
@@ -182,14 +182,14 @@ export default function ProjectSelector({ value, onChange, disabled = false, hel
 						type="button"
 						onClick={handleClear}
 						disabled={disabled || !value}
-						className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+						className="rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50 dark:border-border dark:bg-gray-800 dark:text-gray-300"
 					>
 						清除关联
 					</button>
 				</div>
 			</div>
 
-			<div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
+			<div className="rounded-2xl border border-border bg-white dark:border-border dark:bg-gray-900">
 				{loading && (
 					<div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">正在加载项目...</div>
 				)}
@@ -205,9 +205,8 @@ export default function ProjectSelector({ value, onChange, disabled = false, hel
 								type="button"
 								onClick={() => handleSelect(project)}
 								disabled={disabled}
-								className={`flex w-full flex-col gap-1 px-4 py-3 text-left transition hover:bg-gray-50 disabled:opacity-50 dark:hover:bg-gray-800 ${
-									isSelected ? 'bg-blue-50/80 hover:bg-blue-50 dark:bg-blue-500/10 dark:hover:bg-blue-500/10' : ''
-								}`}
+								className={`flex w-full flex-col gap-1 px-4 py-3 text-left transition hover:bg-gray-50 disabled:opacity-50 dark:hover:bg-gray-800 ${isSelected ? 'bg-blue-50/80 hover:bg-blue-50 dark:bg-blue-500/10 dark:hover:bg-blue-500/10' : ''
+									}`}
 							>
 								<div className="flex flex-wrap items-center justify-between gap-2">
 									<div className="text-sm font-medium text-gray-900 dark:text-gray-100">{project.projectName}</div>
@@ -229,7 +228,7 @@ export default function ProjectSelector({ value, onChange, disabled = false, hel
 			</div>
 
 			{value && resolvingSelection && (
-				<div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-300">
+				<div className="rounded-xl border border-border bg-gray-50 px-4 py-3 text-sm text-gray-500 dark:border-border dark:bg-gray-800/60 dark:text-gray-300">
 					正在同步已选项目...
 				</div>
 			)}
