@@ -126,3 +126,20 @@ docker run -d -p 3000:3000 --name my-app --env-file .env.local --restart always 
 -   **构建时内存不足？**
     -   Next.js 构建比较吃内存。如果服务器只有 1G 内存，可能会失败。
     -   **解决方法**: 在本地电脑构建好镜像，推送到 Docker Hub，然后在服务器上拉取运行。或者给服务器增加 Swap (虚拟内存)。
+
+## 5. 进阶：使用 Docker Compose (推荐)
+
+如果您觉得每次输入长长的 `docker run` 命令很麻烦，可以使用 `docker-compose`。
+
+1.  **准备**: 确保服务器安装了 Docker Compose (通常安装 Docker Desktop 或较新版本的 Docker Engine 会自带)。
+2.  **文件**: 确保项目根目录有 `docker-compose.yml` 文件。
+3.  **启动**:
+    ```bash
+    docker compose up -d
+    ```
+    这就完了！它会自动构建镜像、启动容器、映射端口 (3000)、并加载环境变量。
+
+4.  **停止**:
+    ```bash
+    docker compose down
+    ```
