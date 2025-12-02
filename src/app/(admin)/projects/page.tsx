@@ -47,31 +47,29 @@ export default function ProjectsPage() {
 	return (
 		<div className="space-y-6">
 
-			<div className="flex flex-wrap items-center justify-between gap-3">
-				<div className="flex items-center gap-2 text-sm text-muted-foreground">
-					<span>访问范围：</span>
-					<span className={canViewAll ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>
-						{canViewAll ? '全部项目' : '仅个人/参与项目'}
-					</span>
-				</div>
-				<div className="flex gap-2">
-					<Button variant="outline" size="sm" onClick={handleRefresh} disabled={statsLoading || listLoading}>
-						<RefreshCw className="mr-2 h-4 w-4" />刷新
-					</Button>
-					{canManage && (
-						<Button size="sm" onClick={() => setShowForm(true)}>
-							<Plus className="mr-2 h-4 w-4" />新建项目
-						</Button>
-					)}
-				</div>
-			</div>
-
 			<ProjectStatsCards stats={stats} loading={statsLoading} />
 
 			<ProjectFilters
 				value={{ ...filters, search: filters.search }}
 				onChange={(v) => setFilters({ search: v.search ?? '', status: v.status ?? 'all', priority: v.priority })}
 				disabled={listLoading}
+				actions={
+					<>
+						<div className="flex items-center gap-2 text-sm text-muted-foreground mr-2">
+							<span className={canViewAll ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>
+								{canViewAll ? '全部项目' : '仅个人/参与项目'}
+							</span>
+						</div>
+						<Button variant="outline" size="sm" onClick={handleRefresh} disabled={statsLoading || listLoading}>
+							<RefreshCw className="mr-2 h-4 w-4" />刷新
+						</Button>
+						{canManage && (
+							<Button size="sm" onClick={() => setShowForm(true)}>
+								<Plus className="mr-2 h-4 w-4" />新建项目
+							</Button>
+						)}
+					</>
+				}
 			/>
 
 			<ProjectTable

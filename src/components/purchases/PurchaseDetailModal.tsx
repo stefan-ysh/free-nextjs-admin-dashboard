@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
 import PurchaseApprovalFlow from './PurchaseApprovalFlow';
 import PurchaseStatusBadge from './PurchaseStatusBadge';
@@ -112,6 +112,15 @@ export default function PurchaseDetailModal({
 	detailError,
 	onReloadDetail,
 }: PurchaseDetailModalProps) {
+	useEffect(() => {
+		if (!purchase) return undefined;
+		const previousOverflow = document.body.style.overflow;
+		document.body.style.overflow = 'hidden';
+		return () => {
+			document.body.style.overflow = previousOverflow;
+		};
+	}, [purchase]);
+
 	if (!purchase) return null;
 
 	const infoRows: Array<{ label: string; value: string | number | ReactNode }> = [
@@ -154,93 +163,101 @@ export default function PurchaseDetailModal({
 	];
 
 	return (
-		<div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4 py-6">
-			<div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-2xl dark:bg-gray-900">
-				<div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-800">
-					<div>
-						<p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">采购详情</p>
-						<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{purchase.itemName}</h3>
+		<div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
+			<button
+				type="button"
+				className="absolute inset-0 h-full w-full bg-black/50 backdrop-blur-sm"
+				onClick={onClose}
+				aria-label="关闭采购详情"
+			/>
+			<div className="relative z-10 flex h-full w-full items-center justify-center px-4 py-6">
+				<div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-2xl dark:bg-gray-900">
+					<div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+						<div>
+							<p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">采购详情</p>
+							<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{purchase.itemName}</h3>
+						</div>
+						<button
+							type="button"
+							onClick={onClose}
+							className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300"
+						>
+							关闭
+						</button>
 					</div>
-					<button
-						type="button"
-						onClick={onClose}
-						className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300"
-					>
-						关闭
-					</button>
-				</div>
-				<div className="space-y-6 px-6 py-5">
-					{detailLoading && (
-						<div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-200">
-							正在同步最新审批状态...
-						</div>
-					)}
-					{detailError && (
-						<div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
-							<span>{detailError}</span>
-							{onReloadDetail && (
-								<button
-									type="button"
-									onClick={onReloadDetail}
-									className="rounded border border-rose-400 px-2 py-1 text-rose-600 hover:bg-rose-100 dark:border-rose-300 dark:text-rose-100"
-								>
-									重试
-								</button>
-							)}
-						</div>
-					)}
-					<div className="grid gap-6 lg:grid-cols-12">
-						<div className="space-y-6 lg:col-span-7">
-							<div className="grid gap-4 md:grid-cols-2">
-								{infoRows.map((row) => (
-									<div key={row.label} className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
-										<p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">{row.label}</p>
-										<div className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">{row.value}</div>
-									</div>
-								))}
+					<div className="space-y-6 px-6 py-5">
+						{detailLoading && (
+							<div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-200">
+								正在同步最新审批状态...
 							</div>
-							<div className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
-								<p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">采购用途</p>
-								<p className="mt-2 text-sm text-gray-800 dark:text-gray-200">{purchase.purpose}</p>
+						)}
+						{detailError && (
+							<div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
+								<span>{detailError}</span>
+								{onReloadDetail && (
+									<button
+										type="button"
+										onClick={onReloadDetail}
+										className="rounded border border-rose-400 px-2 py-1 text-rose-600 hover:bg-rose-100 dark:border-rose-300 dark:text-rose-100"
+									>
+										重试
+									</button>
+								)}
 							</div>
-							{(purchase.attachments.length || purchase.invoiceImages.length || purchase.receiptImages.length) ? (
-								<div className="grid gap-4 md:grid-cols-3">
-									{[
-										{ label: '附件', items: purchase.attachments },
-										{ label: '发票', items: purchase.invoiceImages },
-										{ label: '收据', items: purchase.receiptImages },
-									].map((group) => (
-										<div key={group.label} className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
-											<p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">{group.label}</p>
-											{group.items.length ? (
-												<ul className="mt-2 space-y-1 text-xs text-blue-600 dark:text-blue-300">
-													{group.items.map((item, index) => (
-														<li key={`${group.label}-${index}`} className="truncate">
-															<a href={item} target="_blank" rel="noreferrer" className="hover:underline">
-																{item}
-															</a>
-														</li>
-													))}
-												</ul>
-											) : (
-												<p className="mt-2 text-xs text-gray-500 dark:text-gray-400">暂无</p>
-											)}
+						)}
+						<div className="grid gap-6 lg:grid-cols-12">
+							<div className="space-y-6 lg:col-span-7">
+								<div className="grid gap-4 md:grid-cols-2">
+									{infoRows.map((row) => (
+										<div key={row.label} className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+											<p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">{row.label}</p>
+											<div className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">{row.value}</div>
 										</div>
 									))}
 								</div>
-							) : null}
-						</div>
-						<div className="lg:col-span-5">
-							<PurchaseApprovalFlow
-								purchase={purchase}
-								permissions={permissions}
-								onSubmit={onSubmit}
-								onWithdraw={onWithdraw}
-								onApprove={onApprove}
-								onReject={onReject}
-								onPay={onPay}
-								busy={busy}
-							/>
+								<div className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+									<p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">采购用途</p>
+									<p className="mt-2 text-sm text-gray-800 dark:text-gray-200">{purchase.purpose}</p>
+								</div>
+								{(purchase.attachments.length || purchase.invoiceImages.length || purchase.receiptImages.length) ? (
+									<div className="grid gap-4 md:grid-cols-3">
+										{[
+											{ label: '附件', items: purchase.attachments },
+											{ label: '发票', items: purchase.invoiceImages },
+											{ label: '收据', items: purchase.receiptImages },
+										].map((group) => (
+											<div key={group.label} className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+												<p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">{group.label}</p>
+												{group.items.length ? (
+													<ul className="mt-2 space-y-1 text-xs text-blue-600 dark:text-blue-300">
+														{group.items.map((item, index) => (
+															<li key={`${group.label}-${index}`} className="truncate">
+																<a href={item} target="_blank" rel="noreferrer" className="hover:underline">
+																	{item}
+																</a>
+															</li>
+														))}
+													</ul>
+												) : (
+													<p className="mt-2 text-xs text-gray-500 dark:text-gray-400">暂无</p>
+												)}
+											</div>
+										))}
+									</div>
+								) : null}
+							</div>
+							<div className="lg:col-span-5">
+								<PurchaseApprovalFlow
+									purchase={purchase}
+									permissions={permissions}
+									onSubmit={onSubmit}
+									onWithdraw={onWithdraw}
+									onApprove={onApprove}
+									onReject={onReject}
+									onPay={onPay}
+									busy={busy}
+								/>
+							</div>
 						</div>
 					</div>
 				</div>

@@ -76,6 +76,7 @@ export default async function FinancePage({
         canView: viewPerm.allowed,
         canManage: managePerm.allowed,
       }}
+      currentUserId={context.user.id}
     />
   );
 }

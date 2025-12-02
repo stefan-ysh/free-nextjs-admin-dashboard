@@ -226,6 +226,7 @@ export default function PurchaseApprovalsClient() {
         rejecter: null,
         payer: null,
         logs: [],
+        supplier: null,
       });
       void loadPurchaseDetail(purchase.id);
     },

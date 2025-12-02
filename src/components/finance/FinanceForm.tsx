@@ -30,6 +30,7 @@ import DatePicker from '@/components/ui/DatePicker';
 import FileUpload from '@/components/common/FileUpload';
 import { Label } from '@/components/ui/label';
 import { getCategoryGroups } from '@/constants/finance-categories';
+import UserSelect from '@/components/common/UserSelect';
 
 interface FinanceFormProps {
   initialData?: Partial<FinanceRecord>;
@@ -37,6 +38,7 @@ interface FinanceFormProps {
   onCancel?: () => void;
   incomeCategories: string[];
   expenseCategories: string[];
+  currentUserId: string;
 }
 
 export type FinanceFormSubmitPayload = FinanceRecordFormValues;
@@ -47,6 +49,7 @@ export default function FinanceForm({
   onCancel,
   incomeCategories,
   expenseCategories,
+  currentUserId,
 }: FinanceFormProps) {
   const [loading, setLoading] = useState(false);
   const isEditing = Boolean(initialData?.id);
@@ -67,6 +70,7 @@ export default function FinanceForm({
     date: initialData?.date?.split('T')[0] ?? new Date().toISOString().split('T')[0],
     description: initialData?.description ?? '',
     tags: initialData?.tags ?? [],
+    handlerId: (initialData?.metadata as any)?.handlerId ?? currentUserId,
     invoice: {
       type: initialData?.invoice?.type ?? InvoiceType.NONE,
       status: initialData?.invoice?.status ?? InvoiceStatus.NOT_REQUIRED,
@@ -183,6 +187,24 @@ export default function FinanceForm({
                     value={field.value}
                     onChange={field.onChange}
                     required
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="handlerId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>经办人</FormLabel>
+                <FormControl>
+                  <UserSelect
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="选择经办人"
                   />
                 </FormControl>
                 <FormMessage />

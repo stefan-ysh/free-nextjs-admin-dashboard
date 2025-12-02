@@ -28,6 +28,7 @@ type FinanceRecordFilters = {
   minAmount?: number;
   maxAmount?: number;
   keyword?: string;
+  handlerId?: string;
 };
 
 type FinanceRecordQueryOptions = FinanceRecordFilters & {
@@ -56,6 +57,7 @@ type FinanceRecordRow = RowDataPacket & {
   source_type: FinanceSourceType;
   status: FinanceRecordStatus;
   purchase_id: string | null;
+  supplier_id: string | null;
   project_id: string | null;
   inventory_movement_id: string | null;
   project_payment_id: string | null;
@@ -125,6 +127,7 @@ function mapFinanceRecord(row: FinanceRecordRow): FinanceRecord {
     createdBy: row.created_by ?? undefined,
     sourceType: row.source_type ?? 'manual',
     purchaseId: row.purchase_id ?? undefined,
+    supplierId: row.supplier_id ?? undefined,
     projectId: row.project_id ?? undefined,
     inventoryMovementId: row.inventory_movement_id ?? undefined,
     projectPaymentId: row.project_payment_id ?? undefined,
@@ -192,6 +195,12 @@ function buildFinanceFilters(filters: FinanceRecordFilters = {}) {
     const like = `%${filters.keyword}%`;
     conditions.push('(name LIKE ? OR description LIKE ?)');
     params.push(like, like);
+  }
+
+  if (filters.handlerId) {
+    // Filter by handlerId in metadata JSON field
+    conditions.push('JSON_UNQUOTE(JSON_EXTRACT(metadata_json, "$.handlerId")) = ?');
+    params.push(filters.handlerId);
   }
 
   return {
@@ -287,6 +296,7 @@ export async function createRecord(
   const status: FinanceRecordStatus = record.status ?? 'draft';
   const projectId = record.projectId ?? null;
   const purchaseId = record.purchaseId ?? null;
+  const supplierId = record.supplierId ?? null;
   const inventoryMovementId = record.inventoryMovementId ?? null;
   const projectPaymentId = record.projectPaymentId ?? null;
   const quantity = record.quantity ?? 1;
@@ -304,9 +314,9 @@ export async function createRecord(
       contract_amount, fee, total_amount, payment_type,
       quantity, payment_channel, payer, transaction_no,
       invoice_json, description, tags_json, created_by,
-      source_type, status, purchase_id, project_id,
+      source_type, status, purchase_id, supplier_id, project_id,
       inventory_movement_id, project_payment_id, metadata_json
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id,
       record.name,
@@ -328,6 +338,7 @@ export async function createRecord(
       sourceType,
       status,
       purchaseId,
+      supplierId,
       projectId,
       inventoryMovementId,
       projectPaymentId,
@@ -440,6 +451,7 @@ export async function updateRecord(
   }
   merged.sourceType = updates.sourceType ?? existing.sourceType;
   merged.purchaseId = updates.purchaseId ?? existing.purchaseId;
+  merged.supplierId = updates.supplierId ?? existing.supplierId ?? null;
   merged.projectId = updates.projectId ?? existing.projectId;
   merged.inventoryMovementId = updates.inventoryMovementId ?? existing.inventoryMovementId;
   merged.projectPaymentId = updates.projectPaymentId ?? existing.projectPaymentId;
@@ -469,6 +481,7 @@ export async function updateRecord(
       status = ?,
       source_type = ?,
       purchase_id = ?,
+      supplier_id = ?,
       project_id = ?,
       inventory_movement_id = ?,
       project_payment_id = ?,
@@ -494,6 +507,7 @@ export async function updateRecord(
       merged.status ?? 'draft',
       merged.sourceType ?? 'manual',
       merged.purchaseId ?? null,
+      merged.supplierId ?? null,
       merged.projectId ?? null,
       merged.inventoryMovementId ?? null,
       merged.projectPaymentId ?? null,

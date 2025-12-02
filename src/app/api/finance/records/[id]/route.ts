@@ -74,7 +74,19 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json();
-    
+
+    // Handle handlerId update by merging into metadata
+    if (body.handlerId) {
+      const existing = await getRecord(id);
+      if (existing) {
+        body.metadata = {
+          ...existing.metadata,
+          handlerId: body.handlerId,
+        };
+        delete body.handlerId;
+      }
+    }
+
     const record = await updateRecord(id, body);
 
     if (!record) {

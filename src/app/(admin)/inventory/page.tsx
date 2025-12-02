@@ -96,66 +96,74 @@ export default function InventoryOverviewPage() {
       <InventoryStatsCards stats={stats} loading={statsLoading} />
 
       <div className="grid gap-6 lg:grid-cols-3">
+        {/* Quick Actions - 1/3 width */}
         <div className="lg:col-span-1">
-          <InventoryLowStockList
-            items={stats?.lowStockItems ?? []}
-            loading={statsLoading}
-          />
-        </div>
-        <div className="lg:col-span-2 space-y-4">
-          <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5 text-sm text-blue-900 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-100">
-            <p className="font-semibold mb-4">快速操作</p>
+          <div className="h-full rounded-2xl border border-border/60 bg-card p-5 text-sm shadow-sm">
+            <p className="font-semibold mb-4 text-foreground">快速操作</p>
             <div className="grid grid-cols-2 gap-3">
               <Button
                 variant="outline"
-                className="h-auto flex-col gap-2 py-4 bg-white/60 hover:bg-white border-blue-200 text-blue-700 hover:text-blue-800 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 dark:border-blue-800 dark:text-blue-300 dark:hover:text-blue-100"
+                className="h-auto flex-col gap-2 py-4 border-border/60 bg-background/50 hover:bg-accent hover:text-accent-foreground"
                 onClick={() => setInboundDrawerOpen(true)}
               >
-                <PackagePlus className="h-6 w-6" />
+                <PackagePlus className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                 <span>入库作业</span>
               </Button>
               <Button
                 variant="outline"
-                className="h-auto flex-col gap-2 py-4 bg-white/60 hover:bg-white border-blue-200 text-blue-700 hover:text-blue-800 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 dark:border-blue-800 dark:text-blue-300 dark:hover:text-blue-100"
+                className="h-auto flex-col gap-2 py-4 border-border/60 bg-background/50 hover:bg-accent hover:text-accent-foreground"
                 onClick={() => setOutboundDrawerOpen(true)}
               >
-                <PackageMinus className="h-6 w-6" />
+                <PackageMinus className="h-6 w-6 text-orange-600 dark:text-orange-400" />
                 <span>出库作业</span>
               </Button>
               <Button
                 variant="outline"
-                className="h-auto flex-col gap-2 py-4 bg-white/60 hover:bg-white border-blue-200 text-blue-700 hover:text-blue-800 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 dark:border-blue-800 dark:text-blue-300 dark:hover:text-blue-100"
+                className="h-auto flex-col gap-2 py-4 border-border/60 bg-background/50 hover:bg-accent hover:text-accent-foreground"
                 asChild
               >
                 <Link href="/inventory/items">
-                  <Package className="h-6 w-6" />
+                  <Package className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
                   <span>商品管理</span>
                 </Link>
               </Button>
               <Button
                 variant="outline"
-                className="h-auto flex-col gap-2 py-4 bg-white/60 hover:bg-white border-blue-200 text-blue-700 hover:text-blue-800 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 dark:border-blue-800 dark:text-blue-300 dark:hover:text-blue-100"
+                className="h-auto flex-col gap-2 py-4 border-border/60 bg-background/50 hover:bg-accent hover:text-accent-foreground"
                 asChild
               >
                 <Link href="/inventory/warehouses">
-                  <Warehouse className="h-6 w-6" />
+                  <Warehouse className="h-6 w-6 text-purple-600 dark:text-purple-400" />
                   <span>仓库管理</span>
                 </Link>
               </Button>
             </div>
           </div>
-          {canViewMovements ? (
-            <InventoryMovementsTable
-              movements={movements}
-              loading={movementsLoading}
-              emptyHint="暂无库存流水，可通过入库/出库功能创建"
-            />
-          ) : (
-            <div className="rounded-2xl border border-gray-200 bg-white p-6 text-sm text-gray-500 shadow dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
-              当前账户无权查看库存流水。
-            </div>
-          )}
         </div>
+
+        {/* Low Stock List - 2/3 width */}
+        <div className="lg:col-span-2">
+          <InventoryLowStockList
+            items={stats?.lowStockItems ?? []}
+            loading={statsLoading}
+          />
+        </div>
+      </div>
+
+      {/* Movements Table - Full Width */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-foreground">最近库存流水</h3>
+        {canViewMovements ? (
+          <InventoryMovementsTable
+            movements={movements}
+            loading={movementsLoading}
+            emptyHint="暂无库存流水，可通过入库/出库功能创建"
+          />
+        ) : (
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 text-sm text-gray-500 shadow dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+            当前账户无权查看库存流水。
+          </div>
+        )}
       </div>
 
       {/* Inbound Drawer */}

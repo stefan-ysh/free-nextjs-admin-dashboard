@@ -960,39 +960,139 @@ export default function EmployeeClient({
 
   return (
     <div className="space-y-6">
-      <div className="space-y-3 rounded-lg border border-border/60 bg-card/90 p-3 shadow-sm md:space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[220px]">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="employee-search"
-              value={searchInput}
-              onChange={(event) => handleSearchInputChange(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  triggerImmediateSearch();
+      {/* Stats Chips */}
+      <div className="flex flex-wrap gap-2">
+        {renderSummaryChip('active', activeCount)}
+        {renderSummaryChip('on_leave', onLeaveCount)}
+        {renderSummaryChip('terminated', terminatedCount)}
+      </div>
+
+      {/* Filters & Actions Bar */}
+      <div className="rounded-lg border border-border bg-card p-3 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+          {/* Filters Grid */}
+          <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 lg:gap-4">
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-muted-foreground">搜索</span>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="employee-search"
+                  value={searchInput}
+                  onChange={(event) => handleSearchInputChange(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      triggerImmediateSearch();
+                    }
+                  }}
+                  placeholder="搜索姓名/邮箱/电话"
+                  className="h-9 pl-10 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-muted-foreground">部门</span>
+              <Select
+                value={filters.departmentId ?? 'all'}
+                onValueChange={(value) =>
+                  handleSearch({
+                    departmentId: value === 'all' ? null : value,
+                    department: null,
+                  })
                 }
-              }}
-              placeholder="按姓名、邮箱、电话模糊检索"
-              className="h-9 pl-10 text-sm"
-            />
+              >
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="全部部门" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部部门</SelectItem>
+                  {departmentOptions.map((dept) => (
+                    <SelectItem key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-muted-foreground">职级</span>
+              <Select
+                value={filters.jobGradeId ?? 'all'}
+                onValueChange={(value) =>
+                  handleSearch({
+                    jobGradeId: value === 'all' ? null : value,
+                  })
+                }
+              >
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="全部职级" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部职级</SelectItem>
+                  {jobGradeOptions.map((grade) => (
+                    <SelectItem key={grade.id} value={grade.id}>
+                      {grade.name}
+                      {grade.level != null ? ` (L${grade.level})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-muted-foreground">状态</span>
+              <Select value={filters.status} onValueChange={(value) => handleSearch({ status: value as EmployeeFilters['status'] })}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="全部状态" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部状态</SelectItem>
+                  <SelectItem value="active">在职</SelectItem>
+                  <SelectItem value="on_leave">休假</SelectItem>
+                  <SelectItem value="terminated">已离职</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-muted-foreground">排序</span>
+              <Select
+                value={filters.sortBy}
+                onValueChange={(value) => handleSearch({ sortBy: value as EmployeeFilters['sortBy'] })}
+              >
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="排序字段" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="updatedAt">按更新时间</SelectItem>
+                  <SelectItem value="createdAt">按创建时间</SelectItem>
+                  <SelectItem value="lastName">按姓名</SelectItem>
+                  <SelectItem value="department">按部门</SelectItem>
+                  <SelectItem value="status">按状态</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 pt-1">
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => refreshList()}
               disabled={loading || isPending}
-              className="gap-1"
+              className="h-9 gap-1"
             >
               <RefreshCcw className="h-4 w-4" /> 刷新
             </Button>
             {canViewEmployees && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="outline" size="sm" className="gap-1" disabled={exporting}>
+                  <Button type="button" variant="outline" size="sm" className="h-9 gap-1" disabled={exporting}>
                     <Download className="h-4 w-4" /> 批量操作
                   </Button>
                 </DropdownMenuTrigger>
@@ -1032,140 +1132,62 @@ export default function EmployeeClient({
               </DropdownMenu>
             )}
             {canCreateEmployee && (
-              <Button type="button" size="sm" onClick={handleCreateClick} className="gap-1">
+              <Button type="button" size="sm" onClick={handleCreateClick} className="h-9 gap-1">
                 <Plus className="h-4 w-4" /> 新增
               </Button>
             )}
           </div>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <Select
-            value={filters.departmentId ?? 'all'}
-            onValueChange={(value) =>
-              handleSearch({
-                departmentId: value === 'all' ? null : value,
-                department: null,
-              })
-            }
-          >
-            <SelectTrigger className="h-9 min-w-[140px] flex-1 border-border/80 text-xs">
-              <SelectValue placeholder="全部部门" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部部门</SelectItem>
-              {departmentOptions.map((dept) => (
-                <SelectItem key={dept.id} value={dept.id}>
-                  {dept.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={filters.jobGradeId ?? 'all'}
-            onValueChange={(value) =>
-              handleSearch({
-                jobGradeId: value === 'all' ? null : value,
-              })
-            }
-          >
-            <SelectTrigger className="h-9 min-w-[140px] flex-1 border-border/80 text-xs">
-              <SelectValue placeholder="全部职级" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部职级</SelectItem>
-              {jobGradeOptions.map((grade) => (
-                <SelectItem key={grade.id} value={grade.id}>
-                  {grade.name}
-                  {grade.level != null ? ` (L${grade.level})` : ''}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filters.status} onValueChange={(value) => handleSearch({ status: value as EmployeeFilters['status'] })}>
-            <SelectTrigger className="h-9 min-w-[120px] flex-1 border-border/80 text-xs">
-              <SelectValue placeholder="全部状态" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部状态</SelectItem>
-              <SelectItem value="active">在职</SelectItem>
-              <SelectItem value="on_leave">休假</SelectItem>
-              <SelectItem value="terminated">已离职</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={filters.sortBy}
-            onValueChange={(value) => handleSearch({ sortBy: value as EmployeeFilters['sortBy'] })}
-          >
-            <SelectTrigger className="h-9 min-w-[140px] flex-1 border-border/80 text-xs">
-              <SelectValue placeholder="排序字段" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="updatedAt">按更新时间</SelectItem>
-              <SelectItem value="createdAt">按创建时间</SelectItem>
-              <SelectItem value="lastName">按姓名</SelectItem>
-              <SelectItem value="department">按部门</SelectItem>
-              <SelectItem value="status">按状态</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground">
-          {renderSummaryChip('active', activeCount)}
-          {renderSummaryChip('on_leave', onLeaveCount)}
-          {renderSummaryChip('terminated', terminatedCount)}
-        </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-card shadow-sm">
-        <EmployeeTable
-          employees={employees}
-          loading={loading || isPending}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          canEdit={canUpdateEmployee}
-          canDelete={canDeleteEmployee}
-          onAssignRoles={canAssignRoles ? handleRoleAssignClick : undefined}
-          canAssignRoles={canAssignRoles}
-        />
+      <EmployeeTable
+        employees={employees}
+        loading={loading || isPending}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        canEdit={canUpdateEmployee}
+        canDelete={canDeleteEmployee}
+        onAssignRoles={canAssignRoles ? handleRoleAssignClick : undefined}
+        canAssignRoles={canAssignRoles}
+      />
 
-        <div className="flex flex-col gap-3 border-t border-border/80 px-6 py-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
-          <div>共 {total} 人 • 第 {page} / {totalPages} 页</div>
-          <div className="flex flex-col gap-3 md:flex-row md:items-center">
-            <Select value={String(pageSize)} onValueChange={(value) => handlePageSizeChange(Number(value))}>
-              <SelectTrigger className="h-9 w-[140px]">
-                <SelectValue placeholder="每页数量" />
-              </SelectTrigger>
-              <SelectContent>
-                {PAGE_SIZE_OPTIONS.map((size) => (
-                  <SelectItem key={size} value={String(size)}>
-                    每页 {size} 条
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange('prev')}
-                disabled={page <= 1}
-                className="gap-1"
-              >
-                <ChevronLeft className="h-4 w-4" /> 上一页
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange('next')}
-                disabled={page >= totalPages}
-                className="gap-1"
-              >
-                下一页 <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+      {/* Pagination */}
+      <div className="flex flex-col gap-3 border-t border-transparent px-2 py-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+        <div>共 {total} 人 • 第 {page} / {totalPages} 页</div>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
+          <Select value={String(pageSize)} onValueChange={(value) => handlePageSizeChange(Number(value))}>
+            <SelectTrigger className="h-9 w-[140px]">
+              <SelectValue placeholder="每页数量" />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <SelectItem key={size} value={String(size)}>
+                  每页 {size} 条
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange('prev')}
+              disabled={page <= 1}
+              className="gap-1"
+            >
+              <ChevronLeft className="h-4 w-4" /> 上一页
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange('next')}
+              disabled={page >= totalPages}
+              className="gap-1"
+            >
+              下一页 <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </div>

@@ -19,6 +19,7 @@ import {
   LineChart as FinanceIcon,
   ShoppingCart as PurchaseIcon,
   UserCircle as UserCircleIcon,
+  CircleGauge as PerformanceIcon,
   Users2 as ClientIcon,
 } from "lucide-react";
 // import SidebarWidget from "./SidebarWidget";
@@ -45,7 +46,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   {
-    icon: <DashboardIcon />,
+    icon: <PerformanceIcon />,
     name: "仪表盘",
     path: "/",
   },
@@ -102,6 +103,12 @@ const navItems: NavItem[] = [
     name: "客户管理",
     path: "/clients",
     requiredPermission: "CLIENT_VIEW",
+  },
+  {
+    icon: <UserCircleIcon />,
+    name: "供应商管理",
+    path: "/suppliers",
+    requiredAnyPermissions: ["SUPPLIER_VIEW", "SUPPLIER_MANAGE"],
   },
   {
     icon: <InventoryIcon />,
@@ -395,14 +402,14 @@ const AppSidebar: React.FC = () => {
           <nav className="mb-6 pr-2">
             <div className="flex flex-col gap-4">
               <div>
-                <h2
+                {/* <h2
                   className={cn(
                     'mb-4 flex text-xs uppercase leading-5 text-gray-400',
                     showLabels ? 'justify-start' : 'justify-center'
                   )}
                 >
                   {showLabels ? 'Menu' : <HorizontaLDots />}
-                </h2>
+                </h2> */}
                 {renderMenuItems(filteredNavItems)}
               </div>
             </div>

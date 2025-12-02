@@ -4,6 +4,7 @@ import type { PoolConnection } from 'mysql2/promise';
 
 import { mysqlPool, mysqlQuery } from '@/lib/mysql';
 import { ensurePurchasesSchema } from '@/lib/schema/purchases';
+import { getSupplierById } from '@/lib/db/suppliers';
 import {
   PurchaseRecord,
   PurchaseDetail,
@@ -33,6 +34,7 @@ import { findUserById, ensureBusinessUserRecord } from '@/lib/users';
 import { findProjectById } from '@/lib/db/projects';
 import { normalizeDateInput } from '@/lib/dates';
 import { InvoiceType as FinanceInvoiceType } from '@/types/finance';
+import type { SupplierStatus } from '@/types/supplier';
 import { createPurchaseExpense } from '@/lib/services/finance-automation';
 function sanitizeId(value: string | null | undefined): string | null {
   if (value == null) return null;
@@ -50,8 +52,34 @@ async function ensureUserExists(userId: string, errorCode: string): Promise<void
 
 const pool = mysqlPool();
 
+const PURCHASE_SELECT_FIELDS = `
+  p.*,
+  s.name AS supplier_name,
+  s.short_name AS supplier_short_name,
+  s.status AS supplier_status
+`;
+
+const PURCHASE_FROM_CLAUSE = `
+  FROM purchases p
+  LEFT JOIN suppliers s ON s.id = p.supplier_id AND s.is_deleted = 0
+`;
+
 const hasOwn = <T extends object>(obj: T, key: PropertyKey): boolean =>
   Object.prototype.hasOwnProperty.call(obj, key);
+
+async function resolveSupplierId(rawId?: string | null): Promise<string | null> {
+  const sanitized = sanitizeId(rawId);
+  if (!sanitized) {
+    return null;
+  }
+  const result = await mysqlQuery<RowDataPacket & { id: string }>`
+    SELECT id FROM suppliers WHERE id = ${sanitized} AND is_deleted = 0 LIMIT 1
+  `;
+  if (!result.rows.length) {
+    throw new Error('SUPPLIER_NOT_FOUND');
+  }
+  return sanitized;
+}
 
 type RawPurchaseRow = RowDataPacket & {
   id: string;
@@ -73,6 +101,7 @@ type RawPurchaseRow = RowDataPacket & {
   payer_name: string | null;
   transaction_no: string | null;
   purchaser_id: string;
+  supplier_id: string | null;
   invoice_type: string;
   invoice_status: string;
   invoice_number: string | null;
@@ -97,6 +126,9 @@ type RawPurchaseRow = RowDataPacket & {
   created_by: string;
   is_deleted: number;
   deleted_at: string | null;
+  supplier_name?: string | null;
+  supplier_short_name?: string | null;
+  supplier_status?: SupplierStatus | null;
 };
 
 type RawLogRow = RowDataPacket & {
@@ -188,6 +220,10 @@ function mapPurchase(row: RawPurchaseRow | undefined): PurchaseRecord | null {
     payerName: row.payer_name,
     transactionNo: row.transaction_no,
     purchaserId: row.purchaser_id,
+    supplierId: row.supplier_id ?? null,
+    supplierName: row.supplier_name ?? undefined,
+    supplierShortName: row.supplier_short_name ?? undefined,
+    supplierStatus: row.supplier_status ?? undefined,
     invoiceType: normalizeInvoiceType(row.invoice_type),
     invoiceStatus: normalizeInvoiceStatus(row.invoice_status),
     invoiceNumber: row.invoice_number,
@@ -237,66 +273,72 @@ type PurchaseFilterClause = {
   values: unknown[];
 };
 
-function buildPurchaseFilterClause(params: ListPurchasesParams = {}): PurchaseFilterClause {
+function buildPurchaseFilterClause(params: ListPurchasesParams = {}, tableAlias = ''): PurchaseFilterClause {
+  const column = (name: string) => (tableAlias ? `${tableAlias}.${name}` : name);
   const conditions: string[] = [];
   const values: unknown[] = [];
 
   if (!params.includeDeleted) {
-    conditions.push('is_deleted = 0');
+    conditions.push(`${column('is_deleted')} = 0`);
   }
 
   if (params.search) {
     const search = `%${params.search.trim().toLowerCase()}%`;
     conditions.push('(' +
-      'LOWER(purchase_number) LIKE ? OR ' +
-      'LOWER(item_name) LIKE ? OR ' +
-      'LOWER(purpose) LIKE ?' +
+      `LOWER(${column('purchase_number')}) LIKE ? OR ` +
+      `LOWER(${column('item_name')}) LIKE ? OR ` +
+      `LOWER(${column('purpose')}) LIKE ?` +
     ')');
     values.push(search, search, search);
   }
 
   if (params.status && params.status !== 'all') {
-    conditions.push('status = ?');
+    conditions.push(`${column('status')} = ?`);
     values.push(params.status);
   }
 
   if (params.purchaserId) {
-    conditions.push('purchaser_id = ?');
+    conditions.push(`${column('purchaser_id')} = ?`);
     values.push(params.purchaserId);
   }
 
   if (params.projectId) {
-    conditions.push('project_id = ?');
+    conditions.push(`${column('project_id')} = ?`);
     values.push(params.projectId);
   }
 
+  if (params.supplierId) {
+    conditions.push(`${column('supplier_id')} = ?`);
+    values.push(params.supplierId);
+  }
+
   if (params.purchaseChannel) {
-    conditions.push('purchase_channel = ?');
+    conditions.push(`${column('purchase_channel')} = ?`);
     values.push(params.purchaseChannel);
   }
 
   if (params.paymentMethod) {
-    conditions.push('payment_method = ?');
+    conditions.push(`${column('payment_method')} = ?`);
     values.push(params.paymentMethod);
   }
 
   if (params.startDate) {
-    conditions.push('purchase_date >= ?');
+    conditions.push(`${column('purchase_date')} >= ?`);
     values.push(params.startDate);
   }
 
   if (params.endDate) {
-    conditions.push('purchase_date <= ?');
+    conditions.push(`${column('purchase_date')} <= ?`);
     values.push(params.endDate);
   }
 
   if (params.minAmount != null) {
-    conditions.push('total_amount >= ?');
+    conditions.push(`${column('total_amount')} >= ?`);
     values.push(params.minAmount);
   }
 
   if (params.maxAmount != null) {
-    conditions.push('total_amount <= ?');
+    conditions.push(`${column('total_amount')} <= ?`);
     values.push(params.maxAmount);
   }
 
@@ -422,6 +464,7 @@ export async function createPurchase(
   const paymentChannel = input.paymentChannel?.trim() || null;
   const payerName = input.payerName?.trim() || null;
   const transactionNo = input.transactionNo?.trim() || null;
+  const supplierId = await resolveSupplierId(input.supplierId);
 
   const invoiceType = input.invoiceType;
   if (input.invoiceStatus !== undefined && !isInvoiceStatus(input.invoiceStatus)) {
@@ -465,6 +508,7 @@ export async function createPurchase(
       'payer_name',
       'transaction_no',
       'purchaser_id',
+      'supplier_id',
       'invoice_type',
       'invoice_status',
       'invoice_number',
@@ -504,6 +548,7 @@ export async function createPurchase(
       payerName,
       transactionNo,
       purchaserId,
+      supplierId,
       input.invoiceType,
       invoiceStatus,
       invoiceNumber,
@@ -535,7 +580,12 @@ export async function createPurchase(
 export async function findPurchaseById(id: string): Promise<PurchaseRecord | null> {
   await ensurePurchasesSchema();
   const [rows] = await pool.query<RawPurchaseRow[]>(
-    'SELECT * FROM purchases WHERE id = ? LIMIT 1',
+    `
+      SELECT ${PURCHASE_SELECT_FIELDS}
+      ${PURCHASE_FROM_CLAUSE}
+      WHERE p.id = ?
+      LIMIT 1
+    `,
     [id]
   );
   return mapPurchase(rows[0]);
@@ -552,14 +602,18 @@ export async function getPurchaseDetail(id: string): Promise<PurchaseDetail | nu
   const rejecterPromise = purchase.rejectedBy ? findUserById(purchase.rejectedBy) : Promise.resolve(null);
   const payerPromise = purchase.paidBy ? findUserById(purchase.paidBy) : Promise.resolve(null);
   const logsPromise = getPurchaseLogs(purchase.id);
+  const supplierPromise = purchase.supplierId
+    ? getSupplierById(purchase.supplierId).catch(() => null)
+    : Promise.resolve(null);
 
-  const [purchaserUser, project, approverUser, rejecterUser, payerUser, logs] = await Promise.all([
+  const [purchaserUser, project, approverUser, rejecterUser, payerUser, logs, supplier] = await Promise.all([
     purchaserPromise,
     projectPromise,
     approverPromise,
     rejecterPromise,
     payerPromise,
     logsPromise,
+    supplierPromise,
   ]);
 
   return {
@@ -576,6 +630,7 @@ export async function getPurchaseDetail(id: string): Promise<PurchaseDetail | nu
     rejecter: buildBasicUserProfile(rejecterUser),
     payer: buildBasicUserProfile(payerUser),
     logs,
+    supplier: supplier ?? null,
   };
 }
 
@@ -588,26 +643,31 @@ export async function listPurchases(params: ListPurchasesParams = {}): Promise<L
   const sortOrder = params.sortOrder === 'asc' ? 'ASC' : 'DESC';
 
   const sortMap: Record<string, string> = {
-    createdAt: 'created_at',
-    updatedAt: 'updated_at',
-    purchaseDate: 'purchase_date',
-    totalAmount: 'total_amount',
-    status: 'status',
-    submittedAt: 'submitted_at',
+    createdAt: 'p.created_at',
+    updatedAt: 'p.updated_at',
+    purchaseDate: 'p.purchase_date',
+    totalAmount: 'p.total_amount',
+    status: 'p.status',
+    submittedAt: 'p.submitted_at',
   };
-  const sortColumn = sortMap[sortBy] || 'updated_at';
+  const sortColumn = sortMap[sortBy] || 'p.updated_at';
 
-  const { whereClause, values } = buildPurchaseFilterClause(params);
-  const orderClause = `ORDER BY ${sortColumn} ${sortOrder}, id ASC`;
+  const { whereClause, values } = buildPurchaseFilterClause(params, 'p');
+  const orderClause = `ORDER BY ${sortColumn} ${sortOrder}, p.id ASC`;
+
+  const baseSelect = `
+    SELECT ${PURCHASE_SELECT_FIELDS}
+    ${PURCHASE_FROM_CLAUSE}
+  `;
 
   const dataParams = [...values, pageSize, (page - 1) * pageSize];
   const [dataResult, countResult] = await Promise.all([
     pool.query<RawPurchaseRow[]>(
-      `SELECT * FROM purchases ${whereClause} ${orderClause} LIMIT ? OFFSET ?`,
+      `${baseSelect} ${whereClause} ${orderClause} LIMIT ? OFFSET ?`,
       dataParams
     ),
     pool.query<Array<RowDataPacket & { total: number }>>(
-      `SELECT COUNT(*) AS total FROM purchases ${whereClause}`,
+      `SELECT COUNT(*) AS total FROM purchases p ${whereClause}`,
       values
     ),
   ]);
@@ -634,7 +694,7 @@ export async function listPendingApprovals(params: Pick<ListPurchasesParams, 'se
 
 export async function getPurchaseStats(params: ListPurchasesParams = {}): Promise<PurchaseStats> {
   await ensurePurchasesSchema();
-  const { whereClause, values } = buildPurchaseFilterClause(params);
+  const { whereClause, values } = buildPurchaseFilterClause(params, 'p');
 
   const [rows] = await pool.query<Array<RowDataPacket & {
     total_purchases: number | null;
@@ -648,14 +708,14 @@ export async function getPurchaseStats(params: ListPurchasesParams = {}): Promis
   }>>(
     `SELECT
       COUNT(*) AS total_purchases,
-      COALESCE(SUM(total_amount), 0) AS total_amount,
-      SUM(CASE WHEN status = 'pending_approval' THEN 1 ELSE 0 END) AS pending_count,
-      COALESCE(SUM(CASE WHEN status = 'pending_approval' THEN total_amount ELSE 0 END), 0) AS pending_amount,
-      SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS approved_count,
-      COALESCE(SUM(CASE WHEN status = 'approved' THEN total_amount ELSE 0 END), 0) AS approved_amount,
-      SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) AS paid_count,
-      COALESCE(SUM(CASE WHEN status = 'paid' THEN total_amount ELSE 0 END), 0) AS paid_amount
-    FROM purchases ${whereClause}`,
+      COALESCE(SUM(p.total_amount), 0) AS total_amount,
+      SUM(CASE WHEN p.status = 'pending_approval' THEN 1 ELSE 0 END) AS pending_count,
+      COALESCE(SUM(CASE WHEN p.status = 'pending_approval' THEN p.total_amount ELSE 0 END), 0) AS pending_amount,
+      SUM(CASE WHEN p.status = 'approved' THEN 1 ELSE 0 END) AS approved_count,
+      COALESCE(SUM(CASE WHEN p.status = 'approved' THEN p.total_amount ELSE 0 END), 0) AS approved_amount,
+      SUM(CASE WHEN p.status = 'paid' THEN 1 ELSE 0 END) AS paid_count,
+      COALESCE(SUM(CASE WHEN p.status = 'paid' THEN p.total_amount ELSE 0 END), 0) AS paid_amount
+    FROM purchases p ${whereClause}`,
     values
   );
 
@@ -740,6 +800,10 @@ export async function updatePurchase(id: string, input: UpdatePurchaseInput): Pr
     }
     await ensureUserExists(nextPurchaserId, 'PURCHASER_NOT_FOUND');
     push('purchaser_id', nextPurchaserId);
+  }
+  if (input.supplierId !== undefined) {
+    const nextSupplierId = await resolveSupplierId(input.supplierId);
+    push('supplier_id', nextSupplierId);
   }
   if (input.invoiceStatus !== undefined && !isInvoiceStatus(input.invoiceStatus)) {
     throw new Error('INVALID_INVOICE_STATUS');

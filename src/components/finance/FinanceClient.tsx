@@ -22,6 +22,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TransactionType } from '@/types/finance';
 import { getCategoryGroups } from '@/constants/finance-categories';
+import UserSelect from '@/components/common/UserSelect';
 
 interface FinanceClientProps {
     records: FinanceRecord[];
@@ -37,6 +38,7 @@ interface FinanceClientProps {
         canView: boolean;
         canManage: boolean;
     };
+    currentUserId: string;
 }
 
 export default function FinanceClient({
@@ -45,6 +47,7 @@ export default function FinanceClient({
     categories,
     pagination,
     permissions,
+    currentUserId,
 }: FinanceClientProps) {
     const router = useRouter();
     const pathname = usePathname();
@@ -61,6 +64,7 @@ export default function FinanceClient({
     const keywordParam = searchParams.get('keyword') || '';
     const minAmountParam = searchParams.get('minAmount') || '';
     const maxAmountParam = searchParams.get('maxAmount') || '';
+    const handlerIdParam = searchParams.get('handlerId') || '';
     const selectedType =
         currentTypeParam === TransactionType.INCOME || currentTypeParam === TransactionType.EXPENSE
             ? currentTypeParam
@@ -210,7 +214,7 @@ export default function FinanceClient({
         setMinAmountInput('');
         setMaxAmountInput('');
         updateFilters((params) => {
-            ['type', 'category', 'keyword', 'minAmount', 'maxAmount', 'range', 'startDate', 'endDate'].forEach((key) =>
+            ['type', 'category', 'keyword', 'minAmount', 'maxAmount', 'range', 'startDate', 'endDate', 'handlerId'].forEach((key) =>
                 params.delete(key)
             );
         });
@@ -278,7 +282,7 @@ export default function FinanceClient({
             {/* Filters */}
             <div className="rounded-lg border border-border bg-white p-3 dark:bg-gray-900">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-                    <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 lg:gap-4">
+                    <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 lg:gap-4">
                         <div className="space-y-1">
                             <span className="text-xs font-medium text-muted-foreground">时间范围</span>
                             <Select value={currentRange} onValueChange={handleRangeChange}>
@@ -358,6 +362,24 @@ export default function FinanceClient({
                         </div>
 
                         <div className="space-y-1">
+                            <span className="text-xs font-medium text-muted-foreground">经办人</span>
+                            <UserSelect
+                                value={handlerIdParam}
+                                onChange={(value) => {
+                                    updateFilters((params) => {
+                                        if (value) {
+                                            params.set('handlerId', value);
+                                        } else {
+                                            params.delete('handlerId');
+                                        }
+                                    });
+                                }}
+                                placeholder="全部人员"
+                                className="h-9"
+                            />
+                        </div>
+
+                        <div className="space-y-1">
                             <span className="text-xs font-medium text-muted-foreground">搜索</span>
                             <Input
                                 placeholder="搜索名称/备注"
@@ -376,34 +398,30 @@ export default function FinanceClient({
                         <Button variant="ghost" size="sm" onClick={handleResetFilters} className="h-9 px-2 text-muted-foreground">
                             重置
                         </Button>
+                        {permissions.canManage && (
+                            <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
+                                <SheetTrigger asChild>
+                                    <Button size="sm" className="h-9" onClick={() => setEditingRecord(null)}>+ 记一笔</Button>
+                                </SheetTrigger>
+                                <SheetContent side="right" className="sm:max-w-xl">
+                                    <SheetHeader>
+                                        <SheetTitle>{editingRecord ? '编辑记录' : '添加记录'}</SheetTitle>
+                                    </SheetHeader>
+                                    <div className="flex-1 overflow-y-auto">
+                                        <FinanceForm
+                                            initialData={editingRecord || undefined}
+                                            onSubmit={handleSubmit}
+                                            onCancel={() => setIsDrawerOpen(false)}
+                                            incomeCategories={categories.income}
+                                            expenseCategories={categories.expense}
+                                            currentUserId={currentUserId}
+                                        />
+                                    </div>
+                                </SheetContent>
+                            </Sheet>
+                        )}
                     </div>
                 </div>
-            </div>
-
-            {/* Records Section */}
-            <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold tracking-tight">财务记录</h2>
-                {permissions.canManage && (
-                    <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
-                        <SheetTrigger asChild>
-                            <Button onClick={() => setEditingRecord(null)}>+ 添加记录</Button>
-                        </SheetTrigger>
-                        <SheetContent side="right" className="sm:max-w-xl">
-                            <SheetHeader>
-                                <SheetTitle>{editingRecord ? '编辑记录' : '添加记录'}</SheetTitle>
-                            </SheetHeader>
-                            <div className="flex-1 overflow-y-auto">
-                                <FinanceForm
-                                    initialData={editingRecord || undefined}
-                                    onSubmit={handleSubmit}
-                                    onCancel={() => setIsDrawerOpen(false)}
-                                    incomeCategories={categories.income}
-                                    expenseCategories={categories.expense}
-                                />
-                            </div>
-                        </SheetContent>
-                    </Sheet>
-                )}
             </div>
 
             <FinanceTable

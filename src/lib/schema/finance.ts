@@ -6,6 +6,7 @@ import { ensureProjectsSchema } from '@/lib/schema/projects';
 import { ensurePurchasesSchema } from '@/lib/schema/purchases';
 import { ensureProjectPaymentsSchema } from '@/lib/schema/project-payments';
 import { ensureInventorySchema } from '@/lib/schema/inventory';
+import { ensureSuppliersSchema } from '@/lib/schema/suppliers';
 import { getDefaultCategoryLabels } from '@/constants/finance-categories';
 import { TransactionType } from '@/types/finance';
 
@@ -49,6 +50,7 @@ export async function ensureFinanceSchema() {
   await ensurePurchasesSchema();
   await ensureProjectPaymentsSchema();
   await ensureInventorySchema();
+  await ensureSuppliersSchema();
   const pool = mysqlPool();
 
   await pool.query(`
@@ -73,6 +75,7 @@ export async function ensureFinanceSchema() {
       source_type ENUM('manual','purchase','project','import','inventory','project_payment') NOT NULL DEFAULT 'manual',
       status ENUM('draft','cleared') NOT NULL DEFAULT 'draft',
       purchase_id CHAR(36) NULL,
+      supplier_id CHAR(36) NULL,
       project_id CHAR(36) NULL,
       inventory_movement_id VARCHAR(64) NULL,
       metadata_json JSON NULL,
@@ -91,6 +94,7 @@ export async function ensureFinanceSchema() {
     "ALTER TABLE `finance_records` MODIFY COLUMN `source_type` ENUM('manual','purchase','project','import','inventory','project_payment') NOT NULL DEFAULT 'manual'"
   );
   await ensureColumn('finance_records', 'purchase_id', 'CHAR(36) NULL');
+  await ensureColumn('finance_records', 'supplier_id', 'CHAR(36) NULL');
   await ensureColumn('finance_records', 'project_id', 'CHAR(36) NULL');
   await ensureColumn('finance_records', 'inventory_movement_id', 'VARCHAR(64) NULL');
   await ensureColumn('finance_records', 'project_payment_id', 'CHAR(36) NULL');
@@ -115,6 +119,7 @@ export async function ensureFinanceSchema() {
   await createIndex(pool, 'CREATE INDEX idx_finance_type ON finance_records(type)');
   await createIndex(pool, 'CREATE INDEX idx_finance_category ON finance_records(category)');
   await createIndex(pool, 'CREATE INDEX idx_finance_purchase ON finance_records(purchase_id)');
+  await createIndex(pool, 'CREATE INDEX idx_finance_supplier ON finance_records(supplier_id)');
   await createIndex(pool, 'CREATE INDEX idx_finance_project ON finance_records(project_id)');
   await createIndex(pool, 'CREATE INDEX idx_finance_inventory_movement ON finance_records(inventory_movement_id)');
   await createIndex(pool, 'CREATE INDEX idx_finance_project_payment ON finance_records(project_payment_id)');
@@ -122,6 +127,11 @@ export async function ensureFinanceSchema() {
     'finance_records',
     'fk_finance_purchase',
     'FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE SET NULL'
+  );
+  await ensureForeignKey(
+    'finance_records',
+    'fk_finance_supplier',
+    'FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL'
   );
   await ensureForeignKey(
     'finance_records',

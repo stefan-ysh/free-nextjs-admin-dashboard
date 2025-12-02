@@ -162,6 +162,7 @@ export default function PurchaseEditPage() {
 							<PurchaseForm
 								mode="edit"
 								initialData={purchase}
+								currentUserId={permissionUser?.id ?? ''}
 								onSubmit={handleUpdate}
 								onCancel={() => router.push('/purchases')}
 							/>

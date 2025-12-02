@@ -62,6 +62,14 @@ function buildPurchaseMetadata(purchase: PurchaseRecord): FinanceRecordMetadata 
     paidBy: purchase.paidBy ?? undefined,
     paidAt: purchase.paidAt ?? undefined,
     projectId: purchase.projectId ?? undefined,
+    supplier: purchase.supplierId
+      ? {
+          id: purchase.supplierId,
+          name: purchase.supplierName,
+          shortName: purchase.supplierShortName,
+          status: purchase.supplierStatus,
+        }
+      : undefined,
   };
 }
 
@@ -421,6 +429,7 @@ export async function createPurchaseExpense(purchase: PurchaseRecord, operatorId
     sourceType: 'purchase' as const,
     status: 'cleared' as const,
     purchaseId: purchase.id,
+    supplierId: purchase.supplierId ?? null,
     projectId: purchase.projectId ?? undefined,
     metadata: buildPurchaseMetadata(purchase),
   } satisfies Omit<FinanceRecord, 'id' | 'createdAt' | 'updatedAt' | 'totalAmount'>;

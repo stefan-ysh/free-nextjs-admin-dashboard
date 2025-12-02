@@ -513,143 +513,139 @@ export default function ClientManagementPage() {
         </div>
       </div>
 
-      <Card className="border-none">
-        <CardContent className="space-y-4 pt-6">
-          <div className="rounded-lg border border-border bg-white p-3 dark:bg-gray-900">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-              <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3 lg:gap-4">
-                <div className="space-y-1">
-                  <span className="text-xs font-medium text-muted-foreground">搜索</span>
-                  <Input
-                    placeholder="搜索客户名称/手机号/税号"
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    className="h-9 text-sm"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <span className="text-xs font-medium text-muted-foreground">客户类型</span>
-                  <Select value={filterType} onValueChange={(value) => setFilterType(value as 'all' | ClientType)}>
-                    <SelectTrigger className="h-9 text-sm">
-                      <SelectValue placeholder="全部类型" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">全部类型</SelectItem>
-                      <SelectItem value="personal">个人客户</SelectItem>
-                      <SelectItem value="company">企业客户</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-xs font-medium text-muted-foreground">状态</span>
-                  <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as 'all' | ClientStatus)}>
-                    <SelectTrigger className="h-9 text-sm">
-                      <SelectValue placeholder="全部状态" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">全部状态</SelectItem>
-                      <SelectItem value="active">正常往来</SelectItem>
-                      <SelectItem value="inactive">暂停合作</SelectItem>
-                      <SelectItem value="blacklisted">黑名单</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="flex items-center pt-1">
-                {canManage && (
-                  <Button onClick={handleOpenDialog} size="sm" className="h-9">
-                    <PlusCircle className="mr-2 h-4 w-4" /> 新增客户
-                  </Button>
-                )}
-              </div>
+      <div className="rounded-lg border border-border bg-card p-3 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+          <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3 lg:gap-4">
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-muted-foreground">搜索</span>
+              <Input
+                placeholder="搜索客户名称/手机号/税号"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="h-9 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-muted-foreground">客户类型</span>
+              <Select value={filterType} onValueChange={(value) => setFilterType(value as 'all' | ClientType)}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder="全部类型" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部类型</SelectItem>
+                  <SelectItem value="personal">个人客户</SelectItem>
+                  <SelectItem value="company">企业客户</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-muted-foreground">状态</span>
+              <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as 'all' | ClientStatus)}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder="全部状态" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部状态</SelectItem>
+                  <SelectItem value="active">正常往来</SelectItem>
+                  <SelectItem value="inactive">暂停合作</SelectItem>
+                  <SelectItem value="blacklisted">黑名单</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
-
-          <div className="rounded-xl border-none">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>客户名称</TableHead>
-                  <TableHead>类型</TableHead>
-                  <TableHead>联系方式</TableHead>
-                  <TableHead>税号 / 发票抬头</TableHead>
-                  <TableHead className="text-right">授信额度</TableHead>
-                  <TableHead className="text-right">在途金额</TableHead>
-                  <TableHead className="text-center">状态</TableHead>
-                  {canManage && <TableHead className="text-right">操作</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading && (
-                  <TableRow>
-                    <TableCell colSpan={columnCount} className="py-6 text-center text-muted-foreground">
-                      <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> 正在加载...
-                    </TableCell>
-                  </TableRow>
-                )}
-                {!loading && clients.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={columnCount} className="py-6 text-center text-muted-foreground">
-                      暂无客户数据，点击“新增客户”开始维护
-                    </TableCell>
-                  </TableRow>
-                )}
-                {!loading &&
-                  clients.map((client) => (
-                    <TableRow key={client.id}>
-                      <TableCell>
-                        <div className="font-medium">{client.displayName}</div>
-                        {client.contactPerson && (
-                          <div className="text-xs text-muted-foreground">联系人：{client.contactPerson}</div>
-                        )}
-                      </TableCell>
-                      <TableCell>{typeLabels[client.type]}</TableCell>
-                      <TableCell>
-                        <div className="text-sm">{client.mobile || '—'}</div>
-                        <div className="text-xs text-muted-foreground">{client.email || '—'}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">{client.taxNumber || '—'}</div>
-                        <div className="text-xs text-muted-foreground">{client.invoiceTitle || '—'}</div>
-                      </TableCell>
-                      <TableCell className="text-right">{formatCurrency(client.creditLimit)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(client.outstandingAmount)}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="secondary" className={cn('px-3 py-1 text-xs', statusBadgeClass[client.status])}>
-                          {statusLabels[client.status]}
-                        </Badge>
-                      </TableCell>
-                      {canManage && (
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-32">
-                              <DropdownMenuItem onClick={() => handleEditDialog(client)}>
-                                <Edit2 className="mr-2 h-4 w-4" /> 编辑
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleDeleteClick(client)}
-                                className="text-rose-600 focus:text-rose-600"
-                                disabled={deletingId === client.id}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                {deletingId === client.id ? '删除中...' : '删除'}
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
+          <div className="flex items-center pt-1">
+            {canManage && (
+              <Button onClick={handleOpenDialog} size="sm" className="h-9">
+                <PlusCircle className="mr-2 h-4 w-4" /> 新增客户
+              </Button>
+            )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+        <Table className="[&_tbody_tr]:hover:bg-muted/40">
+          <TableHeader className="[&_tr]:border-b border-border/40">
+            <TableRow>
+              <TableHead>客户名称</TableHead>
+              <TableHead>类型</TableHead>
+              <TableHead>联系方式</TableHead>
+              <TableHead>税号 / 发票抬头</TableHead>
+              <TableHead className="text-right">授信额度</TableHead>
+              <TableHead className="text-right">在途金额</TableHead>
+              <TableHead className="text-center">状态</TableHead>
+              {canManage && <TableHead className="text-right">操作</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody className="[&_tr]:border-0">
+            {loading && (
+              <TableRow>
+                <TableCell colSpan={columnCount} className="py-6 text-center text-muted-foreground">
+                  <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> 正在加载...
+                </TableCell>
+              </TableRow>
+            )}
+            {!loading && clients.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={columnCount} className="py-6 text-center text-muted-foreground">
+                  暂无客户数据，点击“新增客户”开始维护
+                </TableCell>
+              </TableRow>
+            )}
+            {!loading &&
+              clients.map((client) => (
+                <TableRow key={client.id}>
+                  <TableCell>
+                    <div className="font-medium">{client.displayName}</div>
+                    {client.contactPerson && (
+                      <div className="text-xs text-muted-foreground">联系人：{client.contactPerson}</div>
+                    )}
+                  </TableCell>
+                  <TableCell>{typeLabels[client.type]}</TableCell>
+                  <TableCell>
+                    <div className="text-sm">{client.mobile || '—'}</div>
+                    <div className="text-xs text-muted-foreground">{client.email || '—'}</div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-sm">{client.taxNumber || '—'}</div>
+                    <div className="text-xs text-muted-foreground">{client.invoiceTitle || '—'}</div>
+                  </TableCell>
+                  <TableCell className="text-right">{formatCurrency(client.creditLimit)}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(client.outstandingAmount)}</TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="secondary" className={cn('px-3 py-1 text-xs', statusBadgeClass[client.status])}>
+                      {statusLabels[client.status]}
+                    </Badge>
+                  </TableCell>
+                  {canManage && (
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-32">
+                          <DropdownMenuItem onClick={() => handleEditDialog(client)}>
+                            <Edit2 className="mr-2 h-4 w-4" /> 编辑
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteClick(client)}
+                            className="text-rose-600 focus:text-rose-600"
+                            disabled={deletingId === client.id}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            {deletingId === client.id ? '删除中...' : '删除'}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+          </TableBody>
+        </Table>
+      </div>
 
       <Dialog open={dialogOpen} onOpenChange={(open) => !saving && setDialogOpen(open)}>
         <DialogContent className="p-0 sm:max-w-3xl">

@@ -32,6 +32,9 @@ export function parsePurchaseListParams(searchParams: URLSearchParams): ListPurc
   const projectId = searchParams.get('projectId');
   if (projectId) params.projectId = projectId;
 
+  const supplierId = searchParams.get('supplierId');
+  if (supplierId) params.supplierId = supplierId;
+
   const purchaseChannelParam = searchParams.get('purchaseChannel');
   if (isPurchaseChannel(purchaseChannelParam)) {
     params.purchaseChannel = purchaseChannelParam;

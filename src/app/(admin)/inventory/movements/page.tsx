@@ -137,99 +137,101 @@ export default function InventoryMovementsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6 shadow dark:border-gray-700 dark:bg-gray-900">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">出入库流水</h2>
-            <p className="text-sm text-gray-500">按方向、SKU、仓库和时间范围组合筛选，支持快速导出</p>
-          </div>
-          <Button variant="outline" onClick={handleExport} className="sm:w-auto">
-            导出 CSV（规划中）
-          </Button>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-4">
-          <Select value={directionFilter} onValueChange={(value) => setDirectionFilter(value as typeof directionFilter)}>
-            <SelectTrigger>
-              <SelectValue placeholder="方向" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部方向</SelectItem>
-              <SelectItem value="inbound">仅入库</SelectItem>
-              <SelectItem value="outbound">仅出库</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={itemFilter} onValueChange={(value) => setItemFilter(value)}>
-            <SelectTrigger>
-              <SelectValue placeholder="SKU" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部商品</SelectItem>
-              {uniqueItems.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={warehouseFilter} onValueChange={(value) => setWarehouseFilter(value)}>
-            <SelectTrigger>
-              <SelectValue placeholder="仓库" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部仓库</SelectItem>
-              {uniqueWarehouses.map((warehouse) => (
-                <SelectItem key={warehouse.value} value={warehouse.value}>
-                  {warehouse.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={rangeFilter} onValueChange={(value) => setRangeFilter(value as RangeFilter)}>
-            <SelectTrigger>
-              <SelectValue placeholder="时间范围" />
-            </SelectTrigger>
-            <SelectContent>
-              {rangeOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          {([
-            { label: '入库合计', value: summary.inbound, tone: 'text-green-600 bg-green-50 dark:text-green-300 dark:bg-green-500/10' },
-            { label: '出库合计', value: summary.outbound, tone: 'text-rose-600 bg-rose-50 dark:text-rose-300 dark:bg-rose-500/10' },
-            { label: '净变化', value: summary.net, tone: 'text-indigo-600 bg-indigo-50 dark:text-indigo-300 dark:bg-indigo-500/10' },
-          ] as const).map((card) => (
-            <div key={card.label} className="rounded-xl border border-dashed border-gray-200 p-4 dark:border-gray-700">
-              <div className="flex items-center justify-between text-sm text-gray-500">
-                <span>{card.label}</span>
-                <Badge variant="outline" className={card.tone + ' border-transparent'}>
-                  {filteredMovements.length ? `${filteredMovements.length} 条记录` : '暂无记录'}
-                </Badge>
-              </div>
-              <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
-                {formatNumber(card.value.quantity)}
-                <span className="ml-1 text-sm text-gray-500">件</span>
-              </p>
-              <p className="text-sm text-gray-500">金额 ¥{formatNumber(card.value.amount)}</p>
+      {/* Stats Section */}
+      <div className="grid gap-4 md:grid-cols-3">
+        {([
+          { label: '入库合计', value: summary.inbound, tone: 'text-green-600 bg-green-50 dark:text-green-300 dark:bg-green-500/10' },
+          { label: '出库合计', value: summary.outbound, tone: 'text-rose-600 bg-rose-50 dark:text-rose-300 dark:bg-rose-500/10' },
+          { label: '净变化', value: summary.net, tone: 'text-indigo-600 bg-indigo-50 dark:text-indigo-300 dark:bg-indigo-500/10' },
+        ] as const).map((card) => (
+          <div key={card.label} className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>{card.label}</span>
+              <Badge variant="outline" className={card.tone + ' border-transparent'}>
+                {filteredMovements.length ? `${filteredMovements.length} 条记录` : '暂无记录'}
+              </Badge>
             </div>
-          ))}
+            <p className="mt-2 text-2xl font-semibold text-foreground">
+              {formatNumber(card.value.quantity)}
+              <span className="ml-1 text-sm text-muted-foreground">件</span>
+            </p>
+            <p className="text-sm text-muted-foreground">金额 ¥{formatNumber(card.value.amount)}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters & Actions Bar */}
+      <div className="rounded-lg border border-border bg-card p-3 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-4 lg:gap-4">
+            <Select value={directionFilter} onValueChange={(value) => setDirectionFilter(value as typeof directionFilter)}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="方向" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部方向</SelectItem>
+                <SelectItem value="inbound">仅入库</SelectItem>
+                <SelectItem value="outbound">仅出库</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={itemFilter} onValueChange={(value) => setItemFilter(value)}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="SKU" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部商品</SelectItem>
+                {uniqueItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={warehouseFilter} onValueChange={(value) => setWarehouseFilter(value)}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="仓库" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部仓库</SelectItem>
+                {uniqueWarehouses.map((warehouse) => (
+                  <SelectItem key={warehouse.value} value={warehouse.value}>
+                    {warehouse.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={rangeFilter} onValueChange={(value) => setRangeFilter(value as RangeFilter)}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="时间范围" />
+              </SelectTrigger>
+              <SelectContent>
+                {rangeOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center pt-1 lg:pt-0">
+            <Button variant="outline" onClick={handleExport} size="sm" className="h-9 w-full lg:w-auto">
+              导出 CSV（规划中）
+            </Button>
+          </div>
         </div>
       </div>
 
-      <InventoryMovementsTable
-        movements={filteredMovements}
-        loading={loading}
-        emptyHint="暂无流水数据"
-      />
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+        <InventoryMovementsTable
+          movements={filteredMovements}
+          loading={loading}
+          emptyHint="暂无流水数据"
+        />
+      </div>
     </div>
   );
 }

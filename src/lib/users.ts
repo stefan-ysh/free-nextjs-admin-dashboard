@@ -401,12 +401,6 @@ export async function updateUserRoles(
     throw new Error('USER_NOT_FOUND');
   }
 
-  await mysqlQuery`
-    UPDATE auth_users
-    SET role = ${newPrimaryRole}, updated_at = NOW()
-    WHERE id = ${userId}
-  `;
-  
   return (await findUserById(userId))!;
 }
 

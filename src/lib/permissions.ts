@@ -216,6 +216,21 @@ export const Permissions = {
     anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.INVENTORY_MANAGER],
   } as PermissionConfig,
 
+  // ============ 供应商管理 ============
+  SUPPLIER_VIEW: {
+    anyRoles: [
+      UserRole.SUPER_ADMIN,
+      UserRole.ADMIN,
+      UserRole.FINANCE,
+      UserRole.INVENTORY_MANAGER,
+      UserRole.INVENTORY_OPERATOR,
+    ],
+  } as PermissionConfig,
+
+  SUPPLIER_MANAGE: {
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE],
+  } as PermissionConfig,
+
   // ============ 日程管理 ============
   CALENDAR_VIEW: {
     anyRoles: [

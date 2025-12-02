@@ -94,9 +94,9 @@ export default function FinanceTable({
   }
 
   return (
-    <div className="rounded-none border-primary-200 dark:border-primary-700">
-      <Table>
-        <TableHeader>
+    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+      <Table className="[&_tbody_tr]:hover:bg-muted/40">
+        <TableHeader className="[&_tr]:border-b border-border/40">
           <TableRow>
             <TableHead>日期</TableHead>
             <TableHead>名称</TableHead>
@@ -113,11 +113,11 @@ export default function FinanceTable({
             <TableHead className="text-right">操作</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody>
+        <TableBody className="[&_tr]:border-0">
           {records.map((record) => {
             const totalAmount = record.contractAmount + record.fee;
             return (
-              <TableRow key={record.id} className='border-none'>
+              <TableRow key={record.id}>
                 <TableCell>{formatDate(record.date)}</TableCell>
                 <TableCell className="font-medium">
                   <div className="max-w-[200px] truncate" title={record.name}>
@@ -170,43 +170,68 @@ export default function FinanceTable({
                           onClick={(e) => {
                             e.stopPropagation();
                             const attachments = record.invoice?.attachments || [];
-                            const firstAttachment = attachments[0];
-                            const isImage = firstAttachment?.startsWith('data:image/') || /\.(png|jpe?g|gif|bmp|webp)$/i.test(firstAttachment || '');
 
-                            // Create a simple preview dialog
+                            // Create a modal dialog
                             const dialog = document.createElement('div');
                             dialog.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4';
                             dialog.onclick = () => dialog.remove();
 
                             const content = document.createElement('div');
-                            content.className = 'bg-white dark:bg-gray-900 rounded-lg p-4 max-w-2xl max-h-[80vh] overflow-auto';
+                            content.className = 'bg-white dark:bg-gray-900 rounded-lg p-4 max-w-4xl max-h-[90vh] overflow-auto';
                             content.onclick = (e) => e.stopPropagation();
 
                             const header = document.createElement('div');
-                            header.className = 'flex items-center justify-between mb-3';
+                            header.className = 'flex items-center justify-between mb-4 pb-3 border-b border-border';
                             header.innerHTML = `
-                              <h3 class="text-sm font-semibold">附件预览 (${attachments.length})</h3>
-                              <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" onclick="this.closest('.fixed').remove()">&times;</button>
+                              <h3 class="text-lg font-semibold">附件预览 (${attachments.length} 个文件)</h3>
+                              <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none" onclick="this.closest('.fixed').remove()">&times;</button>
                             `;
 
                             const grid = document.createElement('div');
-                            grid.className = 'grid gap-3 md:grid-cols-2';
+                            grid.className = 'grid gap-4 md:grid-cols-2';
 
                             attachments.forEach((file, idx) => {
+                              const isImage = file.startsWith('data:image/') || /\.(png|jpe?g|gif|bmp|webp)$/i.test(file);
                               const item = document.createElement('div');
-                              const isItemImage = file.startsWith('data:image/') || /\.(png|jpe?g|gif|bmp|webp)$/i.test(file);
 
-                              if (isItemImage) {
+                              if (isImage) {
                                 item.className = 'space-y-2';
-                                item.innerHTML = `
-                                  <img src="${file}" alt="附件 ${idx + 1}" class="w-full h-40 object-cover rounded border border-border" />
-                                  <a href="${file}" target="_blank" class="text-xs text-blue-600 hover:underline dark:text-blue-400">新窗口查看</a>
-                                `;
+                                const img = document.createElement('img');
+                                img.src = file;
+                                img.alt = `附件 ${idx + 1}`;
+                                img.className = 'w-full max-h-[400px] object-contain rounded border border-border cursor-pointer hover:opacity-90 transition-opacity';
+                                img.onclick = () => {
+                                  // Open in new window for full view
+                                  const newWindow = window.open();
+                                  if (newWindow) {
+                                    newWindow.document.write(`
+                                      <!DOCTYPE html>
+                                      <html>
+                                        <head>
+                                          <title>附件 ${idx + 1}</title>
+                                          <style>
+                                            body { margin: 0; padding: 20px; background: #000; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+                                            img { max-width: 100%; max-height: 100vh; object-fit: contain; }
+                                          </style>
+                                        </head>
+                                        <body><img src="${file}" alt="附件 ${idx + 1}" /></body>
+                                      </html>
+                                    `);
+                                  }
+                                };
+                                item.appendChild(img);
+
+                                const link = document.createElement('a');
+                                link.href = file;
+                                link.download = `附件_${idx + 1}`;
+                                link.className = 'inline-block text-xs text-blue-600 hover:underline dark:text-blue-400';
+                                link.textContent = '点击放大查看';
+                                item.appendChild(link);
                               } else {
-                                item.className = 'flex items-center justify-between rounded border border-border bg-muted/50 px-3 py-2';
+                                item.className = 'flex items-center justify-between rounded border border-border bg-muted/50 px-4 py-3';
                                 item.innerHTML = `
-                                  <span class="text-xs">附件 ${idx + 1}</span>
-                                  <a href="${file}" target="_blank" class="text-xs text-blue-600 hover:underline dark:text-blue-400">打开</a>
+                                  <span class="text-sm">附件 ${idx + 1}</span>
+                                  <a href="${file}" target="_blank" class="text-sm text-blue-600 hover:underline dark:text-blue-400">打开</a>
                                 `;
                               }
                               grid.appendChild(item);
@@ -218,7 +243,7 @@ export default function FinanceTable({
                             document.body.appendChild(dialog);
                           }}
                           className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
-                          title={`点击预览 ${record.invoice.attachments.length} 个附件`}
+                          title={`查看 ${record.invoice.attachments.length} 个附件`}
                         >
                           📎 {record.invoice.attachments.length}
                         </button>

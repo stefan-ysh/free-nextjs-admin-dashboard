@@ -74,6 +74,7 @@ export async function GET(request: NextRequest) {
     const keyword = searchParams.get('keyword')?.trim() || undefined;
     const minAmount = parseNumberParam(searchParams.get('minAmount'));
     const maxAmount = parseNumberParam(searchParams.get('maxAmount'));
+    const handlerId = searchParams.get('handlerId')?.trim() || undefined;
 
     const typeFilter = typeParam && [TransactionType.INCOME, TransactionType.EXPENSE].includes(typeParam)
       ? typeParam
@@ -92,6 +93,7 @@ export async function GET(request: NextRequest) {
       keyword,
       minAmount,
       maxAmount,
+      handlerId,
     } as const;
 
     const [records, total] = await Promise.all([
@@ -165,8 +167,10 @@ export async function POST(request: NextRequest) {
       createdBy: context.user.id,
       sourceType: body.sourceType,
       purchaseId: body.purchaseId,
+      supplierId: body.supplierId,
       projectId: body.projectId,
       status: body.status ?? 'draft',
+      metadata: body.handlerId ? { handlerId: body.handlerId } : undefined,
     });
 
     const response: FinanceApiResponse<FinanceRecord> = {

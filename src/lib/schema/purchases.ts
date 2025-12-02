@@ -1,6 +1,7 @@
 import { schemaPool, safeCreateIndex, ensureColumn } from '@/lib/schema/mysql-utils';
 import { ensureUsersSchema } from '@/lib/schema/users';
 import { ensureProjectsSchema } from '@/lib/schema/projects';
+import { ensureSuppliersSchema } from '@/lib/schema/suppliers';
 
 let initialized = false;
 
@@ -9,6 +10,7 @@ export async function ensurePurchasesSchema() {
 
   await ensureUsersSchema();
   await ensureProjectsSchema();
+  await ensureSuppliersSchema();
 
   const pool = schemaPool();
 
@@ -33,6 +35,7 @@ export async function ensurePurchasesSchema() {
       payer_name VARCHAR(120),
       transaction_no VARCHAR(160),
       purchaser_id CHAR(36) NOT NULL,
+      supplier_id CHAR(36),
       invoice_type ENUM('special','general','none') NOT NULL,
       invoice_status ENUM('pending','issued','not_required') NOT NULL DEFAULT 'not_required',
       invoice_number VARCHAR(120),
@@ -67,7 +70,8 @@ export async function ensurePurchasesSchema() {
       CONSTRAINT fk_purchases_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
       CONSTRAINT fk_purchases_approved_by FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL,
       CONSTRAINT fk_purchases_rejected_by FOREIGN KEY (rejected_by) REFERENCES users(id) ON DELETE SET NULL,
-      CONSTRAINT fk_purchases_paid_by FOREIGN KEY (paid_by) REFERENCES users(id) ON DELETE SET NULL
+      CONSTRAINT fk_purchases_paid_by FOREIGN KEY (paid_by) REFERENCES users(id) ON DELETE SET NULL,
+      CONSTRAINT fk_purchases_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
@@ -81,6 +85,7 @@ export async function ensurePurchasesSchema() {
   await ensureColumn('purchases', 'payment_channel', 'VARCHAR(120)');
   await ensureColumn('purchases', 'payer_name', 'VARCHAR(120)');
   await ensureColumn('purchases', 'transaction_no', 'VARCHAR(160)');
+  await ensureColumn('purchases', 'supplier_id', 'CHAR(36) NULL');
   await ensureColumn(
     'purchases',
     'invoice_status',
@@ -110,6 +115,7 @@ export async function ensurePurchasesSchema() {
   await safeCreateIndex('CREATE INDEX idx_purchases_project ON purchases(project_id)');
   await safeCreateIndex('CREATE INDEX idx_purchases_date ON purchases(purchase_date)');
   await safeCreateIndex('CREATE INDEX idx_purchases_created_by ON purchases(created_by)');
+  await safeCreateIndex('CREATE INDEX idx_purchases_supplier ON purchases(supplier_id)');
   await safeCreateIndex('CREATE INDEX idx_reimbursement_logs_purchase ON reimbursement_logs(purchase_id)');
   await safeCreateIndex('CREATE INDEX idx_reimbursement_logs_created ON reimbursement_logs(created_at)');
 

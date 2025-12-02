@@ -14,6 +14,7 @@ const PURCHASE_VALIDATION_MESSAGES: Record<string, string> = {
   CREATED_BY_REQUIRED: '当前登录信息异常，请重新登录后再试',
   CREATED_BY_NOT_FOUND: '创建人不存在或已被禁用，请重新登录后再试',
   PURCHASER_NOT_FOUND: '采购人不存在或已被禁用，请重新选择',
+  SUPPLIER_NOT_FOUND: '供应商不存在或已被停用，请重新选择',
   INVALID_INVOICE_STATUS: '发票状态填写有误，请重新选择',
   NOT_EDITABLE: '当前状态下不能修改采购信息',
   NOT_SUBMITTABLE: '当前状态无法提交报销，请先确认记录为草稿或已驳回',

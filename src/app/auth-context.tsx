@@ -32,22 +32,30 @@ export function useAuth() {
 }
 
 async function fetchMe(): Promise<AuthUser | null> {
-  const res = await fetch('/api/auth/me', { cache: 'no-store' });
-  if (!res.ok) return null;
-  const data = await res.json();
-  if (!data?.data) return null;
-  const payload = data.data as Record<string, unknown>;
-  return {
-    id: String(payload.id),
-    email: String(payload.email ?? ''),
-    role: String(payload.role ?? ''),
-    firstName: (payload.firstName as string | null | undefined) ?? null,
-    lastName: (payload.lastName as string | null | undefined) ?? null,
-    displayName: (payload.displayName as string | null | undefined) ?? null,
-    jobTitle: (payload.jobTitle as string | null | undefined) ?? null,
-    avatarUrl: (payload.avatarUrl as string | null | undefined) ?? null,
-    expiresAt: (payload.expiresAt as string | null | undefined) ?? undefined,
-  };
+  try {
+    const res = await fetch('/api/auth/me', {
+      cache: 'no-store',
+      credentials: 'include',
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.data) return null;
+    const payload = data.data as Record<string, unknown>;
+    return {
+      id: String(payload.id),
+      email: String(payload.email ?? ''),
+      role: String(payload.role ?? ''),
+      firstName: (payload.firstName as string | null | undefined) ?? null,
+      lastName: (payload.lastName as string | null | undefined) ?? null,
+      displayName: (payload.displayName as string | null | undefined) ?? null,
+      jobTitle: (payload.jobTitle as string | null | undefined) ?? null,
+      avatarUrl: (payload.avatarUrl as string | null | undefined) ?? null,
+      expiresAt: (payload.expiresAt as string | null | undefined) ?? undefined,
+    };
+  } catch (error) {
+    console.error('Failed to fetch current auth user', error);
+    return null;
+  }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

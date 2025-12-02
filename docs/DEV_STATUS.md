@@ -46,6 +46,10 @@
 - 所有 Finance DAO/类型/校验已同步新增字段，API 创建记录时默认 `status='draft'`
 - 采购打款会将流水记为 `sourceType=purchase`、`status=cleared`，并记录 `purchaseNumber/purchaserId/payedBy` 等 metadata
 
+### 8. 供应商基础数据 ✅
+- `ensureSuppliersSchema` 会在首次初始化时自动写入「淘宝 / 拼多多 / 京东 / 1688」四个常用电商平台
+- 默认标记为 `active` 状态，管理员仍可在后台供应商页面继续新增或编辑其它供应商
+
 ## 🔧 本地数据库模式
 
 - MySQL: `finance_records / finance_categories / projects / purchases / auth_users / reimbursement_logs` 已通过 `ensure*Schema` 自动创建

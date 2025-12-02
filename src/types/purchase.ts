@@ -1,4 +1,5 @@
 import { PaymentType, InvoiceStatus, InvoiceType as FinanceInvoiceType } from '@/types/finance';
+import type { Supplier, SupplierStatus } from '@/types/supplier';
 
 export { PaymentType, InvoiceStatus } from '@/types/finance';
 
@@ -76,6 +77,12 @@ export interface PurchaseRecord {
   payerName: string | null;
   transactionNo: string | null;
   purchaserId: string;
+
+  // 供应商信息
+  supplierId: string | null;
+  supplierName?: string | null;
+  supplierShortName?: string | null;
+  supplierStatus?: SupplierStatus;
   
   // 发票信息
   invoiceType: InvoiceType;
@@ -136,6 +143,7 @@ export interface CreatePurchaseInput {
   payerName?: string;
   transactionNo?: string;
   purchaserId?: string;  // 默认当前用户
+  supplierId?: string | null;
   
   invoiceType: InvoiceType;
   invoiceStatus?: InvoiceStatus;
@@ -173,6 +181,7 @@ export interface UpdatePurchaseInput {
   payerName?: string | null;
   transactionNo?: string | null;
   purchaserId?: string;
+  supplierId?: string | null;
   
   invoiceType?: InvoiceType;
   invoiceStatus?: InvoiceStatus;
@@ -196,6 +205,7 @@ export interface ListPurchasesParams {
   status?: PurchaseStatus | 'all';
   purchaserId?: string;
   projectId?: string;
+  supplierId?: string;
   purchaseChannel?: PurchaseChannel;
   paymentMethod?: PaymentMethod;
   startDate?: string;
@@ -309,6 +319,7 @@ export interface PurchaseDetail extends PurchaseRecord {
     displayName: string;
   } | null;
   logs: ReimbursementLog[];
+  supplier: Supplier | null;
 }
 
 /**

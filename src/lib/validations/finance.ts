@@ -27,8 +27,10 @@ export const financeRecordSchema = z.object({
   status: z.enum(['draft', 'cleared']).optional(),
   sourceType: z.enum(['manual', 'purchase', 'project', 'import', 'inventory', 'project_payment']).optional(),
   purchaseId: z.string().optional(),
+  supplierId: z.string().optional(),
   projectId: z.string().optional(),
   projectPaymentId: z.string().optional(),
+  handlerId: z.string().optional(),
 });
 
 export type FinanceRecordFormValues = z.infer<typeof financeRecordSchema>;

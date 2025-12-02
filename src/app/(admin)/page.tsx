@@ -23,6 +23,7 @@ import InventoryStatsCards from '@/components/inventory/InventoryStatsCards';
 import InventoryLowStockList from '@/components/inventory/InventoryLowStockList';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { USER_ROLE_LABELS } from '@/constants/user-roles';
 
 const currencyFormatter = new Intl.NumberFormat('zh-CN', {
   style: 'currency',
@@ -70,7 +71,7 @@ function MetricCard({ label, value, helper, icon, tone = 'default' }: MetricCard
           : 'text-gray-900 dark:text-white';
 
   return (
-    <Card className="shadow-sm">
+    <Card className="shadow-sm border-none">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 pb-1">
         <CardTitle className="text-xs font-medium text-muted-foreground">{label}</CardTitle>
         {icon}
@@ -124,30 +125,47 @@ export default async function AdminDashboardPage() {
   ].some(Boolean);
 
   const greetingName = profile.displayName || profile.firstName || profile.email;
-  const primaryRole = profile.primaryRole?.replace(/_/g, ' ') ?? 'member';
+  const primaryRole = profile.primaryRole ? USER_ROLE_LABELS[profile.primaryRole] : '员工';
   const lastLogin = formatDateTimeLocal(profile.lastLoginAt) ?? '暂无登录记录';
+  const accessibleModules = (
+    [
+      inventoryPermission.allowed && '库存',
+      financePermission.allowed && '财务',
+      hrPermission.allowed && '人事',
+      clientPermission.allowed && '客户',
+      projectPermission.allowed && '项目',
+    ].filter(Boolean) as string[]
+  ).join(' / ');
+  const quickFacts = [
+    { label: '当前主角色', value: primaryRole },
+    { label: '上次登录', value: lastLogin },
+    { label: '可访问模块', value: accessibleModules || '基础权限' },
+  ];
 
   return (
     <div className="space-y-10 p-6">
-      <Card className="bg-gradient-to-br from-indigo-50 via-white to-white/40 dark:from-indigo-950/40 dark:via-gray-900 dark:to-gray-900/40">
-        <CardHeader>
-          <CardDescription className="text-sm font-medium uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
-            今日概览
+      <Card className="bg-gradient-to-br from-indigo-50 via-white to-white/40 dark:from-indigo-950/40 dark:via-gray-900 dark:to-gray-900/40 border-none">
+        <CardHeader className="space-y-2 pb-0">
+          <CardDescription className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
+            运营概览
           </CardDescription>
           <CardTitle className="text-3xl font-semibold text-foreground">
             你好，{greetingName}！
           </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            当前主角色：{primaryRole} · 上次登录：{lastLogin}
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
-            {profile.roles.map((role) => (
-              <Badge key={role} variant="outline">
-                {role}
-              </Badge>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-0">
+          <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
+            {quickFacts.map((fact) => (
+              <div
+                key={fact.label}
+                className="rounded-xl border border-white/60 bg-white/70 p-3 shadow-sm backdrop-blur transition hover:border-indigo-200 dark:border-white/10 dark:bg-slate-900/40"
+              >
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{fact.label}</p>
+                <p className="mt-1 text-sm font-semibold text-foreground">{fact.value}</p>
+              </div>
             ))}
           </div>
-        </CardHeader>
+        </CardContent>
       </Card>
 
       {!hasAnySection ? (
@@ -169,7 +187,7 @@ export default async function AdminDashboardPage() {
                   <div className="lg:col-span-2">
                     <InventoryLowStockList items={inventoryStats?.lowStockItems ?? []} />
                   </div>
-                  <Card>
+                  <Card className="hidden lg:block border-none">
                     <CardHeader>
                       <CardTitle className="text-base">任务贴士</CardTitle>
                       <CardDescription>根据库存提醒安排补货或调拨。</CardDescription>
@@ -194,7 +212,7 @@ export default async function AdminDashboardPage() {
                 <MetricCard label="记录数量" value={formatNumber(financeStats?.recordCount)} icon={<ClipboardList className="h-5 w-5 text-purple-500" />} helper="财务流水条目" />
               </div>
               {financeStats?.categoryStats?.length ? (
-                <Card>
+                <Card className="border-none shadow-sm">
                   <CardHeader>
                     <CardTitle className="text-base">分类排名（前 5）</CardTitle>
                     <CardDescription>按金额排序的主要收入/支出分类。</CardDescription>
@@ -237,7 +255,7 @@ export default async function AdminDashboardPage() {
                 <MetricCard label="待回款" value={formatCurrency(clientStats?.outstanding)} helper="Outstanding" tone="negative" />
               </div>
               <div className="grid gap-4 md:grid-cols-2">
-                <Card>
+                <Card className='border-none'>
                   <CardHeader>
                     <CardTitle className="text-base">授信额度</CardTitle>
                     <CardDescription>当前所有客户授信总额。</CardDescription>
@@ -247,7 +265,7 @@ export default async function AdminDashboardPage() {
                     <p className="mt-2 text-xs text-muted-foreground">包含公司与个人客户</p>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className='border-none'>
                   <CardHeader>
                     <CardTitle className="text-base">占款排名</CardTitle>
                     <CardDescription>Outstanding Top 5</CardDescription>
@@ -280,7 +298,7 @@ export default async function AdminDashboardPage() {
                 <MetricCard label="近 30 天入职" value={formatNumber(hrStats?.newHires30d)} helper="New hires" tone="info" />
                 <MetricCard label="近 30 天离职" value={formatNumber(hrStats?.departures30d)} helper="Departures" tone="negative" />
               </div>
-              <Card>
+              <Card className="border-none shadow-sm">
                 <CardHeader>
                   <CardTitle className="text-base">最新状态变更</CardTitle>
                   <CardDescription>最多展示 6 条记录。</CardDescription>

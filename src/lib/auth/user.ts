@@ -18,7 +18,8 @@ type RawUserRow = RowDataPacket & {
   id: string;
   email: string;
   password_hash: string;
-  role: UserRole;
+  roles: unknown; // JSON array of roles
+  primary_role: string;
   first_name: string | null;
   last_name: string | null;
   display_name: string | null;
@@ -31,13 +32,36 @@ type RawUserRow = RowDataPacket & {
   tax_id: string | null;
   avatar_url: string | null;
   social_links: unknown;
+  custom_fields: unknown;
+  is_active: number;
+  email_verified: number;
   password_updated_at: string | null;
   created_at: string;
   updated_at: string;
 };
 
-export type UserRecord = Omit<RawUserRow, 'social_links'> & {
+export type UserRecord = {
+  id: string;
+  email: string;
+  password_hash: string;
+  role: UserRole; // Keep for backward compatibility
+  roles: UserRole[]; // Array of roles from users table
+  primary_role: UserRole;
+  first_name: string | null;
+  last_name: string | null;
+  display_name: string | null;
+  job_title: string | null;
+  phone: string | null;
+  bio: string | null;
+  country: string | null;
+  city: string | null;
+  postal_code: string | null;
+  tax_id: string | null;
+  avatar_url: string | null;
   social_links: SocialLinks;
+  password_updated_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type UserProfile = Omit<UserRecord, 'password_hash'>;
@@ -53,10 +77,24 @@ function parseJsonObject(value: unknown): Record<string, unknown> {
         return parsed as Record<string, unknown>;
       }
     } catch (error) {
-      console.warn('Failed to parse auth_users.social_links JSON', error);
+      console.warn('Failed to parse JSON object column', error);
     }
   }
   return {};
+}
+
+function parseJsonArray<T = string>(value: unknown): T[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value as T[];
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? (parsed as T[]) : [];
+    } catch (error) {
+      console.warn('Failed to parse JSON array column', error);
+    }
+  }
+  return [];
 }
 
 function normalizeSocialLinks(input: unknown): SocialLinks {
@@ -78,9 +116,32 @@ function normalizeSocialLinks(input: unknown): SocialLinks {
 
 function mapUser(row: RawUserRow | undefined): UserRecord | null {
   if (!row) return null;
+
+  const roles = parseJsonArray<UserRole>(row.roles);
+  const primaryRole = row.primary_role as UserRole;
+
   return {
-    ...row,
+    id: row.id,
+    email: row.email,
+    password_hash: row.password_hash,
+    roles: roles.length ? roles : [primaryRole],
+    primary_role: primaryRole,
+    role: primaryRole, // For backward compatibility
+    first_name: row.first_name,
+    last_name: row.last_name,
+    display_name: row.display_name,
+    job_title: row.job_title,
+    phone: row.phone,
+    bio: row.bio,
+    country: row.country,
+    city: row.city,
+    postal_code: row.postal_code,
+    tax_id: row.tax_id,
+    avatar_url: row.avatar_url,
     social_links: normalizeSocialLinks(parseJsonObject(row.social_links)),
+    password_updated_at: row.password_updated_at,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
 
@@ -102,7 +163,7 @@ function cleanSocialLinks(links: SocialLinks | null | undefined): Record<string,
 export async function findUserByEmail(email: string): Promise<UserRecord | null> {
   await ensureAuthSchema();
   const [rows] = await pool.query<RawUserRow[]>(
-    'SELECT * FROM auth_users WHERE email = ? LIMIT 1',
+    'SELECT * FROM users WHERE email = ? LIMIT 1',
     [email.toLowerCase()]
   );
   return mapUser(rows[0]);
@@ -111,7 +172,7 @@ export async function findUserByEmail(email: string): Promise<UserRecord | null>
 export async function findUserById(id: string): Promise<UserRecord | null> {
   await ensureAuthSchema();
   const [rows] = await pool.query<RawUserRow[]>(
-    'SELECT * FROM auth_users WHERE id = ? LIMIT 1',
+    'SELECT * FROM users WHERE id = ? LIMIT 1',
     [id]
   );
   return mapUser(rows[0]);
@@ -135,10 +196,14 @@ export async function createUser(params: {
   const role = params.role ?? 'staff';
   const displayName = params.displayName?.trim() || email.split('@')[0];
 
-  await mysqlQuery`
-    INSERT INTO auth_users (id, email, password_hash, role, display_name)
-    VALUES (${id}, ${email}, ${passwordHash}, ${role}, ${displayName})
-  `;
+  // Convert single role to roles array for users table
+  const rolesJson = JSON.stringify([role]);
+
+  await pool.query(
+    `INSERT INTO users (id, email, password_hash, roles, primary_role, display_name, is_active, email_verified, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, 1, 0, NOW(), NOW())`,
+    [id, email, passwordHash, rolesJson, role, displayName]
+  );
 
   return (await findUserById(id))!;
 }
@@ -146,11 +211,10 @@ export async function createUser(params: {
 export async function updateUserPassword(userId: string, password: string): Promise<void> {
   await ensureAuthSchema();
   const passwordHash = await hashPassword(password);
-  await mysqlQuery`
-    UPDATE auth_users
-    SET password_hash = ${passwordHash}, password_updated_at = NOW(), updated_at = NOW()
-    WHERE id = ${userId}
-  `;
+  await pool.query(
+    'UPDATE users SET password_hash = ?, password_updated_at = NOW(), updated_at = NOW() WHERE id = ?',
+    [passwordHash, userId]
+  );
 }
 
 export type UpdateUserProfileInput = {
@@ -191,7 +255,7 @@ export async function updateUserProfile(userId: string, input: UpdateUserProfile
   };
 
   const [result] = await pool.query<ResultSetHeader>(
-    `UPDATE auth_users
+    `UPDATE users
       SET
         first_name = ?,
         last_name = ?,
@@ -233,7 +297,7 @@ export async function updateUserAvatar(userId: string, avatarUrl: string | null)
   await ensureAuthSchema();
   const sanitized = sanitizeNullableText(avatarUrl);
   const [result] = await pool.query<ResultSetHeader>(
-    'UPDATE auth_users SET avatar_url = ?, updated_at = NOW() WHERE id = ?',
+    'UPDATE users SET avatar_url = ?, updated_at = NOW() WHERE id = ?',
     [sanitized, userId]
   );
 

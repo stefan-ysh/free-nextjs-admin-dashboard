@@ -9,7 +9,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 
 export default function PurchaseCreatePage() {
 	const router = useRouter();
-	const { loading: permissionLoading, hasPermission } = usePermissions();
+	const { user, loading: permissionLoading, hasPermission } = usePermissions();
 	const canCreatePurchase = useMemo(
 		() => !permissionLoading && hasPermission('PURCHASE_CREATE'),
 		[hasPermission, permissionLoading]
@@ -56,6 +56,7 @@ export default function PurchaseCreatePage() {
 				<div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900">
 					<PurchaseForm
 						mode="create"
+						currentUserId={user?.id ?? ''}
 						onSubmit={handleCreate}
 						onCancel={() => router.push('/purchases')}
 					/>

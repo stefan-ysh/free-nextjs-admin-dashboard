@@ -6,9 +6,11 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import { toast } from 'sonner';
 
 import ProjectSelector from '@/components/common/ProjectSelector';
+import SupplierSelector from '@/components/common/SupplierSelector';
 import DatePicker from '@/components/ui/DatePicker';
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from '@/components/ui/sheet';
 
+import UserSelect from '@/components/common/UserSelect';
 import PurchaseDetailModal from './PurchaseDetailModal';
 import PurchaseTable, { type PurchaseRowPermissions } from './PurchaseTable';
 import RejectionReasonDialog from './RejectionReasonDialog';
@@ -59,7 +61,8 @@ type PurchaseFilters = {
   projectId: string | null;
   minAmount: number | null;
   maxAmount: number | null;
-  onlyMine: boolean;
+  purchaserId: string | null;
+  supplierId: string | null;
 };
 
 const DEFAULT_FILTERS: PurchaseFilters = {
@@ -72,7 +75,8 @@ const DEFAULT_FILTERS: PurchaseFilters = {
   projectId: null,
   minAmount: null,
   maxAmount: null,
-  onlyMine: false,
+  purchaserId: null,
+  supplierId: null,
 };
 
 const CHANNEL_LABELS: Record<PurchaseChannel, string> = {
@@ -111,6 +115,7 @@ function createFallbackDetail(record: PurchaseRecord): PurchaseDetail {
     rejecter: record.rejectedBy ? { id: record.rejectedBy, displayName: record.rejectedBy } : null,
     payer: record.paidBy ? { id: record.paidBy, displayName: record.paidBy } : null,
     logs: [],
+    supplier: null,
   };
 }
 
@@ -119,8 +124,7 @@ function buildQuery(
   page: number,
   pageSize: number,
   sortBy: SortField,
-  sortOrder: SortOrder,
-  purchaserId?: string | null
+  sortOrder: SortOrder
 ) {
   const params = new URLSearchParams();
   if (filters.search.trim()) params.set('search', filters.search.trim());
@@ -130,9 +134,10 @@ function buildQuery(
   if (filters.startDate) params.set('startDate', filters.startDate);
   if (filters.endDate) params.set('endDate', filters.endDate);
   if (filters.projectId) params.set('projectId', filters.projectId);
+  if (filters.supplierId) params.set('supplierId', filters.supplierId);
   if (filters.minAmount != null) params.set('minAmount', String(filters.minAmount));
   if (filters.maxAmount != null) params.set('maxAmount', String(filters.maxAmount));
-  if (filters.onlyMine && purchaserId) params.set('purchaserId', purchaserId);
+  if (filters.purchaserId) params.set('purchaserId', filters.purchaserId);
   params.set('page', String(page));
   params.set('pageSize', String(pageSize));
   params.set('sortBy', sortBy);
@@ -194,6 +199,7 @@ export default function PurchasesClient() {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [projectFilterSummary, setProjectFilterSummary] = useState<{ id: string; name: string; code?: string } | null>(null);
+  const [supplierFilterSummary, setSupplierFilterSummary] = useState<{ id: string; name: string; shortName?: string } | null>(null);
   const [exporting, setExporting] = useState(false);
   const [stats, setStats] = useState<PurchaseStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
@@ -237,13 +243,14 @@ export default function PurchasesClient() {
   useEffect(() => {
     if (permissionLoading || !canViewPurchases) return;
 
-    const purchaserId = filters.onlyMine ? permissionUser?.id ?? null : null;
+    if (permissionLoading || !canViewPurchases) return;
+
     let cancelled = false;
     async function load() {
       setLoading(true);
       setError(null);
       try {
-        const query = buildQuery(filters, page, pageSize, sortBy, sortOrder, purchaserId);
+        const query = buildQuery(filters, page, pageSize, sortBy, sortOrder);
         const response = await fetch(`/api/purchases?${query}`, {
           headers: { Accept: 'application/json' },
         });
@@ -283,14 +290,15 @@ export default function PurchasesClient() {
   useEffect(() => {
     if (permissionLoading || !canViewPurchases) return;
 
-    const purchaserId = filters.onlyMine ? permissionUser?.id ?? null : null;
+    if (permissionLoading || !canViewPurchases) return;
+
     let cancelled = false;
 
     async function loadStats() {
       setStatsLoading(true);
       setStatsError(null);
       try {
-        const query = buildQuery(filters, 1, 1, sortBy, sortOrder, purchaserId);
+        const query = buildQuery(filters, 1, 1, sortBy, sortOrder);
         const response = await fetch(`/api/purchases/stats?${query}`, {
           headers: { Accept: 'application/json' },
         });
@@ -359,11 +367,12 @@ export default function PurchasesClient() {
   const advancedFilterCount = useMemo(() => {
     let count = 0;
     if (filters.projectId) count += 1;
+    if (filters.supplierId) count += 1;
     if (filters.minAmount != null) count += 1;
     if (filters.maxAmount != null) count += 1;
-    if (filters.onlyMine) count += 1;
+    if (filters.purchaserId) count += 1;
     return count;
-  }, [filters.projectId, filters.minAmount, filters.maxAmount, filters.onlyMine]);
+  }, [filters.projectId, filters.supplierId, filters.minAmount, filters.maxAmount, filters.purchaserId]);
 
   const handleView = useCallback(
     (purchase: PurchaseRecord) => {
@@ -380,6 +389,7 @@ export default function PurchasesClient() {
       setSortBy('updatedAt');
       setSortOrder('desc');
       setProjectFilterSummary(null);
+      setSupplierFilterSummary(null);
       setShowAdvancedFilters(false);
     });
   };
@@ -407,8 +417,7 @@ export default function PurchasesClient() {
     if (exporting) return;
     setExporting(true);
     try {
-      const purchaserId = filters.onlyMine ? permissionUser?.id ?? null : null;
-      const query = buildQuery(filters, 1, pageSize, sortBy, sortOrder, purchaserId);
+      const query = buildQuery(filters, 1, pageSize, sortBy, sortOrder);
       const response = await fetch(`/api/purchases/export?${query}`, {
         headers: { Accept: 'text/csv' },
       });
@@ -439,7 +448,7 @@ export default function PurchasesClient() {
     } finally {
       setExporting(false);
     }
-  }, [exporting, filters, permissionUser?.id, pageSize, sortBy, sortOrder]);
+  }, [exporting, filters, pageSize, sortBy, sortOrder]);
 
   const handleAmountFilterChange = useCallback(
     (field: 'minAmount' | 'maxAmount', rawValue: string) => {
@@ -458,6 +467,18 @@ export default function PurchasesClient() {
         setProjectFilterSummary({ id: projectId, name: project.projectName, code: project.projectCode });
       } else {
         setProjectFilterSummary(null);
+      }
+    },
+    [handleFilterChange]
+  );
+
+  const handleSupplierFilterChange = useCallback(
+    (supplierId: string, supplier?: { name: string; shortName?: string | null } | null) => {
+      handleFilterChange({ supplierId: supplierId || null });
+      if (supplier && supplierId) {
+        setSupplierFilterSummary({ id: supplierId, name: supplier.name, shortName: supplier.shortName ?? undefined });
+      } else {
+        setSupplierFilterSummary(null);
       }
     },
     [handleFilterChange]
@@ -497,24 +518,25 @@ export default function PurchasesClient() {
         : `项目：${filters.projectId}`;
       chips.push({ key: 'project', label, onRemove: () => handleProjectFilterChange('', null) });
     }
+    if (filters.supplierId) {
+      const label = supplierFilterSummary
+        ? `供应商：${supplierFilterSummary.name}${supplierFilterSummary.shortName ? `（${supplierFilterSummary.shortName}）` : ''}`
+        : `供应商：${filters.supplierId}`;
+      chips.push({ key: 'supplier', label, onRemove: () => handleSupplierFilterChange('', null) });
+    }
     if (filters.minAmount != null) {
       chips.push({ key: 'minAmount', label: `金额≥¥${filters.minAmount}`, onRemove: () => handleFilterChange({ minAmount: null }) });
     }
     if (filters.maxAmount != null) {
       chips.push({ key: 'maxAmount', label: `金额≤¥${filters.maxAmount}`, onRemove: () => handleFilterChange({ maxAmount: null }) });
     }
-    if (filters.onlyMine) {
-      chips.push({ key: 'onlyMine', label: '仅看我发起', onRemove: () => handleFilterChange({ onlyMine: false }) });
+    if (filters.purchaserId) {
+      chips.push({ key: 'purchaserId', label: '指定员工', onRemove: () => handleFilterChange({ purchaserId: null }) });
     }
     return chips;
-  }, [filters, handleFilterChange, handleProjectFilterChange, projectFilterSummary]);
+  }, [filters, handleFilterChange, handleProjectFilterChange, handleSupplierFilterChange, projectFilterSummary, supplierFilterSummary]);
 
-  const handleToggleOnlyMine = useCallback(
-    (checked: boolean) => {
-      handleFilterChange({ onlyMine: checked });
-    },
-    [handleFilterChange]
-  );
+
 
   const performAction = useCallback(
     async (
@@ -695,17 +717,71 @@ export default function PurchasesClient() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-border bg-white p-4 shadow-sm dark:border-border dark:bg-gray-900 sm:p-5 !pt-0">
+      {/* Stats Section */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {stats ? (
+            <>
+              <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
+                <span className="font-medium text-foreground">总采购金额</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{amountFormatter.format(stats.totalAmount)}</span>
+                <span className="text-[10px] text-muted-foreground/80">共 {stats.totalPurchases} 条</span>
+              </div>
+              <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
+                <span className="font-medium text-foreground">待审批</span>
+                <span className="font-semibold text-amber-600 dark:text-amber-400">{amountFormatter.format(stats.pendingAmount)}</span>
+                <span className="text-[10px] text-muted-foreground/80">{stats.pendingCount} 条</span>
+              </div>
+              <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
+                <span className="font-medium text-foreground">已批准</span>
+                <span className="font-semibold text-sky-600 dark:text-sky-400">{amountFormatter.format(stats.approvedAmount)}</span>
+                <span className="text-[10px] text-muted-foreground/80">{stats.approvedCount} 条</span>
+              </div>
+              <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
+                <span className="font-medium text-foreground">已打款</span>
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">{amountFormatter.format(stats.paidAmount)}</span>
+                <span className="text-[10px] text-muted-foreground/80">{stats.paidCount} 条</span>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-full border border-dashed border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground">
+              {statsLoading ? '正在加载统计信息…' : '暂无统计数据'}
+            </div>
+          )}
+        </div>
+        <div>
+          {statsLoading && <span className="text-xs text-gray-500 dark:text-gray-400">加载中…</span>}
+          {statsError && !statsLoading && (
+            <span className="text-xs text-rose-600 dark:text-rose-300">{statsError}</span>
+          )}
+        </div>
+      </div>
 
-
-        <div className="mt-4 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
+      {/* Filters & Actions Bar */}
+      <div className="rounded-lg border border-border bg-card p-3 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          {/* Search Input */}
+          <div className="relative flex-1">
             <input
               value={filters.search}
               onChange={(event) => handleFilterChange({ search: event.target.value })}
               placeholder="按单号 / 物品 / 用途检索"
-              className="h-9 min-w-[220px] flex-1 rounded-md border border-border px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
+              className="h-9 w-full rounded-md border border-border px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
             />
+          </div>
+
+          {/* Filters Group */}
+          <div className="flex flex-wrap items-center gap-2">
+            {permissions.canViewAll && (
+              <div className="w-[160px]">
+                <UserSelect
+                  value={filters.purchaserId}
+                  onChange={(val) => handleFilterChange({ purchaserId: val })}
+                  placeholder="筛选申请人..."
+                  className="h-9"
+                />
+              </div>
+            )}
 
             <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
               <SheetTrigger asChild>
@@ -720,7 +796,6 @@ export default function PurchasesClient() {
                     </span>
                   )}
                 </button>
-
               </SheetTrigger>
               <SheetContent side="right" className="sm:max-w-xl">
                 <SheetHeader>
@@ -867,17 +942,16 @@ export default function PurchasesClient() {
                             helperText="快速定位对应项目的采购记录"
                           />
                         </div>
-                        <label className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
-                          <input
-                            type="checkbox"
-                            checked={filters.onlyMine}
-                            onChange={(event) => handleToggleOnlyMine(event.target.checked)}
-                            disabled={!permissionUser}
-                            className="h-4 w-4"
+                        <div>
+                          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">关联供应商（可选）</label>
+                          <SupplierSelector
+                            value={filters.supplierId ?? ''}
+                            onChange={(supplierId, supplier) => handleSupplierFilterChange(supplierId, supplier ?? undefined)}
+                            disabled={loading}
+                            helperText="默认展示状态为正常的供应商，可输入关键字搜索"
+                            status="all"
                           />
-                          <span>仅查看我发起的采购</span>
-                          {!permissionUser && <span className="text-xs text-gray-400">加载账户信息后可用</span>}
-                        </label>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -944,62 +1018,11 @@ export default function PurchasesClient() {
             </div>
           )}
         </div>
+
+
       </div>
 
-      <div className="rounded-lg border border-border bg-white p-6 shadow-sm dark:border-border dark:bg-gray-900">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">实时统计</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">根据当前筛选条件自动聚合</p>
-          </div>
-          {statsLoading && <span className="text-xs text-gray-500 dark:text-gray-400">加载中…</span>}
-          {statsError && !statsLoading && (
-            <span className="text-xs text-rose-600 dark:text-rose-300">{statsError}</span>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {stats ? (
-            <>
-              <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
-                <span className="font-medium text-foreground">总采购金额</span>
-                <span className="font-semibold text-gray-900 dark:text-white">{amountFormatter.format(stats.totalAmount)}</span>
-                <span className="text-[10px] text-muted-foreground/80">共 {stats.totalPurchases} 条</span>
-              </div>
-              <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
-                <span className="font-medium text-foreground">待审批</span>
-                <span className="font-semibold text-amber-600 dark:text-amber-400">{amountFormatter.format(stats.pendingAmount)}</span>
-                <span className="text-[10px] text-muted-foreground/80">{stats.pendingCount} 条</span>
-              </div>
-              <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
-                <span className="font-medium text-foreground">已批准</span>
-                <span className="font-semibold text-sky-600 dark:text-sky-400">{amountFormatter.format(stats.approvedAmount)}</span>
-                <span className="text-[10px] text-muted-foreground/80">{stats.approvedCount} 条</span>
-              </div>
-              <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
-                <span className="font-medium text-foreground">已打款</span>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">{amountFormatter.format(stats.paidAmount)}</span>
-                <span className="text-[10px] text-muted-foreground/80">{stats.paidCount} 条</span>
-              </div>
-            </>
-          ) : (
-            <div className="rounded-full border border-dashed border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground">
-              {statsLoading ? '正在加载统计信息…' : '暂无统计数据'}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        {Object.entries(statusSummary).map(([status, count]) => (
-          <div key={status} className="rounded-lg border border-border bg-white p-4 dark:border-border dark:bg-gray-900">
-            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-              {getPurchaseStatusText(status as PurchaseStatus)}
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-gray-100">{count}</p>
-          </div>
-        ))}
-      </div>
+      {/* Status summary grid removed to avoid duplicating the metrics shown in the real-time stats card above */}
 
       <div className="rounded-lg border border-border bg-white shadow-sm dark:border-border dark:bg-gray-900">
         <PurchaseTable

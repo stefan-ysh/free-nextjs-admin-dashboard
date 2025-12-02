@@ -11,7 +11,9 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 
 import FileUpload from '@/components/common/FileUpload';
+import UserSelect from '@/components/common/UserSelect';
 import ProjectSelector from '@/components/common/ProjectSelector';
+import SupplierSelector from '@/components/common/SupplierSelector';
 import {
 	INVOICE_TYPES,
 	INVOICE_STATUSES,
@@ -81,6 +83,8 @@ type PurchaseFormState = {
 	payerName: string;
 	isProxyPayment: boolean;
 	transactionNo: string;
+	purchaserId: string;
+	supplierId: string;
 	invoiceType: PurchaseInvoiceType;
 	invoiceStatus: InvoiceStatus;
 	invoiceNumber: string;
@@ -109,6 +113,8 @@ export type PurchaseFormSubmitPayload = {
 	paymentChannel?: string | null;
 	payerName?: string | null;
 	transactionNo?: string | null;
+	purchaserId?: string;
+	supplierId?: string | null;
 	invoiceType: PurchaseInvoiceType;
 	invoiceStatus?: InvoiceStatus;
 	invoiceNumber?: string | null;
@@ -124,6 +130,7 @@ export type PurchaseFormSubmitPayload = {
 type PurchaseFormProps = {
 	mode: 'create' | 'edit';
 	initialData?: PurchaseRecord | null;
+	currentUserId: string;
 	onSubmit: (payload: PurchaseFormSubmitPayload) => Promise<void>;
 	onCancel?: () => void;
 	disabled?: boolean;
@@ -140,7 +147,7 @@ function getISODate(value?: string | null): string {
 	return date.toISOString().split('T')[0];
 }
 
-function buildInitialState(purchase?: PurchaseRecord | null): PurchaseFormState {
+function buildInitialState(purchase: PurchaseRecord | null | undefined, currentUserId: string): PurchaseFormState {
 	const invoiceType = purchase?.invoiceType ?? FinanceInvoiceType.NONE;
 	const invoiceStatus =
 		purchase?.invoiceStatus ??
@@ -163,6 +170,8 @@ function buildInitialState(purchase?: PurchaseRecord | null): PurchaseFormState 
 		payerName: purchase?.payerName ?? '',
 		transactionNo: purchase?.transactionNo ?? '',
 		isProxyPayment: Boolean(purchase?.payerName),
+		purchaserId: purchase?.purchaserId ?? currentUserId,
+		supplierId: purchase?.supplierId ?? '',
 		invoiceType,
 		invoiceStatus,
 		invoiceNumber: purchase?.invoiceNumber ?? '',
@@ -185,13 +194,13 @@ function toISODateString(value: string): string {
 	return date.toISOString();
 }
 
-export default function PurchaseForm({ mode, initialData, onSubmit, onCancel, disabled = false }: PurchaseFormProps) {
-	const [formState, setFormState] = useState<PurchaseFormState>(() => buildInitialState(initialData));
+export default function PurchaseForm({ mode, initialData, currentUserId, onSubmit, onCancel, disabled = false }: PurchaseFormProps) {
+	const [formState, setFormState] = useState<PurchaseFormState>(() => buildInitialState(initialData, currentUserId));
 	const [submitting, setSubmitting] = useState(false);
 
 	useEffect(() => {
-		setFormState(buildInitialState(initialData));
-	}, [initialData]);
+		setFormState(buildInitialState(initialData, currentUserId));
+	}, [initialData, currentUserId]);
 
 	const { contractAmount, totalAmount } = useMemo(() => {
 		const contract = Number(formState.quantity) * Number(formState.unitPrice);
@@ -263,6 +272,7 @@ export default function PurchaseForm({ mode, initialData, onSubmit, onCancel, di
 			const trimmedPaymentChannel = formState.paymentChannel.trim() || null;
 			const trimmedPayer = formState.isProxyPayment ? formState.payerName.trim() || null : null;
 			const trimmedTransactionNo = formState.transactionNo.trim() || null;
+			const normalizedSupplierId = formState.supplierId.trim() || null;
 			const effectiveInvoiceStatus =
 				formState.invoiceType === FinanceInvoiceType.NONE
 					? InvoiceStatus.NOT_REQUIRED
@@ -298,6 +308,7 @@ export default function PurchaseForm({ mode, initialData, onSubmit, onCancel, di
 				paymentChannel: trimmedPaymentChannel,
 				payerName: trimmedPayer,
 				transactionNo: trimmedTransactionNo,
+				purchaserId: formState.purchaserId,
 				invoiceType: formState.invoiceType,
 				invoiceStatus: effectiveInvoiceStatus,
 				invoiceNumber,
@@ -311,6 +322,7 @@ export default function PurchaseForm({ mode, initialData, onSubmit, onCancel, di
 				projectId: formState.hasProject ? formState.projectId.trim() || null : null,
 				notes: formState.notes.trim() || null,
 				attachments: formState.attachments.filter(Boolean),
+				supplierId: normalizedSupplierId,
 			};
 
 			await onSubmit(payload);
@@ -338,6 +350,26 @@ export default function PurchaseForm({ mode, initialData, onSubmit, onCancel, di
 							placeholder="例如: MacBook Pro 14"
 							required
 							disabled={isSubmitting}
+						/>
+					</div>
+					<div className="lg:col-span-6">
+						<Label htmlFor="purchaserId" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+							申请人 <span className="text-rose-500">*</span>
+						</Label>
+						<UserSelect
+							value={formState.purchaserId}
+							onChange={(value) => setFormState((prev) => ({ ...prev, purchaserId: value }))}
+							placeholder="选择申请人"
+							disabled={isSubmitting}
+						/>
+					</div>
+					<div className="lg:col-span-12">
+						<Label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">关联供应商</Label>
+						<SupplierSelector
+							value={formState.supplierId}
+							onChange={(supplierId) => setFormState((prev) => ({ ...prev, supplierId }))}
+							disabled={isSubmitting}
+							helperText="用于财务自动化和统计分析，默认展示状态正常的供应商"
 						/>
 					</div>
 					<div className="lg:col-span-6">
@@ -494,7 +526,7 @@ export default function PurchaseForm({ mode, initialData, onSubmit, onCancel, di
 								setFormState((prev) => ({
 									...prev,
 									paymentMethod: value,
-							}))
+								}))
 							}
 							disabled={isSubmitting}
 						>

@@ -234,32 +234,32 @@ export default function DepartmentManager() {
       return <div className="py-10 text-center text-sm text-muted-foreground">暂无部门，点击「新建部门」开始配置</div>;
     }
     return (
-      <div className="overflow-x-auto">
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead>名称</TableHead>
-              <TableHead>编码</TableHead>
-              <TableHead>父级</TableHead>
-              <TableHead className="text-right">排序</TableHead>
-              <TableHead>更新时间</TableHead>
-              <TableHead className="text-right">操作</TableHead>
+            <TableRow className="bg-muted/60">
+              <TableHead className="px-4 py-3">名称</TableHead>
+              <TableHead className="px-4 py-3">编码</TableHead>
+              <TableHead className="px-4 py-3">父级</TableHead>
+              <TableHead className="px-4 py-3 text-right">排序</TableHead>
+              <TableHead className="px-4 py-3">更新时间</TableHead>
+              <TableHead className="px-4 py-3 text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {departments.map((dept) => (
-              <TableRow key={dept.id}>
-                <TableCell>
+              <TableRow key={dept.id} className="hover:bg-muted/40 border-b border-border/40 last:border-0">
+                <TableCell className="px-4 py-4">
                   <div className="font-medium">{dept.name}</div>
                   {dept.description ? (
                     <p className="text-xs text-muted-foreground">{dept.description}</p>
                   ) : null}
                 </TableCell>
-                <TableCell>{dept.code ?? '—'}</TableCell>
-                <TableCell>{dept.parentId ? parentNameMap.get(dept.parentId) ?? '—' : '—'}</TableCell>
-                <TableCell className="text-right">{dept.sortOrder ?? 0}</TableCell>
-                <TableCell>{formatDateTimeLocal(dept.updatedAt) ?? dept.updatedAt}</TableCell>
-                <TableCell className="text-right">
+                <TableCell className="px-4 py-4">{dept.code ?? '—'}</TableCell>
+                <TableCell className="px-4 py-4">{dept.parentId ? parentNameMap.get(dept.parentId) ?? '—' : '—'}</TableCell>
+                <TableCell className="px-4 py-4 text-right">{dept.sortOrder ?? 0}</TableCell>
+                <TableCell className="px-4 py-4">{formatDateTimeLocal(dept.updatedAt) ?? dept.updatedAt}</TableCell>
+                <TableCell className="px-4 py-4 text-right">
                   <div className="flex justify-end gap-2">
                     {canUpdate && (
                       <Button variant="ghost" size="icon" onClick={() => handleEditClick(dept)}>
@@ -283,29 +283,20 @@ export default function DepartmentManager() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">部门管理</h1>
-        </div>
+      <div className="rounded-lg border border-border bg-card p-3 shadow-sm flex justify-end">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={fetchDepartments} disabled={loading || !canView}>
+          <Button variant="outline" size="sm" onClick={fetchDepartments} disabled={loading || !canView} className="h-9">
             <RefreshCcw className="mr-2 h-4 w-4" />刷新
           </Button>
           {(canCreate || canUpdate) && (
-            <Button onClick={handleCreateClick} disabled={!canCreate}>
+            <Button onClick={handleCreateClick} disabled={!canCreate} size="sm" className="h-9">
               <Plus className="mr-2 h-4 w-4" />新建部门
             </Button>
           )}
         </div>
       </div>
 
-      <div className="rounded-2xl border bg-card shadow-sm">
-        <div className="border-b px-6 py-4">
-          <p className="text-sm font-medium">部门列表</p>
-          <p className="text-xs text-muted-foreground">当前共有 {departments.length} 个部门</p>
-        </div>
-        <div className="px-6 py-6">{renderContent()}</div>
-      </div>
+      {renderContent()}
 
       <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent className="max-w-xl overflow-hidden p-0">
