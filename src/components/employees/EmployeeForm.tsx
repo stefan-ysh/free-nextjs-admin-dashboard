@@ -43,6 +43,8 @@ type EmployeeFormProps = {
 	onCancel?: () => void;
 	departmentOptions?: DepartmentOption[];
 	jobGradeOptions?: JobGradeOption[];
+	formId?: string;
+	hideActions?: boolean;
 };
 
 type CustomFieldRow = {
@@ -150,7 +152,7 @@ const employeeSchema = z.object({
 
 type EmployeeFormValues = z.infer<typeof employeeSchema>;
 
-export default function EmployeeForm({ initialData, onSubmit, onCancel, departmentOptions, jobGradeOptions }: EmployeeFormProps) {
+export default function EmployeeForm({ initialData, onSubmit, onCancel, departmentOptions, jobGradeOptions, formId, hideActions = false }: EmployeeFormProps) {
 	const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
 	const [removeAvatar, setRemoveAvatar] = useState(false);
 
@@ -248,7 +250,7 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 
 	return (
 		<Form {...form}>
-			<form onSubmit={handleFormSubmit} className="space-y-6">
+			<form id={formId} onSubmit={handleFormSubmit} className="space-y-6">
 				<AvatarUpload
 					initialAvatarUrl={initialData?.avatarUrl}
 					onAvatarChange={handleAvatarChange}
@@ -639,16 +641,18 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 
 				<CustomFields control={control} name="customFields" disabled={formState.isSubmitting} />
 
-				<div className="flex justify-end gap-4">
-					{onCancel && (
-						<Button type="button" variant="outline" onClick={onCancel} disabled={formState.isSubmitting}>
-							取消
+				{!hideActions && (
+					<div className="flex justify-end gap-4">
+						{onCancel && (
+							<Button type="button" variant="outline" onClick={onCancel} disabled={formState.isSubmitting}>
+								取消
+							</Button>
+						)}
+						<Button type="submit" disabled={formState.isSubmitting}>
+							{formState.isSubmitting ? '保存中...' : '保存'}
 						</Button>
-					)}
-					<Button type="submit" disabled={formState.isSubmitting}>
-						{formState.isSubmitting ? '保存中...' : '保存'}
-					</Button>
-				</div>
+					</div>
+				)}
 			</form>
 		</Form>
 	);

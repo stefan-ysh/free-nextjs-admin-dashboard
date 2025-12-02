@@ -39,6 +39,8 @@ interface FinanceFormProps {
   incomeCategories: string[];
   expenseCategories: string[];
   currentUserId: string;
+  formId?: string;
+  hideActions?: boolean;
 }
 
 export type FinanceFormSubmitPayload = FinanceRecordFormValues;
@@ -50,6 +52,8 @@ export default function FinanceForm({
   incomeCategories,
   expenseCategories,
   currentUserId,
+  formId,
+  hideActions = false,
 }: FinanceFormProps) {
   const [loading, setLoading] = useState(false);
   const isEditing = Boolean(initialData?.id);
@@ -112,7 +116,7 @@ export default function FinanceForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+      <form id={formId} onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
         <Tabs
           value={type}
           onValueChange={(val) => {
@@ -371,7 +375,7 @@ export default function FinanceForm({
           />
         </div>
 
-        <div className="rounded-lg border p-4">
+        <div className="rounded-lg border-none p-4">
           <h3 className="mb-3 text-sm font-medium">发票信息</h3>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <FormField
@@ -498,16 +502,18 @@ export default function FinanceForm({
           )}
         />
 
-        <div className="flex justify-end gap-3">
-          {onCancel && (
-            <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
-              取消
+        {!hideActions && (
+          <div className="flex justify-end gap-3">
+            {onCancel && (
+              <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
+                取消
+              </Button>
+            )}
+            <Button type="submit" disabled={loading}>
+              {loading ? '提交中...' : initialData ? '更新' : '添加'}
             </Button>
-          )}
-          <Button type="submit" disabled={loading}>
-            {loading ? '提交中...' : initialData ? '更新' : '添加'}
-          </Button>
-        </div>
+          </div>
+        )}
       </form>
     </Form>
   );

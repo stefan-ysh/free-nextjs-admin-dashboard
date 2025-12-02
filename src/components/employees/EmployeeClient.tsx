@@ -34,13 +34,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/components/ui/drawer';
 import { useConfirm } from '@/hooks/useConfirm';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -1200,71 +1201,90 @@ export default function EmployeeClient({
         onSubmit={handleRoleSubmit}
       />
 
-      <Sheet open={isFormOpen} onOpenChange={handleDialogOpenChange}>
-        <SheetContent side="right" className="max-w-3xl">
-          <SheetHeader className="border-b border-border/60 pb-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <SheetTitle>
-                  {isEditMode
-                    ? `编辑员工: ${selectedEmployee?.displayName ?? selectedEmployee?.firstName ?? ''}`
-                    : selectedEmployee
-                      ? '员工详情'
-                      : '新增员工'}
-                </SheetTitle>
-                <SheetDescription>
-                  {isEditMode
-                    ? '更新员工档案信息，保存后立即生效'
-                    : selectedEmployee
-                      ? '查看员工基础信息，如需调整请切换到编辑模式'
-                      : '填写入职信息后提交创建新的员工记录'}
-                </SheetDescription>
+      <Drawer open={isFormOpen} onOpenChange={handleDialogOpenChange} direction="right">
+        <DrawerContent side="right" className="w-full sm:max-w-4xl">
+          <div className="flex h-full flex-col">
+            <DrawerHeader className="border-b px-6 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <DrawerTitle>
+                    {isEditMode
+                      ? `编辑员工: ${selectedEmployee?.displayName ?? selectedEmployee?.firstName ?? ''}`
+                      : selectedEmployee
+                        ? '员工详情'
+                        : '新增员工'}
+                  </DrawerTitle>
+                  <DrawerDescription>
+                    {isEditMode
+                      ? '更新员工档案信息，保存后立即生效'
+                      : selectedEmployee
+                        ? '查看员工基础信息，如需调整请切换到编辑模式'
+                        : '填写入职信息后提交创建新的员工记录'}
+                  </DrawerDescription>
+                </div>
+                <div className="flex gap-2">
+                  {selectedEmployee && !isEditMode && (
+                    <Button variant="outline" size="sm" onClick={() => setIsEditMode(true)}>
+                      编辑
+                    </Button>
+                  )}
+                  <DrawerClose asChild>
+                    <Button variant="ghost" size="sm" onClick={handleDialogClose}>
+                      关闭
+                    </Button>
+                  </DrawerClose>
+                </div>
               </div>
-              <div className="flex gap-2">
-                {selectedEmployee && !isEditMode && (
-                  <Button variant="outline" size="sm" onClick={() => setIsEditMode(true)}>
-                    编辑
-                  </Button>
-                )}
-                <Button variant="ghost" size="sm" onClick={handleDialogClose}>
-                  关闭
-                </Button>
-              </div>
-            </div>
-          </SheetHeader>
-          <div className="flex-1 overflow-y-auto">
-            {isFormOpen && (
-              <div className="space-y-6">
-                <EmployeeForm
-                  initialData={selectedEmployee}
-                  onSubmit={selectedEmployee ? handleUpdate : handleCreate}
-                  onCancel={handleDialogClose}
-                  departmentOptions={departmentOptions}
-                  jobGradeOptions={jobGradeOptions}
-                />
-                {selectedEmployee && (
-                  <EmployeeStatusHistory
-                    employeeId={selectedEmployee.id}
-                    refreshSignal={statusHistoryRefreshSignal}
+            </DrawerHeader>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              {isFormOpen && (
+                <div className="space-y-6">
+                  <EmployeeForm
+                    initialData={selectedEmployee}
+                    onSubmit={selectedEmployee ? handleUpdate : handleCreate}
+                    onCancel={handleDialogClose}
+                    departmentOptions={departmentOptions}
+                    jobGradeOptions={jobGradeOptions}
+                    formId="employee-details-form"
+                    hideActions
                   />
-                )}
-              </div>
-            )}
+                  {selectedEmployee && (
+                    <EmployeeStatusHistory
+                      employeeId={selectedEmployee.id}
+                      refreshSignal={statusHistoryRefreshSignal}
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+            <DrawerFooter className="border-t px-6 py-4">
+              <DrawerClose asChild>
+                <Button type="button" variant="outline" onClick={handleDialogClose}>
+                  取消
+                </Button>
+              </DrawerClose>
+              {(!selectedEmployee || isEditMode) && (
+                <Button type="submit" form="employee-details-form">
+                  {selectedEmployee ? '保存修改' : '创建员工'}
+                </Button>
+              )}
+            </DrawerFooter>
           </div>
-        </SheetContent>
-      </Sheet>
+        </DrawerContent>
+      </Drawer>
 
-      <Sheet open={importDialogOpen} onOpenChange={handleImportDialogChange}>
-        <SheetContent side="right" className="max-w-3xl">
-          <SheetHeader>
-            <SheetTitle>批量导入员工</SheetTitle>
-            <SheetDescription>
-              支持粘贴 JSON 数组或上传 CSV 文件，字段与单条新增员工一致，支持通过 departmentId 或 departmentCode、jobGradeId 或
-              jobGradeCode 进行关联。
-            </SheetDescription>
-          </SheetHeader>
-          <div className="flex-1 space-y-4 overflow-y-auto">
-            <div className="space-y-3 rounded-lg border border-dashed border-border/70 bg-muted/10 p-4">
+      <Drawer open={importDialogOpen} onOpenChange={handleImportDialogChange} direction="right">
+        <DrawerContent side="right" className="max-w-3xl">
+          <div className="flex h-full flex-col">
+            <DrawerHeader className="border-b px-6 py-4">
+              <DrawerTitle>批量导入员工</DrawerTitle>
+              <DrawerDescription>
+                支持粘贴 JSON 数组或上传 CSV 文件，字段与单条新增员工一致，支持通过 departmentId 或 departmentCode、jobGradeId 或
+                jobGradeCode 进行关联。
+              </DrawerDescription>
+            </DrawerHeader>
+            <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
+              <div className="space-y-3 rounded-lg border border-dashed border-border/70 bg-muted/10 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="space-y-1 text-xs text-muted-foreground">
                   <p className="text-sm font-medium text-foreground">上传 CSV 文件</p>
@@ -1324,37 +1344,40 @@ export default function EmployeeClient({
                 {importError}
               </div>
             )}
-            {importResult && (
-              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-200">
-                <p>
-                  新增 {importResult.created} 条，更新 {importResult.updated} 条，跳过 {importResult.skipped} 条。
-                </p>
-                {importResult.errors?.length ? (
-                  <div className="mt-2 space-y-1 text-[11px] text-emerald-900/80 dark:text-emerald-100">
-                    {importResult.errors?.slice(0, 3).map((err: NonNullable<EmployeeBulkImportResponse['data']>['errors'][number]) => (
-                      <p key={`${err.index}-${err.message}`}>
-                        第 {err.index + 1} 行：{err.identifier ? `${err.identifier} - ` : ''}{err.message}
-                      </p>
-                    ))}
-                    {importResult.errors && importResult.errors.length > 3 && (
-                      <p>其余 {importResult.errors.length - 3} 条请查看接口响应。</p>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            )}
+              {importResult && (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-200">
+                  <p>
+                    新增 {importResult.created} 条，更新 {importResult.updated} 条，跳过 {importResult.skipped} 条。
+                  </p>
+                  {importResult.errors?.length ? (
+                    <div className="mt-2 space-y-1 text-[11px] text-emerald-900/80 dark:text-emerald-100">
+                      {importResult.errors?.slice(0, 3).map((err: NonNullable<EmployeeBulkImportResponse['data']>['errors'][number]) => (
+                        <p key={`${err.index}-${err.message}`}>
+                          第 {err.index + 1} 行：{err.identifier ? `${err.identifier} - ` : ''}{err.message}
+                        </p>
+                      ))}
+                      {importResult.errors && importResult.errors.length > 3 && (
+                        <p>其余 {importResult.errors.length - 3} 条请查看接口响应。</p>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+            <DrawerFooter className="border-t px-6 py-4">
+              <DrawerClose asChild>
+                <Button type="button" variant="ghost" onClick={() => handleImportDialogChange(false)}>
+                  取消
+                </Button>
+              </DrawerClose>
+              <Button type="button" onClick={handleImportSubmit} disabled={importing} className="gap-1">
+                {importing ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {importing ? '导入中...' : '开始导入'}
+              </Button>
+            </DrawerFooter>
           </div>
-          <SheetFooter>
-            <Button type="button" variant="ghost" onClick={() => handleImportDialogChange(false)}>
-              取消
-            </Button>
-            <Button type="button" onClick={handleImportSubmit} disabled={importing} className="gap-1">
-              {importing ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              {importing ? '导入中...' : '开始导入'}
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+        </DrawerContent>
+      </Drawer>
 
       {error && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/60 dark:text-rose-200">

@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import ProjectSelector from '@/components/common/ProjectSelector';
 import SupplierSelector from '@/components/common/SupplierSelector';
 import DatePicker from '@/components/ui/DatePicker';
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from '@/components/ui/sheet';
+import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 
 import UserSelect from '@/components/common/UserSelect';
 import PurchaseDetailModal from './PurchaseDetailModal';
@@ -783,8 +783,8 @@ export default function PurchasesClient() {
               </div>
             )}
 
-            <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
-              <SheetTrigger asChild>
+            <Drawer open={filterSheetOpen} onOpenChange={setFilterSheetOpen} direction="right">
+              <DrawerTrigger asChild>
                 <button
                   type="button"
                   className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm text-gray-700 hover:bg-gray-100 dark:border-border dark:text-gray-200"
@@ -796,13 +796,13 @@ export default function PurchasesClient() {
                     </span>
                   )}
                 </button>
-              </SheetTrigger>
-              <SheetContent side="right" className="sm:max-w-xl">
-                <SheetHeader>
-                  <SheetTitle>筛选条件</SheetTitle>
-                  <SheetDescription>组合多个条件以快速定位采购记录。</SheetDescription>
-                </SheetHeader>
-                <div className="mt-4 flex-1 space-y-4 overflow-y-auto">
+              </DrawerTrigger>
+              <DrawerContent side="right" className="flex flex-col sm:max-w-xl">
+                <DrawerHeader>
+                  <DrawerTitle>筛选条件</DrawerTitle>
+                  <DrawerDescription>组合多个条件以快速定位采购记录。</DrawerDescription>
+                </DrawerHeader>
+                <div className="flex-1 overflow-y-auto px-6 py-4">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">状态</label>
@@ -956,7 +956,7 @@ export default function PurchasesClient() {
                     )}
                   </div>
                 </div>
-                <SheetFooter className="gap-2 pt-4">
+                <DrawerFooter className="gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -967,17 +967,17 @@ export default function PurchasesClient() {
                   >
                     重置
                   </button>
-                  <SheetClose asChild>
+                  <DrawerClose asChild>
                     <button
                       type="button"
                       className="h-10 rounded-md bg-blue-600 px-6 text-sm font-medium text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
                     >
                       完成
                     </button>
-                  </SheetClose>
-                </SheetFooter>
-              </SheetContent>
-            </Sheet>
+                  </DrawerClose>
+                </DrawerFooter>
+              </DrawerContent>
+            </Drawer>
             <button
               onClick={handleManualRefresh}
               className="rounded-lg border border-border px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200"

@@ -146,14 +146,11 @@ export default async function AdminDashboardPage() {
     <div className="space-y-10 p-6">
       <Card className="bg-gradient-to-br from-indigo-50 via-white to-white/40 dark:from-indigo-950/40 dark:via-gray-900 dark:to-gray-900/40 border-none">
         <CardHeader className="space-y-2 pb-0">
-          <CardDescription className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
-            运营概览
-          </CardDescription>
           <CardTitle className="text-3xl font-semibold text-foreground">
             你好，{greetingName}！
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4 pt-0">
+        <CardContent className="space-y-4 pt-0 mt-5">
           <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
             {quickFacts.map((fact) => (
               <div

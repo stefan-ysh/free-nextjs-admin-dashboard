@@ -6,12 +6,14 @@ import { UserCircle, Settings } from "lucide-react";
 import { useAuth } from "@/app/auth-context";
 import { Button } from "@/components/ui/button";
 import {
-    Sheet,
-    SheetContent,
-    SheetDescription,
-    SheetHeader,
-    SheetTitle,
-} from "@/components/ui/sheet";
+    Drawer,
+    DrawerClose,
+    DrawerContent,
+    DrawerDescription,
+    DrawerHeader,
+    DrawerTitle,
+    DrawerFooter,
+} from "@/components/ui/drawer";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -108,14 +110,14 @@ export default function ProfileDrawer({ open, onOpenChange }: ProfileDrawerProps
     };
 
     return (
-        <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent className="w-full sm:max-w-lg">
-                <SheetHeader>
-                    <SheetTitle>个人资料</SheetTitle>
-                    <SheetDescription>快速编辑基本信息</SheetDescription>
-                </SheetHeader>
+        <Drawer open={open} onOpenChange={onOpenChange} direction="right">
+            <DrawerContent side="right" className="flex w-full flex-col sm:max-w-lg">
+                <DrawerHeader>
+                    <DrawerTitle>个人资料</DrawerTitle>
+                    <DrawerDescription>快速编辑基本信息</DrawerDescription>
+                </DrawerHeader>
 
-                <div className="mt-6 space-y-6">
+                <div className="flex-1 space-y-6 overflow-y-auto px-6">
                     {/* Avatar */}
                     <div className="flex items-center gap-4">
                         <Avatar className="h-16 w-16">
@@ -187,15 +189,17 @@ export default function ProfileDrawer({ open, onOpenChange }: ProfileDrawerProps
                     )}
                 </div>
 
-                <div className="mt-6 flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-                        取消
-                    </Button>
+                <DrawerFooter>
+                    <DrawerClose asChild>
+                        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+                            取消
+                        </Button>
+                    </DrawerClose>
                     <Button onClick={handleSave} disabled={loading || saving}>
                         {saving ? "保存中..." : "保存"}
                     </Button>
-                </div>
-            </SheetContent>
-        </Sheet>
+                </DrawerFooter>
+            </DrawerContent>
+        </Drawer>
     );
 }

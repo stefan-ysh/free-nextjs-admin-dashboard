@@ -18,7 +18,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Drawer, DrawerClose, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TransactionType } from '@/types/finance';
 import { getCategoryGroups } from '@/constants/finance-categories';
@@ -399,26 +399,47 @@ export default function FinanceClient({
                             重置
                         </Button>
                         {permissions.canManage && (
-                            <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
-                                <SheetTrigger asChild>
+                            <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen} direction="right">
+                                <DrawerTrigger asChild>
                                     <Button size="sm" className="h-9" onClick={() => setEditingRecord(null)}>+ 记一笔</Button>
-                                </SheetTrigger>
-                                <SheetContent side="right" className="sm:max-w-xl">
-                                    <SheetHeader>
-                                        <SheetTitle>{editingRecord ? '编辑记录' : '添加记录'}</SheetTitle>
-                                    </SheetHeader>
-                                    <div className="flex-1 overflow-y-auto">
-                                        <FinanceForm
-                                            initialData={editingRecord || undefined}
-                                            onSubmit={handleSubmit}
-                                            onCancel={() => setIsDrawerOpen(false)}
-                                            incomeCategories={categories.income}
-                                            expenseCategories={categories.expense}
-                                            currentUserId={currentUserId}
-                                        />
+                                </DrawerTrigger>
+                                <DrawerContent side="right" className="sm:max-w-xl">
+                                    <div className="flex h-full flex-col">
+                                        <DrawerHeader className="border-b px-6 py-4">
+                                            <DrawerTitle>{editingRecord ? '编辑记录' : '添加记录'}</DrawerTitle>
+                                        </DrawerHeader>
+                                        <div className="flex-1 overflow-y-auto px-6 py-4">
+                                            <FinanceForm
+                                                initialData={editingRecord || undefined}
+                                                onSubmit={handleSubmit}
+                                                onCancel={() => setIsDrawerOpen(false)}
+                                                incomeCategories={categories.income}
+                                                expenseCategories={categories.expense}
+                                                currentUserId={currentUserId}
+                                                formId="finance-record-form"
+                                                hideActions
+                                            />
+                                        </div>
+                                        <DrawerFooter className="border-t px-6 py-4">
+                                            <DrawerClose asChild>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={() => {
+                                                        setIsDrawerOpen(false);
+                                                        setEditingRecord(null);
+                                                    }}
+                                                >
+                                                    取消
+                                                </Button>
+                                            </DrawerClose>
+                                            <Button type="submit" form="finance-record-form">
+                                                {editingRecord ? '更新记录' : '添加记录'}
+                                            </Button>
+                                        </DrawerFooter>
                                     </div>
-                                </SheetContent>
-                            </Sheet>
+                                </DrawerContent>
+                            </Drawer>
                         )}
                     </div>
                 </div>

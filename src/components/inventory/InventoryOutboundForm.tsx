@@ -29,9 +29,11 @@ const defaultPayload: InventoryOutboundPayload = {
 interface InventoryOutboundFormProps {
     onSuccess?: () => void;
     onCancel?: () => void;
+    formId?: string;
+    hideActions?: boolean;
 }
 
-export default function InventoryOutboundForm({ onSuccess, onCancel }: InventoryOutboundFormProps) {
+export default function InventoryOutboundForm({ onSuccess, onCancel, formId, hideActions = false }: InventoryOutboundFormProps) {
     const { hasPermission, loading: permissionLoading } = usePermissions();
     const canOperate = useMemo(
         () => hasPermission('INVENTORY_OPERATE_OUTBOUND'),
@@ -152,7 +154,7 @@ export default function InventoryOutboundForm({ onSuccess, onCancel }: Inventory
     }
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form id={formId} onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
                 <Label htmlFor="outbound-item" className="text-sm font-medium">
                     商品
@@ -356,16 +358,18 @@ export default function InventoryOutboundForm({ onSuccess, onCancel }: Inventory
                 />
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
-                {onCancel && (
-                    <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
-                        取消
+            {!hideActions && (
+                <div className="flex justify-end gap-3 pt-2">
+                    {onCancel && (
+                        <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
+                            取消
+                        </Button>
+                    )}
+                    <Button type="submit" disabled={submitting}>
+                        {submitting ? '提交中...' : '创建出库单'}
                     </Button>
-                )}
-                <Button type="submit" disabled={submitting}>
-                    {submitting ? '提交中...' : '创建出库单'}
-                </Button>
-            </div>
+                </div>
+            )}
         </form>
     );
 }

@@ -6,13 +6,14 @@ import { CalendarCheck, CalendarDays, ClipboardCopy, FileText, Link2, Loader2, R
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-	Sheet,
-	SheetContent,
-	SheetDescription,
-	SheetFooter,
-	SheetHeader,
-	SheetTitle,
-} from '@/components/ui/sheet';
+	Drawer,
+	DrawerClose,
+	DrawerContent,
+	DrawerDescription,
+	DrawerFooter,
+	DrawerHeader,
+	DrawerTitle,
+} from '@/components/ui/drawer';
 import { toast } from '@/components/ui/sonner';
 import {
 	milestoneStatusLabels,
@@ -147,14 +148,14 @@ export default function ProjectDrawer({ projectId, onClose, onUpdated }: Props) 
 	const attachments = project?.attachments ?? [];
 
 	return (
-		<Sheet open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
-			<SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
+		<Drawer open={open} onOpenChange={(next) => { if (!next) onClose(); }} direction="right">
+			<DrawerContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
 				<div className="flex items-center justify-between border-b border-border px-6 py-4">
 					<div>
-						<SheetHeader>
-							<SheetTitle>{project?.projectName ?? '项目详情'}</SheetTitle>
-							<SheetDescription>项目编号：{project?.projectCode ?? '请选择一个项目'}</SheetDescription>
-						</SheetHeader>
+						<DrawerHeader>
+							<DrawerTitle>{project?.projectName ?? '项目详情'}</DrawerTitle>
+							<DrawerDescription>项目编号：{project?.projectCode ?? '请选择一个项目'}</DrawerDescription>
+						</DrawerHeader>
 					</div>
 					<div className="flex gap-2">
 						<Button variant="outline" size="icon" onClick={handleRefresh} disabled={!projectId || loading}>
@@ -330,12 +331,14 @@ export default function ProjectDrawer({ projectId, onClose, onUpdated }: Props) 
 					)}
 				</div>
 
-				<SheetFooter className="border-t border-border bg-card px-6 py-4">
-					<Button variant="outline" onClick={onClose} className="w-full sm:w-auto">
-						关闭
-					</Button>
-				</SheetFooter>
-			</SheetContent>
-		</Sheet>
+				<DrawerFooter>
+					<DrawerClose asChild>
+						<Button variant="outline" onClick={onClose} className="w-full sm:w-auto">
+							关闭
+						</Button>
+					</DrawerClose>
+				</DrawerFooter>
+			</DrawerContent>
+		</Drawer>
 	);
 }

@@ -4,7 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { Loader2 } from 'lucide-react';
 
-import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Drawer, DrawerClose, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -149,14 +149,18 @@ export default function InventoryItemFormDialog({ open, onOpenChange, item, onSu
 
   const submitting = form.formState.isSubmitting;
 
+  const formId = 'inventory-item-form';
+
   return (
-    <Sheet open={open} onOpenChange={(next) => (!submitting ? onOpenChange(next) : undefined)}>
-      <SheetContent side="right" className="sm:max-w-3xl">
-        <SheetHeader>
-          <SheetTitle>{isEditMode ? '编辑商品' : '新建商品'}</SheetTitle>
-        </SheetHeader>
-        <Form {...form}>
-          <form onSubmit={handleSubmit} className="space-y-5 overflow-y-auto pr-1">
+    <Drawer open={open} onOpenChange={(next) => (!submitting ? onOpenChange(next) : undefined)} direction="right">
+      <DrawerContent side="right" className="sm:max-w-3xl">
+        <div className="flex h-full flex-col">
+          <DrawerHeader className="border-b px-6 py-4">
+            <DrawerTitle>{isEditMode ? '编辑商品' : '新建商品'}</DrawerTitle>
+          </DrawerHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            <Form {...form}>
+              <form id={formId} onSubmit={handleSubmit} className="space-y-5">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded border border-dashed border-muted p-3 text-sm text-muted-foreground">
                 <p className="text-xs uppercase tracking-wide">SKU</p>
@@ -375,18 +379,22 @@ export default function InventoryItemFormDialog({ open, onOpenChange, item, onSu
               )}
             </div>
 
-            <SheetFooter>
+              </form>
+            </Form>
+          </div>
+          <DrawerFooter className="border-t px-6 py-4">
+            <DrawerClose asChild>
               <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
                 取消
               </Button>
-              <Button type="submit" disabled={submitting}>
-                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isEditMode ? '保存修改' : '创建商品'}
-              </Button>
-            </SheetFooter>
-          </form>
-        </Form>
-      </SheetContent>
-    </Sheet>
+            </DrawerClose>
+            <Button type="submit" form={formId} disabled={submitting}>
+              {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isEditMode ? '保存修改' : '创建商品'}
+            </Button>
+          </DrawerFooter>
+        </div>
+      </DrawerContent>
+    </Drawer>
   );
 }

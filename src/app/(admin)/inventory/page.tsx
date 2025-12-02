@@ -6,12 +6,14 @@ import { Package, PackagePlus, PackageMinus, Warehouse } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/components/ui/drawer';
 import InventoryInboundForm from '@/components/inventory/InventoryInboundForm';
 import InventoryOutboundForm from '@/components/inventory/InventoryOutboundForm';
 
@@ -25,6 +27,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 
 export default function InventoryOverviewPage() {
   const { hasPermission, loading: permissionLoading } = usePermissions();
+  const inboundFormId = 'inventory-inbound-form';
+  const outboundFormId = 'inventory-outbound-form';
 
   const canViewDashboard = useMemo(
     () => hasPermission('INVENTORY_VIEW_DASHBOARD'),
@@ -167,40 +171,76 @@ export default function InventoryOverviewPage() {
       </div>
 
       {/* Inbound Drawer */}
-      <Sheet open={inboundDrawerOpen} onOpenChange={setInboundDrawerOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>创建入库单</SheetTitle>
-            <SheetDescription>
-              填写入库信息，提交后将同步更新库存数据。
-            </SheetDescription>
-          </SheetHeader>
-          <div className="mt-6">
-            <InventoryInboundForm
-              onSuccess={() => setInboundDrawerOpen(false)}
-              onCancel={() => setInboundDrawerOpen(false)}
-            />
+      <Drawer open={inboundDrawerOpen} onOpenChange={setInboundDrawerOpen} direction="right">
+        <DrawerContent side="right" className="w-full sm:max-w-2xl">
+          <div className="flex h-full flex-col">
+            <DrawerHeader className="border-b px-6 py-4">
+              <DrawerTitle>创建入库单</DrawerTitle>
+              <DrawerDescription>
+                填写入库信息，提交后将同步更新库存数据。
+              </DrawerDescription>
+            </DrawerHeader>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <InventoryInboundForm
+                onSuccess={() => setInboundDrawerOpen(false)}
+                onCancel={() => setInboundDrawerOpen(false)}
+                formId={inboundFormId}
+                hideActions
+              />
+            </div>
+            <DrawerFooter className="border-t px-6 py-4">
+              <DrawerClose asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setInboundDrawerOpen(false)}
+                >
+                  取消
+                </Button>
+              </DrawerClose>
+              <Button type="submit" form={inboundFormId}>
+                创建入库单
+              </Button>
+            </DrawerFooter>
           </div>
-        </SheetContent>
-      </Sheet>
+        </DrawerContent>
+      </Drawer>
 
       {/* Outbound Drawer */}
-      <Sheet open={outboundDrawerOpen} onOpenChange={setOutboundDrawerOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>创建出库单</SheetTitle>
-            <SheetDescription>
-              选择商品和客户信息，提交后将同步更新库存数据。
-            </SheetDescription>
-          </SheetHeader>
-          <div className="mt-6">
-            <InventoryOutboundForm
-              onSuccess={() => setOutboundDrawerOpen(false)}
-              onCancel={() => setOutboundDrawerOpen(false)}
-            />
+      <Drawer open={outboundDrawerOpen} onOpenChange={setOutboundDrawerOpen} direction="right">
+        <DrawerContent side="right" className="w-full sm:max-w-2xl">
+          <div className="flex h-full flex-col">
+            <DrawerHeader className="border-b px-6 py-4">
+              <DrawerTitle>创建出库单</DrawerTitle>
+              <DrawerDescription>
+                选择商品和客户信息，提交后将同步更新库存数据。
+              </DrawerDescription>
+            </DrawerHeader>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <InventoryOutboundForm
+                onSuccess={() => setOutboundDrawerOpen(false)}
+                onCancel={() => setOutboundDrawerOpen(false)}
+                formId={outboundFormId}
+                hideActions
+              />
+            </div>
+            <DrawerFooter className="border-t px-6 py-4">
+              <DrawerClose asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setOutboundDrawerOpen(false)}
+                >
+                  取消
+                </Button>
+              </DrawerClose>
+              <Button type="submit" form={outboundFormId}>
+                创建出库单
+              </Button>
+            </DrawerFooter>
           </div>
-        </SheetContent>
-      </Sheet>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }
