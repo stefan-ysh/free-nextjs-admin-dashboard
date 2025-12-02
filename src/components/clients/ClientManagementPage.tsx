@@ -19,13 +19,14 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/sonner';
+import ModalShell from '@/components/common/ModalShell';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -648,21 +649,29 @@ export default function ClientManagementPage() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={(open) => !saving && setDialogOpen(open)}>
-        <DialogContent className="p-0 sm:max-w-3xl">
-          <form onSubmit={handleSubmit} className="flex max-h-[90vh] flex-col">
-            <div className="border-b px-6 py-4">
-              <DialogHeader>
-                <DialogTitle>{dialogTitle}</DialogTitle>
-                <DialogDescription>{dialogDescription}</DialogDescription>
-              </DialogHeader>
-            </div>
-            <div className="flex-1 overflow-y-auto">
+        <DialogContent className="max-h-[90vh] overflow-hidden p-0 sm:max-w-3xl">
+          <form onSubmit={handleSubmit} className="h-full">
+            <ModalShell
+              title={dialogTitle}
+              description={dialogDescription}
+              className="max-h-[90vh]"
+              footer={
+                <DialogFooter className="gap-3">
+                  <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={formDisabled}>
+                    取消
+                  </Button>
+                  <Button type="submit" disabled={formDisabled}>
+                    {saving ? '保存中...' : submitLabel}
+                  </Button>
+                </DialogFooter>
+              }
+            >
               {dialogLoading ? (
                 <div className="flex h-full items-center justify-center py-12 text-muted-foreground">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 正在加载客户详情...
                 </div>
               ) : (
-                <div className="space-y-4 px-6 py-4">
+                <div className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>客户类型</Label>
@@ -1032,15 +1041,7 @@ export default function ClientManagementPage() {
                   </div>
                 </div>
               )}
-            </div>
-            <div className="flex items-center justify-end gap-3 border-t px-6 py-4">
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={formDisabled}>
-                取消
-              </Button>
-              <Button type="submit" disabled={formDisabled}>
-                {saving ? '保存中...' : submitLabel}
-              </Button>
-            </div>
+            </ModalShell>
           </form>
         </DialogContent>
       </Dialog>

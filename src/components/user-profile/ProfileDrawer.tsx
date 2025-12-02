@@ -111,13 +111,13 @@ export default function ProfileDrawer({ open, onOpenChange }: ProfileDrawerProps
 
     return (
         <Drawer open={open} onOpenChange={onOpenChange} direction="right">
-            <DrawerContent side="right" className="flex w-full flex-col sm:max-w-lg">
-                <DrawerHeader>
+            <DrawerContent side="right" className="flex h-full w-full flex-col sm:max-w-lg">
+                <DrawerHeader className="border-b px-6 py-4">
                     <DrawerTitle>个人资料</DrawerTitle>
                     <DrawerDescription>快速编辑基本信息</DrawerDescription>
                 </DrawerHeader>
 
-                <div className="flex-1 space-y-6 overflow-y-auto px-6">
+                <div className="flex-1 space-y-6 overflow-y-auto px-6 py-4">
                     {/* Avatar */}
                     <div className="flex items-center gap-4">
                         <Avatar className="h-16 w-16">
@@ -189,7 +189,7 @@ export default function ProfileDrawer({ open, onOpenChange }: ProfileDrawerProps
                     )}
                 </div>
 
-                <DrawerFooter>
+                <DrawerFooter className="gap-2 border-t px-6 py-4">
                     <DrawerClose asChild>
                         <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
                             取消

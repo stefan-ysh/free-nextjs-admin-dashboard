@@ -797,8 +797,8 @@ export default function PurchasesClient() {
                   )}
                 </button>
               </DrawerTrigger>
-              <DrawerContent side="right" className="flex flex-col sm:max-w-xl">
-                <DrawerHeader>
+              <DrawerContent side="right" className="flex h-full flex-col sm:max-w-xl">
+                <DrawerHeader className="border-b px-6 py-4">
                   <DrawerTitle>筛选条件</DrawerTitle>
                   <DrawerDescription>组合多个条件以快速定位采购记录。</DrawerDescription>
                 </DrawerHeader>
@@ -956,7 +956,7 @@ export default function PurchasesClient() {
                     )}
                   </div>
                 </div>
-                <DrawerFooter className="gap-2">
+                <DrawerFooter className="gap-2 border-t px-6 py-4">
                   <button
                     type="button"
                     onClick={() => {

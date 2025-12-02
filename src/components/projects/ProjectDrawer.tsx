@@ -149,23 +149,23 @@ export default function ProjectDrawer({ projectId, onClose, onUpdated }: Props) 
 
 	return (
 		<Drawer open={open} onOpenChange={(next) => { if (!next) onClose(); }} direction="right">
-			<DrawerContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
-				<div className="flex items-center justify-between border-b border-border px-6 py-4">
-					<div>
-						<DrawerHeader>
+			<DrawerContent side="right" className="flex h-full w-full flex-col sm:max-w-2xl">
+				<DrawerHeader className="border-b px-6 py-4">
+					<div className="flex items-start justify-between gap-4">
+						<div>
 							<DrawerTitle>{project?.projectName ?? '项目详情'}</DrawerTitle>
 							<DrawerDescription>项目编号：{project?.projectCode ?? '请选择一个项目'}</DrawerDescription>
-						</DrawerHeader>
+						</div>
+						<div className="flex gap-2">
+							<Button variant="outline" size="icon" onClick={handleRefresh} disabled={!projectId || loading}>
+								{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+							</Button>
+							<Button variant="outline" size="icon" onClick={handleCopyId} disabled={!projectId}>
+								<ClipboardCopy className="h-4 w-4" />
+							</Button>
+						</div>
 					</div>
-					<div className="flex gap-2">
-						<Button variant="outline" size="icon" onClick={handleRefresh} disabled={!projectId || loading}>
-							{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-						</Button>
-						<Button variant="outline" size="icon" onClick={handleCopyId} disabled={!projectId}>
-							<ClipboardCopy className="h-4 w-4" />
-						</Button>
-					</div>
-				</div>
+				</DrawerHeader>
 
 				<div className="flex-1 overflow-y-auto px-6 py-5">
 					{!projectId && !loading && !error && (
@@ -331,7 +331,7 @@ export default function ProjectDrawer({ projectId, onClose, onUpdated }: Props) 
 					)}
 				</div>
 
-				<DrawerFooter>
+				<DrawerFooter className="border-t px-6 py-4">
 					<DrawerClose asChild>
 						<Button variant="outline" onClick={onClose} className="w-full sm:w-auto">
 							关闭

@@ -13,7 +13,7 @@ import type {
 } from '@/types/supplier';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/sonner';
+import ModalShell from '@/components/common/ModalShell';
 import { cn } from '@/lib/utils';
 
 const statusLabels: Record<SupplierStatus, string> = {
@@ -189,6 +190,8 @@ export default function SupplierManagementPage() {
     const totalCredit = suppliers.reduce((sum, supplier) => sum + Number(supplier.creditLimit || 0), 0);
     return { active, blacklisted, totalCredit };
   }, [suppliers]);
+
+  const supplierDialogDescription = editingSupplier ? '更新供应商档案，保存后立即生效。' : '完善供应商档案，提交后即可在采购流程中引用。';
 
   const formattedCredit = useMemo(
     () => `¥${Number(stats.totalCredit || 0).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`,
@@ -542,16 +545,30 @@ export default function SupplierManagementPage() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={(open) => !saving && setDialogOpen(open)}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>{editingSupplier ? '编辑供应商' : '新增供应商'}</DialogTitle>
-          </DialogHeader>
-          {dialogLoading ? (
-            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 加载中...
-            </div>
-          ) : (
-            <form className="space-y-6" onSubmit={handleSubmit}>
+        <DialogContent className="max-h-[90vh] overflow-hidden p-0 sm:max-w-4xl">
+          <form onSubmit={handleSubmit}>
+            <ModalShell
+              title={editingSupplier ? '编辑供应商' : '新增供应商'}
+              description={supplierDialogDescription}
+              className="max-h-[90vh]"
+              footer={
+                <DialogFooter className="gap-3">
+                  <Button type="button" variant="outline" onClick={() => !saving && setDialogOpen(false)} disabled={saving}>
+                    取消
+                  </Button>
+                  <Button type="submit" disabled={saving}>
+                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    {editingSupplier ? '保存变更' : '创建供应商'}
+                  </Button>
+                </DialogFooter>
+              }
+            >
+              {dialogLoading ? (
+                <div className="flex min-h-[240px] items-center justify-center text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 加载中...
+                </div>
+              ) : (
+                <div className="space-y-6">
               <section className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="name">供应商名称</Label>
@@ -778,17 +795,10 @@ export default function SupplierManagementPage() {
                 </div>
               </section>
 
-              <div className="flex justify-end gap-3">
-                <Button type="button" variant="outline" onClick={() => !saving && setDialogOpen(false)}>
-                  取消
-                </Button>
-                <Button type="submit" disabled={saving}>
-                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  {editingSupplier ? '保存变更' : '创建供应商'}
-                </Button>
-              </div>
-            </form>
-          )}
+                </div>
+              )}
+            </ModalShell>
+          </form>
         </DialogContent>
       </Dialog>
 
