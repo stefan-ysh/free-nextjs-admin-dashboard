@@ -4,11 +4,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import ProjectSelector from '@/components/common/ProjectSelector';
 import SupplierSelector from '@/components/common/SupplierSelector';
 import DatePicker from '@/components/ui/DatePicker';
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import UserSelect from '@/components/common/UserSelect';
 import PurchaseDetailModal from './PurchaseDetailModal';
@@ -348,6 +351,7 @@ export default function PurchasesClient() {
   }, []);
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
+  const showPaginationNav = totalPages > 1;
 
   const statusSummary = useMemo(() => {
     const result: Record<PurchaseStatus, number> = {
@@ -1024,7 +1028,7 @@ export default function PurchasesClient() {
 
       {/* Status summary grid removed to avoid duplicating the metrics shown in the real-time stats card above */}
 
-      <div className="rounded-lg border border-border bg-white shadow-sm dark:border-border dark:bg-gray-900">
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
         <PurchaseTable
           purchases={records}
           loading={loading || isPending}
@@ -1040,39 +1044,47 @@ export default function PurchasesClient() {
           onPay={handlePay}
         />
 
-        <div className="flex items-center justify-between border-t border-gray-100 px-6 py-3 text-sm text-gray-600 dark:border-gray-800 dark:text-gray-300">
-          <div>
-            共 {total} 条 • 第 {page} / {totalPages} 页
-          </div>
-          <div className="flex items-center gap-3">
-            <select
-              value={pageSize}
-              onChange={(event) => handlePageSizeChange(Number(event.target.value))}
-              className="rounded border border-border px-2 py-1 text-sm focus:border-blue-500 focus:outline-none dark:border-border dark:bg-gray-800 dark:text-gray-100"
-            >
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-transparent px-2 py-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+        <div>共 {total} 条 • 第 {page} / {totalPages} 页</div>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
+          <Select value={String(pageSize)} onValueChange={(value) => handlePageSizeChange(Number(value))}>
+            <SelectTrigger className="h-9 w-[140px]">
+              <SelectValue placeholder="每页数量" />
+            </SelectTrigger>
+            <SelectContent>
               {PAGE_SIZE_OPTIONS.map((size) => (
-                <option key={size} value={size}>
-                  每页 {size}
-                </option>
+                <SelectItem key={size} value={String(size)}>
+                  每页 {size} 条
+                </SelectItem>
               ))}
-            </select>
+            </SelectContent>
+          </Select>
+          {showPaginationNav && (
             <div className="flex gap-2">
-              <button
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => handlePageChange('prev')}
                 disabled={page === 1}
-                className="rounded border border-border px-3 py-1 text-sm hover:bg-gray-100 disabled:opacity-50 dark:border-border dark:bg-gray-800"
+                className="gap-1"
               >
-                上一页
-              </button>
-              <button
+                <ChevronLeft className="h-4 w-4" /> 上一页
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => handlePageChange('next')}
                 disabled={page === totalPages}
-                className="rounded border border-border px-3 py-1 text-sm hover:bg-gray-100 disabled:opacity-50 dark:border-border dark:bg-gray-800"
+                className="gap-1"
               >
-                下一页
-              </button>
+                下一页 <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
-          </div>
+          )}
         </div>
       </div>
 

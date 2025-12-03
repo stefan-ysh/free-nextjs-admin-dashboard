@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Edit2, Loader2, PlusCircle, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Edit2, Loader2, PlusCircle, Trash2 } from 'lucide-react';
 
 import { usePermissions } from '@/hooks/usePermissions';
 import type {
@@ -33,6 +33,8 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/sonner';
 import ModalShell from '@/components/common/ModalShell';
 import { cn } from '@/lib/utils';
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 const statusLabels: Record<SupplierStatus, string> = {
   active: '正常合作',
@@ -183,6 +185,8 @@ export default function SupplierManagementPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Supplier | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   const stats = useMemo(() => {
     const active = suppliers.filter((supplier) => supplier.status === 'active').length;
@@ -190,6 +194,17 @@ export default function SupplierManagementPage() {
     const totalCredit = suppliers.reduce((sum, supplier) => sum + Number(supplier.creditLimit || 0), 0);
     return { active, blacklisted, totalCredit };
   }, [suppliers]);
+
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
+
+  useEffect(() => {
+    setPage((prev) => {
+      if (prev > totalPages) {
+        return totalPages;
+      }
+      return prev;
+    });
+  }, [totalPages]);
 
   const supplierDialogDescription = editingSupplier ? '更新供应商档案，保存后立即生效。' : '完善供应商档案，提交后即可在采购流程中引用。';
 
@@ -203,8 +218,8 @@ export default function SupplierManagementPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      params.set('page', '1');
-      params.set('pageSize', '100');
+      params.set('page', String(page));
+      params.set('pageSize', String(pageSize));
       if (search.trim()) params.set('search', search.trim());
       if (filterStatus !== 'all') params.set('status', filterStatus);
       const response = await fetch(`/api/suppliers?${params.toString()}`, { cache: 'no-store' });
@@ -222,7 +237,7 @@ export default function SupplierManagementPage() {
     } finally {
       setLoading(false);
     }
-  }, [canView, filterStatus, search]);
+  }, [canView, filterStatus, search, page, pageSize]);
 
   useEffect(() => {
     loadSuppliers();
@@ -399,6 +414,20 @@ export default function SupplierManagementPage() {
     setDeleteDialogOpen(true);
   };
 
+  const handlePageChange = (direction: 'prev' | 'next') => {
+    setPage((prev) => {
+      if (direction === 'prev') {
+        return Math.max(1, prev - 1);
+      }
+      return Math.min(totalPages, prev + 1);
+    });
+  };
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setPage(1);
+  };
+
   const handleDelete = async () => {
     if (!pendingDelete) return;
     try {
@@ -447,10 +476,19 @@ export default function SupplierManagementPage() {
           <Input
             placeholder="搜索名称 / 税号 / 联系方式"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
             className="md:max-w-xs"
           />
-          <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as typeof filterStatus)}>
+          <Select
+            value={filterStatus}
+            onValueChange={(value) => {
+              setFilterStatus(value as typeof filterStatus);
+              setPage(1);
+            }}
+          >
             <SelectTrigger className="md:w-40">
               <SelectValue placeholder="状态" />
             </SelectTrigger>
@@ -468,79 +506,121 @@ export default function SupplierManagementPage() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
-        <div className="overflow-x-auto">
-          <Table className="[&_tbody_tr]:hover:bg-muted/40">
-            <TableHeader className="[&_tr]:border-b border-border/40">
+        <Table
+          stickyHeader
+          scrollAreaClassName="max-h-[calc(100vh-350px)] custom-scrollbar"
+          className="text-sm text-muted-foreground [&_tbody_tr]:hover:bg-muted/40"
+        >
+          <TableHeader className="[&_tr]:border-b border-border/40">
+            <TableRow className="bg-muted/60 text-xs uppercase tracking-wide">
+              <TableHead className="px-4 py-3">名称</TableHead>
+              <TableHead className="px-4 py-3">分类</TableHead>
+              <TableHead className="px-4 py-3">联系人</TableHead>
+              <TableHead className="px-4 py-3">付款信息</TableHead>
+              <TableHead className="px-4 py-3">状态</TableHead>
+              {canManage && <TableHead className="px-4 py-3 text-right">操作</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading || permissionLoading ? (
               <TableRow>
-                <TableHead>名称</TableHead>
-                <TableHead>分类</TableHead>
-                <TableHead>联系人</TableHead>
-                <TableHead>付款信息</TableHead>
-                <TableHead>状态</TableHead>
-                {canManage && <TableHead className="text-right">操作</TableHead>}
+                <TableCell colSpan={canManage ? 6 : 5} className="px-6 py-12 text-center text-sm text-muted-foreground">
+                  数据加载中...
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody className="[&_tr]:border-0">
-              {loading || permissionLoading ? (
-                <TableRow>
-                  <TableCell colSpan={canManage ? 6 : 5} className="text-center text-sm text-muted-foreground">
-                    数据加载中...
+            ) : suppliers.length ? (
+              suppliers.map((supplier) => (
+                <TableRow key={supplier.id} className="text-foreground">
+                  <TableCell className="px-4 py-4 whitespace-normal">
+                    <div className="font-medium text-foreground">{supplier.name}</div>
+                    <div className="text-xs text-muted-foreground">{supplier.taxNumber || '—'}</div>
                   </TableCell>
-                </TableRow>
-              ) : suppliers.length ? (
-                suppliers.map((supplier) => (
-                  <TableRow key={supplier.id}>
-                    <TableCell>
-                      <div className="font-medium text-foreground">{supplier.name}</div>
-                      <div className="text-xs text-muted-foreground">{supplier.taxNumber || '—'}</div>
-                    </TableCell>
-                    <TableCell>{supplier.category || '—'}</TableCell>
-                    <TableCell>
-                      {supplier.contacts?.length ? (
-                        <div className="text-sm">
-                          <p>{supplier.contacts[0].name}</p>
-                          <p className="text-xs text-muted-foreground">{supplier.contacts[0].mobile || supplier.contacts[0].email || '—'}</p>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">未填写</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {supplier.bankAccounts?.length ? (
-                        <div className="text-xs">
-                          <p>{supplier.bankAccounts[0].bankName}</p>
-                          <p className="text-muted-foreground">{supplier.bankAccounts[0].accountNumber}</p>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">未配置</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={cn('text-xs', statusBadgeClass[supplier.status])}>{statusLabels[supplier.status]}</Badge>
-                    </TableCell>
-                    {canManage && (
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => handleEditDialog(supplier)}>
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleConfirmDelete(supplier)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
+                  <TableCell className="px-4 py-4">{supplier.category || '—'}</TableCell>
+                  <TableCell className="px-4 py-4 whitespace-normal">
+                    {supplier.contacts?.length ? (
+                      <div className="text-sm">
+                        <p>{supplier.contacts[0].name}</p>
+                        <p className="text-xs text-muted-foreground">{supplier.contacts[0].mobile || supplier.contacts[0].email || '—'}</p>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">未填写</span>
                     )}
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={canManage ? 6 : 5} className="text-center text-sm text-muted-foreground">
-                    暂无数据
                   </TableCell>
+                  <TableCell className="px-4 py-4 whitespace-normal">
+                    {supplier.bankAccounts?.length ? (
+                      <div className="text-xs">
+                        <p>{supplier.bankAccounts[0].bankName}</p>
+                        <p className="text-muted-foreground">{supplier.bankAccounts[0].accountNumber}</p>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">未配置</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="px-4 py-4">
+                    <Badge className={cn('text-xs', statusBadgeClass[supplier.status])}>{statusLabels[supplier.status]}</Badge>
+                  </TableCell>
+                  {canManage && (
+                    <TableCell className="px-4 py-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => handleEditDialog(supplier)}>
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleConfirmDelete(supplier)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={canManage ? 6 : 5} className="px-6 py-12 text-center text-sm text-muted-foreground">
+                  暂无数据
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-transparent px-2 py-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+        <div>共 {total} 家供应商 • 第 {page} / {totalPages} 页</div>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
+          <Select value={String(pageSize)} onValueChange={(value) => handlePageSizeChange(Number(value))}>
+            <SelectTrigger className="h-9 w-[140px]">
+              <SelectValue placeholder="每页数量" />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <SelectItem key={size} value={String(size)}>
+                  每页 {size} 条
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange('prev')}
+              disabled={page <= 1}
+              className="gap-1"
+            >
+              <ChevronLeft className="h-4 w-4" /> 上一页
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange('next')}
+              disabled={page >= totalPages}
+              className="gap-1"
+            >
+              下一页 <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
 

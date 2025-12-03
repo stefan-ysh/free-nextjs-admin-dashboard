@@ -7,8 +7,10 @@ import {
   EmploymentStatus,
   getEmployeeById,
   updateEmployee,
+  UpdateEmployeeInput,
 } from '@/lib/hr/employees';
 import { checkPermission, Permissions } from '@/lib/permissions';
+import { deleteAvatarAsset, saveAvatarToLocal } from '@/lib/storage/avatar';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -58,6 +60,7 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ employeeId: string }> }
 ) {
+  let uploadedAvatarPath: string | null = null;
   try {
     const context = await requireCurrentUser();
     const permissionUser = await toPermissionUser(context.user);
@@ -72,7 +75,18 @@ export async function PUT(
       return badRequestResponse('请求体格式错误');
     }
 
-    const payload = {
+    const existingRecord = await getEmployeeById(employeeId);
+    if (!existingRecord) {
+      return notFoundResponse();
+    }
+
+    const trimmedAvatarDataUrl = typeof body.avatarDataUrl === 'string' ? body.avatarDataUrl.trim() : '';
+    const shouldRemoveAvatar = Boolean(body.removeAvatar);
+    if (trimmedAvatarDataUrl) {
+      uploadedAvatarPath = await saveAvatarToLocal(trimmedAvatarDataUrl);
+    }
+
+    const payload: UpdateEmployeeInput = {
       userId: body.userId,
       employeeCode: body.employeeCode,
       firstName: body.firstName,
@@ -98,13 +112,31 @@ export async function PUT(
       statusChangeNote: body.statusChangeNote,
     };
 
+    if (uploadedAvatarPath) {
+      payload.avatarUrl = uploadedAvatarPath;
+    } else if (shouldRemoveAvatar) {
+      payload.avatarUrl = null;
+    }
+
     const updated = await updateEmployee(employeeId, payload);
     if (!updated) {
+      if (uploadedAvatarPath) {
+        await deleteAvatarAsset(uploadedAvatarPath).catch(() => undefined);
+      }
       return notFoundResponse();
+    }
+
+    if (shouldRemoveAvatar && existingRecord.avatarUrl) {
+      await deleteAvatarAsset(existingRecord.avatarUrl).catch(() => undefined);
+    } else if (uploadedAvatarPath && existingRecord.avatarUrl && existingRecord.avatarUrl !== uploadedAvatarPath) {
+      await deleteAvatarAsset(existingRecord.avatarUrl).catch(() => undefined);
     }
 
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
+    if (uploadedAvatarPath) {
+      await deleteAvatarAsset(uploadedAvatarPath).catch(() => undefined);
+    }
     if (error instanceof Error) {
       if (error.message === 'UNAUTHENTICATED') {
         return unauthorizedResponse();
@@ -120,6 +152,15 @@ export async function PUT(
       }
       if (error.message === 'USER_NOT_FOUND') {
         return badRequestResponse('关联的用户不存在');
+      }
+      if (error.message === 'FILE_TOO_LARGE') {
+        return badRequestResponse('头像文件超过允许大小');
+      }
+      if (error.message === 'UNSUPPORTED_FILE_TYPE') {
+        return badRequestResponse('头像文件格式不受支持');
+      }
+      if (error.message === 'The provided string is not a valid base64 data URI') {
+        return badRequestResponse('头像数据无效');
       }
     }
     console.error('更新员工失败', error);

@@ -8,6 +8,7 @@ import {
   listEmployees,
   ListEmployeesParams,
 } from '@/lib/hr/employees';
+import { deleteAvatarAsset, saveAvatarToLocal } from '@/lib/storage/avatar';
 import { checkPermission, Permissions } from '@/lib/permissions';
 
 function unauthorizedResponse() {
@@ -87,6 +88,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  let uploadedAvatarPath: string | null = null;
   try {
     const context = await requireCurrentUser();
     const permissionUser = await toPermissionUser(context.user);
@@ -100,12 +102,18 @@ export async function POST(request: Request) {
       return badRequestResponse('请求体格式错误');
     }
 
+    const trimmedAvatarDataUrl = typeof body.avatarDataUrl === 'string' ? body.avatarDataUrl.trim() : '';
+    if (trimmedAvatarDataUrl) {
+      uploadedAvatarPath = await saveAvatarToLocal(trimmedAvatarDataUrl);
+    }
+
     const result = await createEmployee({
       userId: body.userId,
       employeeCode: body.employeeCode,
       firstName: body.firstName,
       lastName: body.lastName,
       displayName: body.displayName,
+      avatarUrl: uploadedAvatarPath ?? null,
       email: body.email,
       phone: body.phone,
       department: body.department,
@@ -127,6 +135,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, data: result }, { status: 201 });
   } catch (error) {
+    if (uploadedAvatarPath) {
+      await deleteAvatarAsset(uploadedAvatarPath).catch(() => undefined);
+    }
     if (error instanceof Error) {
       if (error.message === 'UNAUTHENTICATED') {
         return unauthorizedResponse();
@@ -142,6 +153,15 @@ export async function POST(request: Request) {
       }
       if (error.message === 'USER_NOT_FOUND') {
         return badRequestResponse('关联的用户不存在');
+      }
+      if (error.message === 'FILE_TOO_LARGE') {
+        return badRequestResponse('头像文件超过允许大小');
+      }
+      if (error.message === 'UNSUPPORTED_FILE_TYPE') {
+        return badRequestResponse('头像文件格式不受支持');
+      }
+      if (error.message === 'The provided string is not a valid base64 data URI') {
+        return badRequestResponse('头像数据无效');
       }
     }
     console.error('创建员工失败', error);

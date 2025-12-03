@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pencil, Plus, RefreshCcw, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Pencil, Plus, RefreshCcw, Trash2 } from 'lucide-react';
 
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,8 @@ const EMPTY_FORM = {
   description: '',
 };
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
+
 type Department = {
   id: string;
   name: string;
@@ -44,6 +46,8 @@ export default function DepartmentManager() {
   const [editing, setEditing] = useState<Department | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const confirm = useConfirm();
 
   const canView = hasPermission('USER_VIEW_ALL');
@@ -56,6 +60,22 @@ export default function DepartmentManager() {
     departments.forEach((dept) => map.set(dept.id, dept.name));
     return map;
   }, [departments]);
+
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(departments.length / pageSize)), [departments.length, pageSize]);
+
+  const paginatedDepartments = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return departments.slice(start, start + pageSize);
+  }, [departments, page, pageSize]);
+
+  useEffect(() => {
+    setPage((prev) => {
+      if (prev > totalPages) {
+        return totalPages;
+      }
+      return prev;
+    });
+  }, [totalPages]);
 
   const resetForm = useCallback(() => {
     setFormValues({ ...EMPTY_FORM });
@@ -208,6 +228,20 @@ export default function DepartmentManager() {
     return departments.filter((dept) => !editing || dept.id !== editing.id);
   }, [departments, editing]);
 
+  const handlePageChange = (direction: 'prev' | 'next') => {
+    setPage((prev) => {
+      if (direction === 'prev') {
+        return Math.max(1, prev - 1);
+      }
+      return Math.min(totalPages, prev + 1);
+    });
+  };
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setPage(1);
+  };
+
   const renderContent = () => {
     if (permissionLoading) {
       return <div className="py-10 text-center text-sm text-muted-foreground">权限加载中...</div>;
@@ -234,49 +268,94 @@ export default function DepartmentManager() {
       return <div className="py-10 text-center text-sm text-muted-foreground">暂无部门，点击「新建部门」开始配置</div>;
     }
     return (
-      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/60">
-              <TableHead className="px-4 py-3">名称</TableHead>
-              <TableHead className="px-4 py-3">编码</TableHead>
-              <TableHead className="px-4 py-3">父级</TableHead>
-              <TableHead className="px-4 py-3 text-right">排序</TableHead>
-              <TableHead className="px-4 py-3">更新时间</TableHead>
-              <TableHead className="px-4 py-3 text-right">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {departments.map((dept) => (
-              <TableRow key={dept.id} className="hover:bg-muted/40 border-b border-border/40 last:border-0">
-                <TableCell className="px-4 py-4">
-                  <div className="font-medium">{dept.name}</div>
-                  {dept.description ? (
-                    <p className="text-xs text-muted-foreground">{dept.description}</p>
-                  ) : null}
-                </TableCell>
-                <TableCell className="px-4 py-4">{dept.code ?? '—'}</TableCell>
-                <TableCell className="px-4 py-4">{dept.parentId ? parentNameMap.get(dept.parentId) ?? '—' : '—'}</TableCell>
-                <TableCell className="px-4 py-4 text-right">{dept.sortOrder ?? 0}</TableCell>
-                <TableCell className="px-4 py-4">{formatDateTimeLocal(dept.updatedAt) ?? dept.updatedAt}</TableCell>
-                <TableCell className="px-4 py-4 text-right">
-                  <div className="flex justify-end gap-2">
-                    {canUpdate && (
-                      <Button variant="ghost" size="icon" onClick={() => handleEditClick(dept)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    )}
-                    {canDelete && (
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(dept)}>
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    )}
-                  </div>
-                </TableCell>
+      <div className="space-y-4">
+        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+          <Table
+            stickyHeader
+            scrollAreaClassName="max-h-[calc(100vh-350px)] custom-scrollbar"
+            className="text-sm text-muted-foreground"
+          >
+            <TableHeader>
+              <TableRow className="bg-muted/60 text-xs uppercase tracking-wide">
+                <TableHead className="px-4 py-3">名称</TableHead>
+                <TableHead className="px-4 py-3">编码</TableHead>
+                <TableHead className="px-4 py-3">父级</TableHead>
+                <TableHead className="px-4 py-3 text-right">排序</TableHead>
+                <TableHead className="px-4 py-3">更新时间</TableHead>
+                <TableHead className="px-4 py-3 text-right">操作</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {paginatedDepartments.map((dept) => (
+                <TableRow key={dept.id} className="border-b border-border/40 hover:bg-muted/40 last:border-0">
+                  <TableCell className="px-4 py-4 whitespace-normal">
+                    <div className="font-medium text-foreground">{dept.name}</div>
+                    {dept.description ? <p className="text-xs text-muted-foreground">{dept.description}</p> : null}
+                  </TableCell>
+                  <TableCell className="px-4 py-4">{dept.code ?? '—'}</TableCell>
+                  <TableCell className="px-4 py-4">{dept.parentId ? parentNameMap.get(dept.parentId) ?? '—' : '—'}</TableCell>
+                  <TableCell className="px-4 py-4 text-right">{dept.sortOrder ?? 0}</TableCell>
+                  <TableCell className="px-4 py-4 text-sm text-muted-foreground">
+                    {formatDateTimeLocal(dept.updatedAt) ?? dept.updatedAt}
+                  </TableCell>
+                  <TableCell className="px-4 py-4 text-right">
+                    <div className="flex justify-end gap-2">
+                      {canUpdate && (
+                        <Button variant="ghost" size="icon" onClick={() => handleEditClick(dept)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {canDelete && (
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(dept)}>
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="flex flex-col gap-3 border-t border-transparent px-2 py-2 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+          <div>共 {departments.length} 个部门 • 第 {page} / {totalPages} 页</div>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+            <Select value={String(pageSize)} onValueChange={(value) => handlePageSizeChange(Number(value))}>
+              <SelectTrigger className="h-9 w-[140px]">
+                <SelectValue placeholder="每页数量" />
+              </SelectTrigger>
+              <SelectContent>
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <SelectItem key={size} value={String(size)}>
+                    每页 {size} 条
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange('prev')}
+                disabled={page <= 1}
+                className="gap-1"
+              >
+                <ChevronLeft className="h-4 w-4" /> 上一页
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange('next')}
+                disabled={page >= totalPages}
+                className="gap-1"
+              >
+                下一页 <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   };

@@ -290,10 +290,13 @@ export default function PurchaseApprovalsClient() {
     <div className="space-y-6">
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900 sm:p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">采购审批工作台</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">集中处理待审批的采购申请，审批后可直接打款。</p>
-          </div>
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="按单号 / 物品 / 申请人检索"
+            className="h-10 flex-1 rounded-md border border-gray-300 px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
+          {error && <p className="text-xs text-rose-500 dark:text-rose-300">{error}</p>}
           <div className="flex flex-wrap gap-2">
             <button
               onClick={handleManualRefresh}
@@ -303,33 +306,28 @@ export default function PurchaseApprovalsClient() {
               刷新
             </button>
           </div>
-        </div>
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="按单号 / 物品 / 申请人检索"
-            className="h-10 flex-1 rounded-md border border-gray-300 px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          />
-          {error && <p className="text-xs text-rose-500 dark:text-rose-300">{error}</p>}
+          
         </div>
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
-        <PurchaseTable
-          purchases={records}
-          loading={loading}
-          mutatingId={mutatingId}
-          getRowPermissions={getRowPermissions}
-          onView={handleView}
-          onEdit={() => {}}
-          onDelete={() => {}}
-          onSubmit={() => {}}
-          onApprove={handleApprove}
-          onReject={handleReject}
-          onWithdraw={() => {}}
-          onPay={handlePay}
-        />
+        <div className="flex min-h-[420px] max-h-[calc(100vh-280px)] flex-col overflow-hidden">
+          <PurchaseTable
+            purchases={records}
+            loading={loading}
+            mutatingId={mutatingId}
+            getRowPermissions={getRowPermissions}
+            scrollAreaClassName="h-full max-h-full"
+            onView={handleView}
+            onEdit={() => {}}
+            onDelete={() => {}}
+            onSubmit={() => {}}
+            onApprove={handleApprove}
+            onReject={handleReject}
+            onWithdraw={() => {}}
+            onPay={handlePay}
+          />
+        </div>
       </div>
 
       {selectedPurchase && (

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CheckSquare, Square } from 'lucide-react';
+import { CheckSquare, ChevronLeft, ChevronRight, Square } from 'lucide-react';
 
 import InventorySpecSummary from '@/components/inventory/InventorySpecSummary';
 import InventoryItemFormDialog from '@/components/inventory/InventoryItemFormDialog';
@@ -9,11 +9,22 @@ import QuoteGeneratorDialog from '@/components/inventory/QuoteGeneratorDialog';
 import DataState from '@/components/common/DataState';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/sonner';
 import type { InventoryItem } from '@/types/inventory';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useConfirm } from '@/hooks/useConfirm';
 import { formatDateTimeLocal } from '@/lib/dates';
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 export default function InventoryItemsPage() {
   const { hasPermission, loading: permissionLoading } = usePermissions();
@@ -28,6 +39,8 @@ export default function InventoryItemsPage() {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const confirm = useConfirm();
 
   const fetchItems = useCallback(async () => {
@@ -84,14 +97,34 @@ export default function InventoryItemsPage() {
     setDialogOpen(true);
   };
 
-  const isAllSelected = items.length > 0 && selectedIds.size === items.length;
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(items.length / pageSize)), [items.length, pageSize]);
+
+  const visibleItems = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return items.slice(start, start + pageSize);
+  }, [items, page, pageSize]);
+
+  useEffect(() => {
+    setPage((prev) => {
+      if (prev > totalPages) {
+        return totalPages;
+      }
+      return prev;
+    });
+  }, [totalPages]);
+
+  const isAllSelected = visibleItems.length > 0 && visibleItems.every((item) => selectedIds.has(item.id));
 
   const toggleSelectAll = () => {
-    if (isAllSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(items.map(i => i.id)));
-    }
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (isAllSelected) {
+        visibleItems.forEach((item) => next.delete(item.id));
+      } else {
+        visibleItems.forEach((item) => next.add(item.id));
+      }
+      return next;
+    });
   };
 
   const toggleSelect = (id: string) => {
@@ -105,6 +138,20 @@ export default function InventoryItemsPage() {
   };
 
   const selectedItems = items.filter(i => selectedIds.has(i.id));
+
+  const handlePageChange = (direction: 'prev' | 'next') => {
+    setPage((prev) => {
+      if (direction === 'prev') {
+        return Math.max(1, prev - 1);
+      }
+      return Math.min(totalPages, prev + 1);
+    });
+  };
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setPage(1);
+  };
 
   if (permissionLoading) {
     return (
@@ -152,119 +199,159 @@ export default function InventoryItemsPage() {
                 onOpenChange={(open) => !open && setSelectedIds(new Set())}
               />
             )}
-            <Button
-              onClick={fetchItems}
-              variant="outline"
-              size="sm"
-              className="h-9 border-gray-300 px-3 text-gray-700 dark:border-gray-600 dark:text-gray-200"
-              disabled={loading}
-            >
+            <Button onClick={fetchItems} variant="outline">
               刷新
             </Button>
-            <Button onClick={openCreateDialog} size="sm" className="h-9 rounded-lg bg-brand-500 px-4 text-white hover:bg-brand-600">
-              + 新建商品
+            <Button onClick={openCreateDialog} className="min-w-[110px]">
+              新建商品
             </Button>
           </div>
         </div>
 
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
-            <thead className="bg-gray-50 text-[11px] uppercase text-gray-500 dark:bg-gray-800 dark:text-gray-400">
-              <tr>
-                <th className="px-3 py-2.5 w-10">
-                  <button onClick={toggleSelectAll} className="flex items-center justify-center text-gray-400 hover:text-gray-600">
-                    {isAllSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-                  </button>
-                </th>
-                <th className="px-3 py-2.5 text-left">SKU</th>
-                <th className="px-3 py-2.5 text-left">名称</th>
-                <th className="px-3 py-2.5 text-left">类别</th>
-                <th className="px-3 py-2.5 text-left">单位</th>
-                <th className="px-3 py-2.5 text-left">采购单价</th>
-                <th className="px-3 py-2.5 text-left">建议售价</th>
-                <th className="px-3 py-2.5 text-left">规格参数</th>
-                <th className="px-3 py-2.5 text-left">安全库存</th>
-                <th className="px-3 py-2.5 text-left">创建时间</th>
-                <th className="px-3 py-2.5 text-left">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {loading ? (
-                Array.from({ length: 5 }).map((_, idx) => (
-                  <tr key={idx} className="animate-pulse bg-gray-50/80 dark:bg-gray-800/40">
-                    {Array.from({ length: 11 }).map((__, cellIdx) => (
-                      <td key={cellIdx} className="px-4 py-3">
-                        <span className="inline-block h-4 w-full rounded bg-gray-200 dark:bg-gray-700" />
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              ) : items.length ? (
-                items.map((item) => {
-                  const isSelected = selectedIds.has(item.id);
-                  return (
-                    <tr key={item.id} className={isSelected ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}>
-                      <td className="px-3 py-2.5">
-                        <button
-                          onClick={() => toggleSelect(item.id)}
-                          className={`flex items-center justify-center ${isSelected ? 'text-blue-600' : 'text-gray-300 hover:text-gray-500'}`}
-                        >
-                          {isSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-                        </button>
-                      </td>
-                      <td className="px-3 py-2.5 font-mono text-xs text-gray-500">{item.sku}</td>
-                      <td className="px-3 py-2.5 text-gray-900 dark:text-white">{item.name}</td>
-                      <td className="px-3 py-2.5 text-gray-600 dark:text-gray-300">
-                        {item.category ? <Badge variant="secondary">{item.category}</Badge> : '—'}
-                      </td>
-                      <td className="px-3 py-2.5 text-gray-600 dark:text-gray-300">{item.unit}</td>
-                      <td className="px-3 py-2.5 text-gray-900 dark:text-white">
-                        ¥{item.unitPrice.toLocaleString()} / {item.unit}
-                      </td>
-                      <td className="px-3 py-2.5 text-gray-900 dark:text-white">
-                        ¥{item.salePrice.toLocaleString()} / {item.unit}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <InventorySpecSummary item={item} />
-                      </td>
-                      <td className="px-3 py-2.5 text-gray-600 dark:text-gray-300">{item.safetyStock}</td>
-                      <td className="px-3 py-2.5 text-gray-500">
-                        {formatDateTimeLocal(item.createdAt) ?? item.createdAt}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex flex-wrap gap-2">
-                          <Button size="sm" variant="secondary" className="h-8 px-3" onClick={() => openEditDialog(item)}>
-                            编辑
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            className="h-8 px-3"
-                            onClick={() => handleDelete(item)}
-                            disabled={deletingId === item.id}
+        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+            <Table
+              stickyHeader
+              scrollAreaClassName="max-h-[calc(100vh-350px)] custom-scrollbar"
+              className="min-w-[1100px] text-sm text-muted-foreground"
+            >
+              <TableHeader>
+                <TableRow className="bg-muted/60 text-[11px] uppercase tracking-wide">
+                  <TableHead className="w-10 px-3 py-3">
+                    <button onClick={toggleSelectAll} className="flex items-center justify-center text-muted-foreground hover:text-foreground">
+                      {isAllSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                    </button>
+                  </TableHead>
+                  <TableHead className="px-3 py-3">SKU</TableHead>
+                  <TableHead className="px-3 py-3">名称</TableHead>
+                  <TableHead className="px-3 py-3">类别</TableHead>
+                  <TableHead className="px-3 py-3">单位</TableHead>
+                  <TableHead className="px-3 py-3">采购单价</TableHead>
+                  <TableHead className="px-3 py-3">建议售价</TableHead>
+                  <TableHead className="px-3 py-3">规格参数</TableHead>
+                  <TableHead className="px-3 py-3">安全库存</TableHead>
+                  <TableHead className="px-3 py-3">创建时间</TableHead>
+                  <TableHead className="px-3 py-3 text-right">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, idx) => (
+                    <TableRow key={`loading-${idx}`} className="animate-pulse bg-muted/40">
+                      {Array.from({ length: 11 }).map((__, cellIdx) => (
+                        <TableCell key={cellIdx} className="px-4 py-3">
+                          <span className="inline-block h-4 w-full rounded bg-muted/80" />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : items.length ? (
+                  visibleItems.map((item) => {
+                    const isSelected = selectedIds.has(item.id);
+                    return (
+                      <TableRow key={item.id} className={isSelected ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}>
+                        <TableCell className="px-3 py-2.5">
+                          <button
+                            onClick={() => toggleSelect(item.id)}
+                            className={`flex items-center justify-center ${isSelected ? 'text-blue-600' : 'text-muted-foreground hover:text-foreground'}`}
                           >
-                            {deletingId === item.id ? '删除中...' : '删除'}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={11} className="px-3 py-6">
-                    <DataState
-                      variant="empty"
-                      title="暂无商品数据"
-                      description="点击右上角“新建商品”添加第一条 SKU"
-                    />
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                            {isSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                          </button>
+                        </TableCell>
+                        <TableCell className="px-3 py-2.5 font-mono text-xs text-muted-foreground">{item.sku}</TableCell>
+                        <TableCell className="px-3 py-2.5 text-foreground">{item.name}</TableCell>
+                        <TableCell className="px-3 py-2.5 text-muted-foreground">
+                          {item.category ? <Badge variant="secondary">{item.category}</Badge> : '—'}
+                        </TableCell>
+                        <TableCell className="px-3 py-2.5 text-muted-foreground">{item.unit}</TableCell>
+                        <TableCell className="px-3 py-2.5 text-foreground">
+                          ¥{item.unitPrice.toLocaleString()} / {item.unit}
+                        </TableCell>
+                        <TableCell className="px-3 py-2.5 text-foreground">
+                          ¥{item.salePrice.toLocaleString()} / {item.unit}
+                        </TableCell>
+                        <TableCell className="px-3 py-2.5 whitespace-normal">
+                          <InventorySpecSummary item={item} />
+                        </TableCell>
+                        <TableCell className="px-3 py-2.5 text-muted-foreground">{item.safetyStock}</TableCell>
+                        <TableCell className="px-3 py-2.5 text-muted-foreground">
+                          {formatDateTimeLocal(item.createdAt) ?? item.createdAt}
+                        </TableCell>
+                        <TableCell className="px-3 py-2.5 text-right">
+                          <div className="flex flex-wrap justify-end gap-2">
+                            <Button size="sm" variant="secondary" className="h-8 px-3" onClick={() => openEditDialog(item)}>
+                              编辑
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              className="h-8 px-3"
+                              onClick={() => handleDelete(item)}
+                              disabled={deletingId === item.id}
+                            >
+                              {deletingId === item.id ? '删除中...' : '删除'}
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={11} className="px-3 py-6">
+                      <DataState
+                        variant="empty"
+                        title="暂无商品数据"
+                        description="点击右上角“新建商品”添加第一条 SKU"
+                      />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-transparent px-2 py-2 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+            <div>共 {items.length} 个商品 • 第 {page} / {totalPages} 页</div>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              <Select value={String(pageSize)} onValueChange={(value) => handlePageSizeChange(Number(value))}>
+                <SelectTrigger className="h-9 w-[140px]">
+                  <SelectValue placeholder="每页数量" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <SelectItem key={size} value={String(size)}>
+                      每页 {size} 条
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange('prev')}
+                  disabled={page <= 1}
+                  className="gap-1"
+                >
+                  <ChevronLeft className="h-4 w-4" /> 上一页
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange('next')}
+                  disabled={page >= totalPages}
+                  className="gap-1"
+                >
+                  下一页 <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
       </div>
+
       <InventoryItemFormDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}

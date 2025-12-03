@@ -2,6 +2,9 @@
 
 import PurchaseStatusBadge from './PurchaseStatusBadge';
 import type { PurchaseRecord, PaymentMethod } from '@/types/purchase';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const currencyFormatter = new Intl.NumberFormat('zh-CN', {
 	style: 'currency',
@@ -36,6 +39,7 @@ type PurchaseTableProps = {
 	purchases: PurchaseRecord[];
 	loading?: boolean;
 	mutatingId?: string | null;
+	scrollAreaClassName?: string;
 	getRowPermissions: (purchase: PurchaseRecord) => PurchaseRowPermissions;
 	onView: (purchase: PurchaseRecord) => void;
 	onEdit: (purchase: PurchaseRecord) => void;
@@ -56,6 +60,7 @@ export default function PurchaseTable({
 	purchases,
 	loading,
 	mutatingId,
+	scrollAreaClassName,
 	getRowPermissions,
 	onView,
 	onEdit,
@@ -66,53 +71,66 @@ export default function PurchaseTable({
 	onWithdraw,
 	onPay,
 }: PurchaseTableProps) {
+	const scrollContainerClassName = cn(
+		'custom-scrollbar',
+		scrollAreaClassName ?? 'max-h-[calc(100vh-350px)]'
+	);
 	return (
-		<div className="overflow-x-auto">
-			<table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-800">
-				<thead className="bg-gray-50 dark:bg-gray-900/50">
-					<tr>
-						<th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-300">采购单号 / 物品</th>
-						<th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-300">金额</th>
-						<th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-300">状态</th>
-						<th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-300">采购日期</th>
-						<th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-300">付款方式</th>
-						<th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-300">操作</th>
-					</tr>
-				</thead>
-				<tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-					{!loading && purchases.length === 0 && (
-						<tr>
-							<td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
-								暂无数据，尝试调整筛选条件。
-							</td>
-						</tr>
-					)}
-					{purchases.map((purchase) => {
+		<Table
+			stickyHeader
+			scrollAreaClassName={scrollContainerClassName}
+			className="min-w-[960px] text-sm text-muted-foreground"
+		>
+			<TableHeader>
+				<TableRow className="bg-muted/60">
+					<TableHead className="px-4 py-3 uppercase tracking-wide">采购单号 / 物品</TableHead>
+					<TableHead className="px-4 py-3 uppercase tracking-wide">金额</TableHead>
+					<TableHead className="px-4 py-3 uppercase tracking-wide">状态</TableHead>
+					<TableHead className="px-4 py-3 uppercase tracking-wide">采购日期</TableHead>
+					<TableHead className="px-4 py-3 uppercase tracking-wide">付款方式</TableHead>
+					<TableHead className="px-4 py-3 text-right uppercase tracking-wide">操作</TableHead>
+				</TableRow>
+			</TableHeader>
+			<TableBody>
+				{loading ? (
+					<TableRow>
+						<TableCell colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
+							<Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> 正在加载采购数据...
+						</TableCell>
+					</TableRow>
+				) : purchases.length === 0 ? (
+					<TableRow>
+						<TableCell colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
+							暂无数据，尝试调整筛选条件。
+						</TableCell>
+					</TableRow>
+				) : (
+					purchases.map((purchase) => {
 						const permissions = getRowPermissions(purchase);
 						const rowBusy = mutatingId === purchase.id;
 						return (
-							<tr key={purchase.id} className="bg-white transition hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-800">
-								<td className="whitespace-nowrap px-4 py-4">
-									<div className="font-semibold text-gray-900 dark:text-gray-100">{purchase.purchaseNumber}</div>
-									<div className="text-xs text-gray-500 dark:text-gray-400">{purchase.itemName}</div>
-								</td>
-								<td className="px-4 py-4 font-semibold text-gray-900 dark:text-gray-100">
+							<TableRow key={purchase.id} className="text-foreground">
+								<TableCell className="px-4 py-4 text-sm text-foreground whitespace-normal">
+									<div className="font-semibold text-foreground">{purchase.purchaseNumber}</div>
+									<div className="text-xs text-muted-foreground">{purchase.itemName}</div>
+								</TableCell>
+								<TableCell className="px-4 py-4 font-semibold text-foreground">
 									{currencyFormatter.format(purchase.totalAmount)}
-								</td>
-								<td className="px-4 py-4">
+								</TableCell>
+								<TableCell className="px-4 py-4">
 									<PurchaseStatusBadge status={purchase.status} />
-								</td>
-								<td className="px-4 py-4 text-gray-700 dark:text-gray-200">
+								</TableCell>
+								<TableCell className="px-4 py-4 text-muted-foreground whitespace-normal">
 									{formatDate(purchase.purchaseDate)}
-								</td>
-								<td className="px-4 py-4 text-gray-700 dark:text-gray-200">
+								</TableCell>
+								<TableCell className="px-4 py-4 text-muted-foreground whitespace-normal">
 									{paymentLabels[purchase.paymentMethod] ?? purchase.paymentMethod}
-								</td>
-								<td className="px-4 py-4">
-									<div className="flex flex-wrap gap-2 text-xs">
+								</TableCell>
+								<TableCell className="px-4 py-4 text-right">
+									<div className="flex flex-wrap justify-end gap-2 text-xs">
 										<button
 											onClick={() => onView(purchase)}
-											className="rounded-lg border border-gray-300 px-3 py-1 text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200"
+											className="rounded-lg border border-border px-3 py-1 text-foreground hover:bg-muted/50"
 										>
 											详情
 										</button>
@@ -174,19 +192,19 @@ export default function PurchaseTable({
 											<button
 												onClick={() => onDelete(purchase)}
 												disabled={rowBusy}
-												className="rounded-lg border border-gray-300 px-3 py-1 text-gray-600 hover:bg-gray-100 disabled:opacity-60 dark:border-gray-600 dark:text-gray-300"
+												className="rounded-lg border border-border px-3 py-1 text-muted-foreground hover:bg-muted/50 disabled:opacity-60"
 											>
 												删除
 											</button>
 										)}
 									</div>
-								</td>
-							</tr>
+								</TableCell>
+							</TableRow>
 						);
-					})}
-				</tbody>
-			</table>
-		</div>
+					})
+				)}
+			</TableBody>
+		</Table>
 	);
 }
 

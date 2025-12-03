@@ -4,11 +4,18 @@ import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 
-const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto">
-    <table ref={ref} className={cn('w-full caption-bottom text-sm', className)} {...props} />
-  </div>
-));
+interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
+  scrollAreaClassName?: string;
+  stickyHeader?: boolean;
+}
+
+const Table = React.forwardRef<HTMLTableElement, TableProps>(
+  ({ className, scrollAreaClassName, stickyHeader = false, ...props }, ref) => (
+    <div className={cn('relative w-full overflow-auto', scrollAreaClassName, stickyHeader && 'table-sticky')}>
+      <table ref={ref} className={cn('w-full caption-bottom text-sm', className)} {...props} />
+    </div>
+  )
+);
 Table.displayName = 'Table';
 
 const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(({ className, ...props }, ref) => (
@@ -32,12 +39,12 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
 TableRow.displayName = 'TableRow';
 
 const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<HTMLTableCellElement>>(({ className, ...props }, ref) => (
-  <th ref={ref} className={cn('h-10 px-2 text-left align-middle text-xs font-medium text-muted-foreground', className)} {...props} />
+  <th ref={ref} className={cn('h-10 px-2 text-left align-middle text-xs font-medium text-muted-foreground whitespace-nowrap', className)} {...props} />
 ));
 TableHead.displayName = 'TableHead';
 
 const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<HTMLTableCellElement>>(({ className, ...props }, ref) => (
-  <td ref={ref} className={cn('p-2 align-middle text-sm', className)} {...props} />
+  <td ref={ref} className={cn('p-2 align-middle text-sm whitespace-nowrap', className)} {...props} />
 ));
 TableCell.displayName = 'TableCell';
 

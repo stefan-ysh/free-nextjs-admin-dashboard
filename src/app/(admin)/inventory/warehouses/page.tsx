@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Edit2, Loader2, MoreHorizontal, PlusCircle, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Edit2, Loader2, MoreHorizontal, PlusCircle, Trash2 } from 'lucide-react';
 
 import WarehouseFormDialog from '@/components/inventory/WarehouseFormDialog';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +28,7 @@ import type { Warehouse } from '@/types/inventory';
 import { formatDateTimeLocal } from '@/lib/dates';
 
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const warehouseTypeLabels: Record<Warehouse['type'], string> = {
   main: '主仓',
@@ -54,6 +55,8 @@ export default function InventoryWarehousesPage() {
   const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const confirm = useConfirm();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   const fetchWarehouses = useCallback(async () => {
     if (!canManageWarehouses) return;
@@ -127,6 +130,36 @@ export default function InventoryWarehousesPage() {
     );
   }, [warehouses, search]);
 
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(filteredWarehouses.length / pageSize)), [filteredWarehouses.length, pageSize]);
+
+  const visibleWarehouses = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredWarehouses.slice(start, start + pageSize);
+  }, [filteredWarehouses, page, pageSize]);
+
+  useEffect(() => {
+    setPage((prev) => {
+      if (prev > totalPages) {
+        return totalPages;
+      }
+      return prev;
+    });
+  }, [totalPages]);
+
+  const handlePageChange = (direction: 'prev' | 'next') => {
+    setPage((prev) => {
+      if (direction === 'prev') {
+        return Math.max(1, prev - 1);
+      }
+      return Math.min(totalPages, prev + 1);
+    });
+  };
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setPage(1);
+  };
+
   if (permissionLoading) {
     return (
       <div className="space-y-6">
@@ -174,9 +207,13 @@ export default function InventoryWarehousesPage() {
 
       <Card className="border-none shadow-sm">
         <CardContent className="p-0">
-          <Table className="[&_tbody_tr]:hover:bg-muted/40">
+          <Table
+            stickyHeader
+            scrollAreaClassName="max-h-[calc(100vh-350px)] custom-scrollbar"
+            className="text-sm text-muted-foreground [&_tbody_tr]:hover:bg-muted/40"
+          >
             <TableHeader className="[&_tr]:border-b border-border/40">
-              <TableRow>
+              <TableRow className="bg-muted/60 text-xs uppercase tracking-wide">
                 <TableHead>仓库名称</TableHead>
                 <TableHead>类型</TableHead>
                 <TableHead>负责人</TableHead>
@@ -189,18 +226,18 @@ export default function InventoryWarehousesPage() {
             <TableBody className="[&_tr]:border-0">
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-6 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                     <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> 正在加载...
                   </TableCell>
                 </TableRow>
               ) : filteredWarehouses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-6 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                     {search ? '未找到匹配的仓库' : '暂无仓库数据，点击“新增仓库”以初始化仓储信息'}
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredWarehouses.map((warehouse) => {
+                visibleWarehouses.map((warehouse) => {
                   const capacity = warehouse.capacity ?? 0;
                   const stockQuantity = warehouse.stockQuantity ?? 0;
                   const usagePercent = capacity > 0 ? Math.min((stockQuantity / capacity) * 100, 100) : 0;
@@ -208,7 +245,7 @@ export default function InventoryWarehousesPage() {
                   return (
                     <TableRow key={warehouse.id}>
                       <TableCell>
-                        <div className="font-medium">{warehouse.name}</div>
+                        <div className="font-medium text-foreground">{warehouse.name}</div>
                         <div className="text-xs text-muted-foreground">{warehouse.code}</div>
                       </TableCell>
                       <TableCell>
@@ -217,7 +254,7 @@ export default function InventoryWarehousesPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">{warehouse.manager || '—'}</div>
+                        <div className="text-sm text-foreground">{warehouse.manager || '—'}</div>
                         <div className="text-xs text-muted-foreground">{warehouse.address || '—'}</div>
                       </TableCell>
                       <TableCell>{capacity || '—'}</TableCell>
@@ -268,6 +305,48 @@ export default function InventoryWarehousesPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {filteredWarehouses.length > 0 && (
+        <div className="flex flex-col gap-3 border-t border-transparent px-2 py-2 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+          <div>共 {filteredWarehouses.length} 个仓库 • 第 {page} / {totalPages} 页</div>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+            <Select value={String(pageSize)} onValueChange={(value) => handlePageSizeChange(Number(value))}>
+              <SelectTrigger className="h-9 w-[140px]">
+                <SelectValue placeholder="每页数量" />
+              </SelectTrigger>
+              <SelectContent>
+                {[10, 20, 50].map((size) => (
+                  <SelectItem key={size} value={String(size)}>
+                    每页 {size} 条
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange('prev')}
+                disabled={page <= 1}
+                className="gap-1"
+              >
+                <ChevronLeft className="h-4 w-4" /> 上一页
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange('next')}
+                disabled={page >= totalPages}
+                className="gap-1"
+              >
+                下一页 <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <WarehouseFormDialog
         open={dialogOpen}

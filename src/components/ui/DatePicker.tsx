@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { format, parseISO, isValid } from 'date-fns';
+import { zhCN } from 'date-fns/locale';
 import { CalendarIcon } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -22,7 +23,7 @@ type DatePickerProps = {
   defaultMonth?: Date;
 } & Omit<ButtonProps, 'value' | 'onChange'>;
 
-const DISPLAY_FORMAT = 'PPP';
+const DISPLAY_FORMAT = "yyyy年MM月dd日 EEEE";
 const OUTPUT_FORMAT = 'yyyy-MM-dd';
 
 function parseValue(value?: string | null) {
@@ -58,7 +59,7 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
     React.useImperativeHandle(ref, () => triggerRef.current as HTMLButtonElement);
 
     const parsedDate = React.useMemo(() => parseValue(value), [value]);
-    const displayLabel = parsedDate ? format(parsedDate, DISPLAY_FORMAT) : placeholder;
+    const displayLabel = parsedDate ? format(parsedDate, DISPLAY_FORMAT, { locale: zhCN }) : placeholder;
 
     const handleSelect = React.useCallback(
       (date?: Date) => {
@@ -97,29 +98,38 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
               variant="outline"
               type="button"
               disabled={disabled}
-              className={cn('w-full justify-start text-left font-normal', !parsedDate && 'text-muted-foreground', className)}
+              className={cn(
+                'w-full justify-start gap-2 rounded-xl border border-border/60 bg-background text-left font-normal shadow-sm hover:bg-muted/50',
+                !parsedDate && 'text-muted-foreground',
+                className
+              )}
               {...buttonProps}
             >
               <CalendarIcon className="mr-2 h-4 w-4" />
               {displayLabel}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
+          <PopoverContent className="w-auto rounded-3xl border border-border/50 p-0 shadow-2xl" align="start" sideOffset={8}>
             <Calendar
               mode="single"
               selected={parsedDate}
               defaultMonth={parsedDate ?? defaultMonth}
               onSelect={handleSelect}
               disabled={disabled}
+              locale={zhCN}
+              weekStartsOn={1}
               initialFocus
             />
-            {clearable && value ? (
-              <div className="border-t px-3 py-2">
-                <Button type="button" variant="ghost" size="sm" className="w-full" onClick={handleClear}>
+            <div className="flex gap-2 border-t px-3 py-2">
+              <Button type="button" variant="ghost" size="sm" className="flex-1" onClick={() => handleSelect(new Date())}>
+                今天
+              </Button>
+              {clearable && value ? (
+                <Button type="button" variant="ghost" size="sm" className="flex-1" onClick={handleClear}>
                   清除
                 </Button>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
           </PopoverContent>
         </Popover>
         {helperText ? <p className="text-xs text-muted-foreground">{helperText}</p> : null}

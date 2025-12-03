@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import EmployeeStatusBadge from './EmployeeStatusBadge';
 import type { Employee } from './types';
 import { formatDateTimeLocal } from '@/lib/dates';
-import { Inbox, Loader2, Mail, MoreHorizontal, Phone, User2, Pencil, Trash2, ShieldCheck } from 'lucide-react';
+import { Inbox, Loader2, MoreHorizontal, Pencil, Trash2, ShieldCheck } from 'lucide-react';
 import { USER_ROLE_LABELS } from '@/constants/user-roles';
 
 type EmployeeTableProps = {
@@ -90,12 +90,15 @@ export default function EmployeeTable({
 
 	return (
 		<div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
-			<Table className="min-w-[1000px] text-muted-foreground">
+			<Table
+				stickyHeader
+				scrollAreaClassName="max-h-[calc(100vh-350px)] custom-scrollbar"
+				className="w-full text-muted-foreground"
+			>
 				<TableHeader>
 					<TableRow className="bg-muted/60">
 						<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">员工编号</TableHead>
 						<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">姓名</TableHead>
-						<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">联系方式</TableHead>
 						<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">部门</TableHead>
 						<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">职位</TableHead>
 						<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">状态</TableHead>
@@ -122,84 +125,29 @@ export default function EmployeeTable({
 											</AvatarFallback>
 										)}
 									</Avatar>
-									<div className="flex flex-col">
-										<span className="font-medium text-foreground">{resolveDisplayName(employee)}</span>
-										{employee.displayName && (
-											<span className="text-xs text-muted-foreground">
-												{employee.firstName} {employee.lastName}
-											</span>
-										)}
-										{employee.userRoles && employee.userRoles.length > 0 && (
-											<div className="mt-1 flex flex-wrap gap-1">
-												{employee.userRoles.map((role) => (
-													<Badge
-														key={role}
-														variant={role === employee.userPrimaryRole ? 'default' : 'outline'}
-														className={role === employee.userPrimaryRole ? 'border-primary/40 bg-primary/10 text-primary' : 'border-dashed text-muted-foreground'}
-													>
-														{USER_ROLE_LABELS[role] ?? role}
-														{role === employee.userPrimaryRole && <span className="ml-1 text-[10px]">主</span>}
-													</Badge>
-												))}
-											</div>
-										)}
-									</div>
-								</div>
-							</TableCell>
-							<TableCell className="px-4 py-4">
-								<div className="flex flex-col gap-1 text-xs">
-									{employee.email && (
-										<a
-											href={`mailto:${employee.email}`}
-											className="inline-flex items-center gap-1 text-primary hover:underline"
-										>
-											<Mail className="h-3.5 w-3.5" />
-											{employee.email}
-										</a>
-									)}
-									{employee.phone && (
-										<a
-											href={`tel:${employee.phone}`}
-											className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary"
-										>
-											<Phone className="h-3.5 w-3.5" />
-											{employee.phone}
-										</a>
-									)}
-									{!employee.email && !employee.phone && (
-										<span className="inline-flex items-center gap-1 text-muted-foreground/70">
-											<User2 className="h-3.5 w-3.5" />
-											暂无
+									<div className="flex items-center gap-2 truncate">
+										<span className="font-medium text-foreground truncate" title={resolveDisplayName(employee)}>
+											{resolveDisplayName(employee)}
 										</span>
-									)}
-								</div>
-							</TableCell>
-							<TableCell className="px-4 py-4">
-								{employee.department || employee.departmentCode ? (
-									<div className="flex flex-col gap-1">
-										{employee.department && (
-											<Badge variant="secondary" className="w-fit border-transparent bg-primary/10 text-primary">
-												{employee.department}
+										{employee.userPrimaryRole ? (
+											<Badge variant="secondary" className="whitespace-nowrap text-xs">
+												{USER_ROLE_LABELS[employee.userPrimaryRole] ?? employee.userPrimaryRole}
 											</Badge>
-										)}
-										{employee.departmentCode && (
-											<span className="text-[11px] font-mono uppercase tracking-wide text-muted-foreground">代码 {employee.departmentCode}</span>
-										)}
+										) : null}
 									</div>
-								) : (
-									<span className="text-xs text-muted-foreground">—</span>
-								)}
-							</TableCell>
-							<TableCell className="px-4 py-4 text-muted-foreground">
-								<div className="flex flex-col gap-1">
-									<span>{employee.jobTitle ?? '—'}</span>
-									{employee.jobGrade && (
-										<Badge variant="outline" className="w-fit border-dashed text-xs font-normal text-muted-foreground">
-											{employee.jobGrade}
-											{employee.jobGradeLevel != null ? ` · L${employee.jobGradeLevel}` : ''}
-										</Badge>
-									)}
 								</div>
+							</TableCell>
+							<TableCell className="px-4 py-4 text-sm text-muted-foreground">
+								<span className="block max-w-[180px] truncate" title={`${employee.department ?? '—'}${employee.departmentCode ? `（${employee.departmentCode}）` : ''}`}>
+									{employee.department ?? '—'}
+									{employee.department && employee.departmentCode ? `（${employee.departmentCode}）` : ''}
+								</span>
+							</TableCell>
+							<TableCell className="px-4 py-4 text-sm text-muted-foreground">
+								<span className="block max-w-[160px] truncate" title={employee.jobTitle ?? '—'}>
+									{employee.jobTitle ?? '—'}
+									{employee.jobGrade ? ` · ${employee.jobGrade}${employee.jobGradeLevel != null ? `L${employee.jobGradeLevel}` : ''}` : ''}
+								</span>
 							</TableCell>
 							<TableCell className="px-4 py-4">
 								<EmployeeStatusBadge status={employee.employmentStatus} />

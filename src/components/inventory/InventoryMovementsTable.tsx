@@ -118,9 +118,9 @@ export default function InventoryMovementsTable({ movements, loading, emptyHint 
       )}
 
       <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+        <div className="max-h-[calc(100vh-350px)] overflow-auto custom-scrollbar">
+          <table className="min-w-full divide-y divide-gray-200 text-sm whitespace-nowrap dark:divide-gray-700">
+            <thead className="sticky top-0 z-10 bg-gray-50 text-xs uppercase text-gray-500 dark:bg-gray-800 dark:text-gray-400">
               <tr>
                 <th className="px-4 py-3 w-10">
                   <button onClick={toggleSelectAll} className="flex items-center justify-center text-gray-400 hover:text-gray-600">
@@ -132,8 +132,6 @@ export default function InventoryMovementsTable({ movements, loading, emptyHint 
                 <th className="px-4 py-3 text-left">仓库</th>
                 <th className="px-4 py-3 text-left">方向</th>
                 <th className="px-4 py-3 text-left">数量</th>
-                <th className="px-4 py-3 text-left">规格</th>
-                <th className="px-4 py-3 text-left">类型</th>
                 <th className="px-4 py-3 text-left">单据号</th>
               </tr>
             </thead>
@@ -164,12 +162,18 @@ export default function InventoryMovementsTable({ movements, loading, emptyHint 
                       <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
                         {formatDateTimeLocal(movement.occurredAt) ?? movement.occurredAt}
                       </td>
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-gray-900 dark:text-white">{movement.itemName ?? movement.itemId}</p>
-                        <p className="text-xs text-gray-500">#{movement.itemId}</p>
+                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">
+                        <span
+                          className="block max-w-[220px] truncate"
+                          title={`${movement.itemName ?? movement.itemId} (#${movement.itemId})`}
+                        >
+                          {(movement.itemName ?? '未命名商品') + ` (#${movement.itemId})`}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
-                        {movement.warehouseName ?? movement.warehouseId}
+                        <span className="block max-w-[120px] truncate" title={movement.warehouseName ?? movement.warehouseId}>
+                          {movement.warehouseName ?? movement.warehouseId}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${directionBadge[movement.direction]}`}>
@@ -177,21 +181,15 @@ export default function InventoryMovementsTable({ movements, loading, emptyHint 
                         </span>
                       </td>
                       <td className="px-4 py-3 text-gray-900 dark:text-white">
-                        {movement.quantity}
-                        {movement.unitCost ? (
-                          <span className="ml-2 text-xs text-gray-500">
-                            ¥{movement.unitCost.toLocaleString()}
-                          </span>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {movement.specSummary ?? renderAttributes(movement.attributes)}
+                        <span title={movement.unitCost ? `单价 ¥${movement.unitCost.toLocaleString()}` : undefined}>
+                          {movement.quantity}
+                          {movement.unitCost ? `（¥${movement.unitCost.toLocaleString()}）` : ''}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-gray-700 capitalize dark:text-gray-200">{movement.type}</td>
                       <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                        {movement.relatedOrderId ?? '—'}
+                        <span className="block max-w-[140px] truncate" title={movement.relatedOrderId ?? '—'}>
+                          {movement.relatedOrderId ?? '—'}
+                        </span>
                       </td>
                     </tr>
                   );
