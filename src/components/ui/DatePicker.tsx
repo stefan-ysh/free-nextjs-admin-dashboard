@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { format, parseISO, isValid } from 'date-fns';
 import { CalendarIcon } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -10,36 +11,28 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 
 type DatePickerProps = {
   value?: string | null;
-  onChange: (date: string) => void;
+  onChange: (value: string) => void;
   label?: string;
   required?: boolean;
   placeholder?: string;
   helperText?: string;
   clearable?: boolean;
+  disabled?: boolean;
   containerClassName?: string;
   defaultMonth?: Date;
 } & Omit<ButtonProps, 'value' | 'onChange'>;
 
-function formatValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
+const DISPLAY_FORMAT = 'PPP';
+const OUTPUT_FORMAT = 'yyyy-MM-dd';
 
 function parseValue(value?: string | null) {
   if (!value) return undefined;
-  const [year, month, day] = value.split('-').map(Number);
-  if (!year || !month || !day) return undefined;
-  return new Date(year, month - 1, day);
-}
-
-function formatDisplay(date: Date) {
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date);
+  try {
+    const parsed = parseISO(value);
+    return isValid(parsed) ? parsed : undefined;
+  } catch (error) {
+    return undefined;
+  }
 }
 
 const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
@@ -48,7 +41,7 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
       value,
       onChange,
       label,
-      required = false,
+      required,
       placeholder = '选择日期',
       helperText,
       clearable = true,
@@ -64,6 +57,18 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
     const triggerRef = React.useRef<HTMLButtonElement>(null);
     React.useImperativeHandle(ref, () => triggerRef.current as HTMLButtonElement);
 
+    const parsedDate = React.useMemo(() => parseValue(value), [value]);
+    const displayLabel = parsedDate ? format(parsedDate, DISPLAY_FORMAT) : placeholder;
+
+    const handleSelect = React.useCallback(
+      (date?: Date) => {
+        if (!date) return;
+        onChange(format(date, OUTPUT_FORMAT));
+        setOpen(false);
+      },
+      [onChange]
+    );
+
     const handleOpenChange = React.useCallback(
       (nextOpen: boolean) => {
         if (disabled) return;
@@ -72,38 +77,19 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
       [disabled]
     );
 
-    React.useEffect(() => {
-      if (disabled && open) {
-        setOpen(false);
-      }
-    }, [disabled, open]);
-
-    const selectedDate = React.useMemo(() => parseValue(value), [value]);
-    const displayValue = selectedDate ? formatDisplay(selectedDate) : placeholder;
-
-    const handleSelect = React.useCallback(
-      (day?: Date) => {
-        if (!day) return;
-        onChange(formatValue(day));
-        setOpen(false);
-      },
-      [onChange]
-    );
-
     const handleClear = React.useCallback(() => {
       onChange('');
       setOpen(false);
     }, [onChange]);
 
-    const showClearButton = clearable && Boolean(value);
-
     return (
       <div className={cn('space-y-2', containerClassName)}>
-        {label && (
-          <label className="mb-2 block text-sm font-medium text-gray-900 dark:text-white">
-            {label} {required && <span className="text-red-500">*</span>}
+        {label ? (
+          <label className="text-sm font-medium leading-none">
+            {label}
+            {required ? <span className="ml-1 text-destructive">*</span> : null}
           </label>
-        )}
+        ) : null}
         <Popover open={open} onOpenChange={handleOpenChange}>
           <PopoverTrigger asChild>
             <Button
@@ -111,46 +97,32 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
               variant="outline"
               type="button"
               disabled={disabled}
-              className={cn(
-                'w-full justify-between text-left font-normal',
-                !selectedDate && 'text-muted-foreground',
-                className
-              )}
+              className={cn('w-full justify-start text-left font-normal', !parsedDate && 'text-muted-foreground', className)}
               {...buttonProps}
             >
-              {displayValue}
-              <CalendarIcon className="ml-2 h-4 w-4 opacity-70" />
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {displayLabel}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-3" align="start">
+          <PopoverContent className="w-auto p-0" align="start">
             <Calendar
               mode="single"
-              selected={selectedDate}
-              defaultMonth={selectedDate ?? defaultMonth}
+              selected={parsedDate}
+              defaultMonth={parsedDate ?? defaultMonth}
               onSelect={handleSelect}
               disabled={disabled}
               initialFocus
             />
-            <div className="mt-2 flex gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                className="flex-1"
-                onClick={() => {
-                  handleSelect(new Date());
-                }}
-              >
-                今天
-              </Button>
-              {showClearButton && (
-                <Button type="button" variant="ghost" className="flex-1" onClick={handleClear}>
+            {clearable && value ? (
+              <div className="border-t px-3 py-2">
+                <Button type="button" variant="ghost" size="sm" className="w-full" onClick={handleClear}>
                   清除
                 </Button>
-              )}
-            </div>
+              </div>
+            ) : null}
           </PopoverContent>
         </Popover>
-        {helperText && <p className="text-xs text-muted-foreground">{helperText}</p>}
+        {helperText ? <p className="text-xs text-muted-foreground">{helperText}</p> : null}
       </div>
     );
   }
