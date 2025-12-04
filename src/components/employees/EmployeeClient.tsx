@@ -346,6 +346,7 @@ export default function EmployeeClient({
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [roleTarget, setRoleTarget] = useState<Employee | null>(null);
   const [roleSaving, setRoleSaving] = useState(false);
+  const [autoBindingEmployeeId, setAutoBindingEmployeeId] = useState<string | null>(null);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
   const { hasPermission, loading: permissionLoading } = usePermissions();
   const searchParams = useSearchParams();
@@ -829,6 +830,42 @@ export default function EmployeeClient({
     [handleDialogClose]
   );
 
+  const autoBindAndOpenRoles = useCallback(
+    async (employee: Employee) => {
+      setAutoBindingEmployeeId(employee.id);
+      try {
+        const response = await fetch('/api/employees/auto-bind', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employeeId: employee.id }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success || !payload.data?.userId) {
+          throw new Error(payload.error || '无法自动生成账号');
+        }
+        const updatedEmployee: Employee = {
+          ...employee,
+          userId: payload.data.userId,
+        };
+        setEmployees((prev) => prev.map((item) => (item.id === employee.id ? updatedEmployee : item)));
+        if (selectedEmployee?.id === employee.id) {
+          setSelectedEmployee(updatedEmployee);
+        }
+        toast.success('已为该员工生成系统账号', {
+          description: `账号：${payload.data.loginAccount}（初始密码同账号）`,
+        });
+        setRoleTarget(updatedEmployee);
+        setRoleDialogOpen(true);
+      } catch (bindingError) {
+        console.error('自动绑定系统账号失败', bindingError);
+        toast.error(bindingError instanceof Error ? bindingError.message : '无法自动生成账号，请稍后再试');
+      } finally {
+        setAutoBindingEmployeeId(null);
+      }
+    },
+    [selectedEmployee]
+  );
+
   const handleRoleAssignClick = useCallback(
     (employee: Employee) => {
       if (!canAssignRoles) {
@@ -836,13 +873,21 @@ export default function EmployeeClient({
         return;
       }
       if (!employee.userId) {
-        toast.error('该员工尚未绑定系统账号，无法设置角色');
+        if (autoBindingEmployeeId && autoBindingEmployeeId !== employee.id) {
+          toast.warning('正在为其他员工生成账号，请稍后重试');
+          return;
+        }
+        if (autoBindingEmployeeId === employee.id) {
+          toast('正在生成账号，请稍候...');
+          return;
+        }
+        void autoBindAndOpenRoles(employee);
         return;
       }
       setRoleTarget(employee);
       setRoleDialogOpen(true);
     },
-    [canAssignRoles]
+    [canAssignRoles, autoBindingEmployeeId, autoBindAndOpenRoles]
   );
 
   const handleRoleDialogChange = useCallback((open: boolean) => {

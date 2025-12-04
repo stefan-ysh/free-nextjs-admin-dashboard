@@ -6,6 +6,7 @@ import {
   deleteEmployee,
   EmploymentStatus,
   getEmployeeById,
+  ensureEmployeeUserAccount,
   updateEmployee,
   UpdateEmployeeInput,
 } from '@/lib/hr/employees';
@@ -126,13 +127,26 @@ export async function PUT(
       return notFoundResponse();
     }
 
+    let finalRecord = updated;
+    if (!finalRecord.userId) {
+      try {
+        await ensureEmployeeUserAccount(employeeId);
+        const refreshed = await getEmployeeById(employeeId);
+        if (refreshed) {
+          finalRecord = refreshed;
+        }
+      } catch (autoBindError) {
+        console.warn('更新后自动生成系统账号失败', autoBindError);
+      }
+    }
+
     if (shouldRemoveAvatar && existingRecord.avatarUrl) {
       await deleteAvatarAsset(existingRecord.avatarUrl).catch(() => undefined);
     } else if (uploadedAvatarPath && existingRecord.avatarUrl && existingRecord.avatarUrl !== uploadedAvatarPath) {
       await deleteAvatarAsset(existingRecord.avatarUrl).catch(() => undefined);
     }
 
-    return NextResponse.json({ success: true, data: updated });
+    return NextResponse.json({ success: true, data: finalRecord });
   } catch (error) {
     if (uploadedAvatarPath) {
       await deleteAvatarAsset(uploadedAvatarPath).catch(() => undefined);

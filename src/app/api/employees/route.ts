@@ -5,8 +5,10 @@ import { toPermissionUser } from '@/lib/auth/permission-user';
 import {
   createEmployee,
   EmploymentStatus,
+  getEmployeeById,
   listEmployees,
   ListEmployeesParams,
+  ensureEmployeeUserAccount,
 } from '@/lib/hr/employees';
 import { deleteAvatarAsset, saveAvatarToLocal } from '@/lib/storage/avatar';
 import { checkPermission, Permissions } from '@/lib/permissions';
@@ -133,7 +135,20 @@ export async function POST(request: Request) {
       customFields: body.customFields,
     });
 
-    return NextResponse.json({ success: true, data: result }, { status: 201 });
+    let finalRecord = result;
+    if (!finalRecord.userId) {
+      try {
+        await ensureEmployeeUserAccount(result.id);
+        const refreshed = await getEmployeeById(result.id);
+        if (refreshed) {
+          finalRecord = refreshed;
+        }
+      } catch (autoBindError) {
+        console.warn('自动生成系统账号失败', autoBindError);
+      }
+    }
+
+    return NextResponse.json({ success: true, data: finalRecord }, { status: 201 });
   } catch (error) {
     if (uploadedAvatarPath) {
       await deleteAvatarAsset(uploadedAvatarPath).catch(() => undefined);
