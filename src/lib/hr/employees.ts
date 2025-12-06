@@ -3,9 +3,8 @@ import { randomUUID } from 'crypto';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 
 import { mysqlPool, mysqlQuery } from '@/lib/mysql';
-import { findUserById, ensureBusinessUserRecord, updateEmployeeInfo } from '@/lib/users';
 import { normalizeDateInput, formatDateTimeLocal } from '@/lib/dates';
-import { createUser as createAuthUser, findUserByEmail as findAuthUserByEmail, findUserById as findAuthUserById } from '@/lib/auth/user';
+import { hashPassword } from '@/lib/auth/password';
 import type { UserRole } from '@/types/user';
 
 import { ensureHrSchema } from './schema';
@@ -86,12 +85,16 @@ export type EmployeeDashboardStats = {
 
 const pool = mysqlPool();
 
+const EMPLOYEE_CODE_PREFIX = 'y';
+const EMPLOYEE_CODE_PAD_LENGTH = 3;
+const EMPLOYEE_CODE_REGEXP = `^${EMPLOYEE_CODE_PREFIX}[0-9]+$`;
+
 const BASE_EMPLOYEE_SELECT = `
   SELECT
     he.id,
-    he.user_id,
-    u.roles AS user_roles,
-    u.primary_role AS user_primary_role,
+    he.roles,
+    he.primary_role,
+    he.password_hash,
     he.employee_code,
     he.first_name,
     he.last_name,
@@ -122,18 +125,20 @@ const BASE_EMPLOYEE_SELECT = `
   FROM hr_employees he
   LEFT JOIN hr_departments d ON d.id = he.department_id
   LEFT JOIN hr_job_grades j ON j.id = he.job_grade_id
-  LEFT JOIN users u ON u.id = he.user_id
 `;
 
-type EmployeeFilterOptions = Pick<ListEmployeesParams, 'search' | 'department' | 'departmentId' | 'jobGradeId' | 'status'>;
+type EmployeeFilterOptions = Pick<
+  ListEmployeesParams,
+  'search' | 'department' | 'departmentId' | 'jobGradeId' | 'status' | 'includeSystemAccounts'
+>;
 
 type MatchField = 'id' | 'employeeCode' | 'email';
 
 type RawEmployeeRow = RowDataPacket & {
   id: string;
-  user_id: string | null;
-  user_roles: unknown;
-  user_primary_role: string | null;
+  roles: unknown;
+  primary_role: string | null;
+  password_hash: string | null;
   employee_code: string | null;
   first_name: string;
   last_name: string;
@@ -246,20 +251,21 @@ function mapEmployee(row: RawEmployeeRow | undefined): EmployeeRecord | null {
   const terminationDate = row.termination_date ? formatDateTimeLocal(row.termination_date) ?? row.termination_date : null;
   const createdAt = formatDateTimeLocal(row.created_at) ?? row.created_at;
   const updatedAt = formatDateTimeLocal(row.updated_at) ?? row.updated_at;
-  const parsedRoles = parseUserRoles(row.user_roles);
-  const primaryRole = row.user_primary_role && typeof row.user_primary_role === 'string'
-    ? (row.user_primary_role as UserRole)
+  const parsedRoles = parseUserRoles(row.roles);
+  const primaryRole = row.primary_role && typeof row.primary_role === 'string'
+    ? (row.primary_role as UserRole)
     : null;
+  const hasLoginAccount = Boolean(row.password_hash);
   return {
     id: row.id,
-    userId: row.user_id,
+    userId: hasLoginAccount ? row.id : null,
     userRoles: parsedRoles,
     userPrimaryRole: primaryRole,
     employeeCode: row.employee_code,
     firstName: row.first_name,
     lastName: row.last_name,
     displayName: row.display_name,
-  avatarUrl: row.avatar_url,
+  	avatarUrl: row.avatar_url,
     email: row.email,
     phone: row.phone,
     department: row.department ?? row.department_code ?? null,
@@ -334,6 +340,63 @@ function normalizeGenderValue(value: string | null | undefined): EmployeeGender 
   return null;
 }
 
+function formatEmployeeCode(counter: number): string {
+  return `${EMPLOYEE_CODE_PREFIX}${String(counter).padStart(EMPLOYEE_CODE_PAD_LENGTH, '0')}`;
+}
+
+async function findLargestSequentialEmployeeCode(): Promise<number> {
+  const [rows] = await pool.query<Array<RowDataPacket & { code: string | null }>>(
+    `SELECT employee_code AS code
+     FROM hr_employees
+     WHERE employee_code REGEXP ?
+     ORDER BY LENGTH(employee_code) DESC, employee_code DESC
+     LIMIT 1`,
+    [EMPLOYEE_CODE_REGEXP]
+  );
+  const rawCode = sanitizeNullableText(rows[0]?.code ?? null);
+  if (!rawCode) {
+    return 0;
+  }
+  const numericPart = Number.parseInt(rawCode.slice(EMPLOYEE_CODE_PREFIX.length), 10);
+  return Number.isNaN(numericPart) ? 0 : numericPart;
+}
+
+async function employeeCodeExists(candidate: string): Promise<boolean> {
+  const [rows] = await pool.query<Array<RowDataPacket & { hit: number }>>(
+    'SELECT 1 AS hit FROM hr_employees WHERE employee_code = ? LIMIT 1',
+    [candidate]
+  );
+  return Boolean(rows[0]);
+}
+
+async function generateSequentialEmployeeCode(): Promise<string> {
+  let counter = (await findLargestSequentialEmployeeCode()) + 1;
+  if (counter < 1) {
+    counter = 1;
+  }
+  // In the unlikely event of duplicates (e.g., concurrent inserts), keep moving forward until a free slot is found.
+  while (true) {
+    const candidate = formatEmployeeCode(counter);
+    if (!(await employeeCodeExists(candidate))) {
+      return candidate;
+    }
+    counter += 1;
+  }
+}
+
+async function ensureEmployeeCodeValue(employeeId: string, existingCode: string | null): Promise<string> {
+  const trimmed = sanitizeNullableText(existingCode ?? null);
+  if (trimmed) {
+    return trimmed;
+  }
+  const generated = await generateSequentialEmployeeCode();
+  await pool.query<ResultSetHeader>(
+    'UPDATE hr_employees SET employee_code = ?, updated_at = NOW() WHERE id = ?',
+    [generated, employeeId]
+  );
+  return generated;
+}
+
 async function insertStatusLog(params: {
   employeeId: string;
   previousStatus: EmploymentStatus;
@@ -362,17 +425,6 @@ async function insertStatusLog(params: {
       ${sanitizeNullableText(actorId ?? null)}
     )
   `;
-}
-
-async function resolveUserId(value: string | null | undefined): Promise<string | null> {
-  if (value == null) return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const user = await findUserById(trimmed);
-  if (!user) {
-    throw new Error('USER_NOT_FOUND');
-  }
-  return trimmed;
 }
 
 async function resolveDepartmentId(value: string | null | undefined): Promise<string | null> {
@@ -413,6 +465,7 @@ export type ListEmployeesParams = {
   pageSize?: number;
   sortBy?: 'createdAt' | 'updatedAt' | 'lastName' | 'department' | 'status';
   sortOrder?: 'asc' | 'desc';
+  includeSystemAccounts?: boolean;
 };
 
 export type ListEmployeesResult = {
@@ -465,6 +518,16 @@ function buildEmployeeWhereClause(filters: EmployeeFilterOptions = {}) {
     const normalizedStatus = sanitizeStatus(filters.status);
     conditions.push('he.employment_status = ?');
     values.push(normalizedStatus);
+  }
+
+  if (!filters.includeSystemAccounts) {
+    conditions.push(`(
+      he.employee_code IS NOT NULL
+      OR (
+        COALESCE(JSON_CONTAINS(he.roles, JSON_QUOTE('super_admin'), '$'), 0) = 0
+        AND COALESCE(JSON_CONTAINS(he.roles, JSON_QUOTE('admin'), '$'), 0) = 0
+      )
+    )`);
   }
 
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -612,7 +675,6 @@ export function employeesToCsv(records: EmployeeRecord[]): string {
 }
 
 export type CreateEmployeeInput = {
-  userId?: string | null;
   employeeCode?: string | null;
   firstName: string;
   lastName: string;
@@ -650,7 +712,6 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
 
   const id = randomUUID();
   const payload = {
-    userId: await resolveUserId(input.userId),
     employeeCode: sanitizeNullableText(input.employeeCode ?? null),
     firstName: requireText(input.firstName, 'first_name'),
     lastName: requireText(input.lastName, 'last_name'),
@@ -675,10 +736,13 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
     customFields: input.customFields && typeof input.customFields === 'object' ? input.customFields : {},
   };
 
+  if (!payload.employeeCode) {
+    payload.employeeCode = await generateSequentialEmployeeCode();
+  }
+
   await mysqlQuery`
     INSERT INTO hr_employees (
       id,
-      user_id,
       employee_code,
       first_name,
       last_name,
@@ -704,7 +768,6 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
     )
     VALUES (
       ${id},
-      ${payload.userId},
       ${payload.employeeCode},
       ${payload.firstName},
       ${payload.lastName},
@@ -752,10 +815,6 @@ export async function updateEmployee(id: string, input: UpdateEmployeeInput): Pr
 
   if (input.employeeCode !== undefined) {
     pushField('employee_code', sanitizeNullableText(input.employeeCode ?? null));
-  }
-  if (input.userId !== undefined) {
-    const resolvedUserId = await resolveUserId(input.userId);
-    pushField('user_id', resolvedUserId);
   }
   if (input.firstName !== undefined) {
     pushField('first_name', requireText(input.firstName, 'first_name'));
@@ -885,14 +944,10 @@ export async function getEmployeeById(id: string): Promise<EmployeeRecord | null
 }
 
 export async function getEmployeeByUserId(userId: string): Promise<EmployeeRecord | null> {
-  await ensureHrSchema();
-  const [rows] = await pool.query<RawEmployeeRow[]>(
-    `${BASE_EMPLOYEE_SELECT}
-    WHERE he.user_id = ?
-    LIMIT 1`,
-    [userId]
-  );
-  return mapEmployee(rows[0]);
+  // Legacy helper maintained for compatibility with modules that still reference
+  // "user" records. Since hr_employees is now the canonical user table, this
+  // simply resolves by employee ID.
+  return getEmployeeById(userId);
 }
 
 export async function ensureEmployeeUserAccount(employeeId: string) {
@@ -901,46 +956,57 @@ export async function ensureEmployeeUserAccount(employeeId: string) {
     throw new Error('EMPLOYEE_NOT_FOUND');
   }
 
-  const loginAccount = employee.employeeCode?.trim() || employee.email?.split('@')[0] || employee.id;
+  const ensuredEmployeeCode = await ensureEmployeeCodeValue(employee.id, employee.employeeCode);
+  const loginAccount = ensuredEmployeeCode || employee.email?.split('@')[0] || employee.id;
   if (!loginAccount) {
     throw new Error('EMPLOYEE_LOGIN_ID_MISSING');
   }
 
   const normalizedAccount = loginAccount.trim();
-  const email = normalizedAccount.includes('@') ? normalizedAccount.toLowerCase() : `${normalizedAccount.toLowerCase()}@staff.local`;
+  const fallbackEmail = normalizedAccount.includes('@')
+    ? normalizedAccount.toLowerCase()
+    : `${normalizedAccount.toLowerCase()}@staff.local`;
   const employeeDisplayName = employee.displayName?.trim() || `${employee.lastName ?? ''}${employee.firstName ?? ''}`.trim() || normalizedAccount;
 
-  let authUser = employee.userId ? await findAuthUserById(employee.userId) : null;
-  if (!authUser) {
-    authUser = await findAuthUserByEmail(email);
+  const roles = employee.userRoles.length ? employee.userRoles : ['employee'];
+  const primaryRole = employee.userPrimaryRole ?? roles[0];
+  const passwordHash = await hashPassword(normalizedAccount);
+
+  const fields: string[] = [
+    'roles = ?',
+    'primary_role = ?',
+    'is_active = 1',
+    'updated_at = NOW()',
+  ];
+  const values: unknown[] = [JSON.stringify(roles), primaryRole];
+
+  if (!employee.email || !employee.email.trim()) {
+    fields.push('email = ?');
+    values.push(fallbackEmail);
+    fields.push('email_verified = 0');
   }
 
-  if (!authUser) {
-    authUser = await createAuthUser({
-      email,
-      password: normalizedAccount,
-      role: 'employee',
-      displayName: employeeDisplayName,
-    });
+  if (!employee.displayName || !employee.displayName.trim()) {
+    fields.push('display_name = ?');
+    values.push(employeeDisplayName);
   }
 
-  await ensureBusinessUserRecord(authUser.id);
-  await updateEmployeeInfo(authUser.id, {
-    employeeCode: employee.employeeCode ?? normalizedAccount,
-    department: employee.department,
-    jobTitle: employee.jobTitle,
-    employmentStatus: employee.employmentStatus,
-    hireDate: employee.hireDate,
-    managerId: employee.managerId,
-    location: employee.location,
-  });
-
-  if (employee.userId !== authUser.id) {
-    await updateEmployee(employeeId, { userId: authUser.id });
+  if (!employee.employeeCode || !employee.employeeCode.trim()) {
+    fields.push('employee_code = ?');
+    values.push(normalizedAccount);
   }
+
+  fields.push('password_hash = ?');
+  values.push(passwordHash);
+  fields.push('password_updated_at = NOW()');
+
+  await pool.query<ResultSetHeader>(
+    `UPDATE hr_employees SET ${fields.join(', ')} WHERE id = ?`,
+    [...values, employeeId]
+  );
 
   return {
-    userId: authUser.id,
+    userId: employee.id,
     loginAccount: normalizedAccount,
     initialPassword: normalizedAccount,
   };
@@ -1247,7 +1313,6 @@ async function normalizeBulkImportRow(
       : null;
 
   return {
-    userId: row.userId ?? null,
     employeeCode: row.employeeCode ?? null,
     firstName: fallbackFirstName,
     lastName: fallbackLastName,

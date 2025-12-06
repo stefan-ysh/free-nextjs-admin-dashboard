@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 
 import { mysqlPool, mysqlQuery } from '@/lib/mysql';
-import { ensureUsersSchema } from '@/lib/schema/users';
+import { ensureHrSchema } from '@/lib/hr/schema';
 import { ensureAuthSchema } from '@/lib/auth/schema';
 import { hashPassword } from '@/lib/auth/password';
 import { findUserById as findAuthUserById } from '@/lib/auth/user';
@@ -94,9 +94,29 @@ function parseJsonObject(value: unknown): Record<string, unknown> {
   return {};
 }
 
+function buildDisplayName(row: RawUserRow): string {
+  const candidates: Array<string | null | undefined> = [
+    row.display_name,
+    row.first_name && row.last_name ? `${row.last_name}${row.first_name}` : null,
+    row.first_name,
+    row.last_name,
+    row.email,
+    row.employee_code,
+  ];
+
+  for (const value of candidates) {
+    if (value && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return '未命名';
+}
+
 function mapUser(row: RawUserRow | undefined): UserRecord | null {
   if (!row) return null;
   const roles = parseJsonArray<UserRole>(row.roles);
+  const displayName = buildDisplayName(row);
   
   return {
     id: row.id,
@@ -106,7 +126,7 @@ function mapUser(row: RawUserRow | undefined): UserRecord | null {
     primaryRole: row.primary_role as UserRole,
     firstName: row.first_name,
     lastName: row.last_name,
-    displayName: row.display_name,
+    displayName,
     phone: row.phone,
     avatarUrl: row.avatar_url,
     employeeCode: row.employee_code,
@@ -184,9 +204,9 @@ function sanitizeNullableText(value: string | null | undefined): string | null {
  * 通过邮箱查找用户
  */
 export async function findUserByEmail(email: string): Promise<UserRecord | null> {
-  await ensureUsersSchema();
+  await ensureHrSchema();
   const [rows] = await pool.query<RawUserRow[]>(
-    'SELECT * FROM users WHERE email = ? LIMIT 1',
+    'SELECT * FROM hr_employees WHERE email = ? LIMIT 1',
     [email.toLowerCase()]
   );
   return mapUser(rows[0]);
@@ -196,9 +216,9 @@ export async function findUserByEmail(email: string): Promise<UserRecord | null>
  * 通过 ID 查找用户
  */
 export async function findUserById(id: string): Promise<UserRecord | null> {
-  await ensureUsersSchema();
+  await ensureHrSchema();
   const [rows] = await pool.query<RawUserRow[]>(
-    'SELECT * FROM users WHERE id = ? LIMIT 1',
+    'SELECT * FROM hr_employees WHERE id = ? LIMIT 1',
     [id]
   );
   return mapUser(rows[0]);
@@ -208,9 +228,9 @@ export async function findUserById(id: string): Promise<UserRecord | null> {
  * 通过员工编号查找用户
  */
 export async function findUserByEmployeeCode(employeeCode: string): Promise<UserRecord | null> {
-  await ensureUsersSchema();
+  await ensureHrSchema();
   const [rows] = await pool.query<RawUserRow[]>(
-    'SELECT * FROM users WHERE employee_code = ? LIMIT 1',
+    'SELECT * FROM hr_employees WHERE employee_code = ? LIMIT 1',
     [employeeCode]
   );
   return mapUser(rows[0]);
@@ -223,7 +243,7 @@ export async function createUser(
   input: CreateUserInput,
   createdBy?: string
 ): Promise<UserRecord> {
-  await ensureUsersSchema();
+  await ensureHrSchema();
   
   const email = input.email.toLowerCase();
   const existing = await findUserByEmail(email);
@@ -248,7 +268,7 @@ export async function createUser(
                       email.split('@')[0];
   
   await mysqlQuery`
-    INSERT INTO users (
+    INSERT INTO hr_employees (
       id, email, password_hash, roles, primary_role,
       first_name, last_name, display_name,
       employee_code, department, job_title, employment_status, hire_date, manager_id,
@@ -278,10 +298,10 @@ export async function updateUserProfile(
   userId: string,
   input: UpdateUserProfileInput
 ): Promise<UserRecord> {
-  await ensureUsersSchema();
+  await ensureHrSchema();
   
   const [result] = await pool.query<ResultSetHeader>(
-    `UPDATE users
+    `UPDATE hr_employees
       SET
         first_name = ?,
         last_name = ?,
@@ -324,7 +344,7 @@ export async function updateEmployeeInfo(
   userId: string,
   input: UpdateEmployeeInfoInput
 ): Promise<UserRecord> {
-  await ensureUsersSchema();
+  await ensureHrSchema();
   
   // 如果要更新员工编号，检查是否重复
   if (input.employeeCode) {
@@ -335,7 +355,7 @@ export async function updateEmployeeInfo(
   }
   
   const [result] = await pool.query<ResultSetHeader>(
-    `UPDATE users
+    `UPDATE hr_employees
       SET
         employee_code = ?,
         department = ?,
@@ -375,7 +395,7 @@ export async function updateUserRoles(
   roles: UserRole[],
   primaryRole?: UserRole
 ): Promise<UserRecord> {
-  await ensureUsersSchema();
+  await ensureHrSchema();
   await ensureAuthSchema();
   
   if (roles.length === 0) {
@@ -388,7 +408,7 @@ export async function updateUserRoles(
   }
   
   const [result] = await pool.query<ResultSetHeader>(
-    `UPDATE users
+    `UPDATE hr_employees
       SET
         roles = ?,
         primary_role = ?,
@@ -408,11 +428,11 @@ export async function updateUserRoles(
  * 更新用户密码
  */
 export async function updateUserPassword(userId: string, password: string): Promise<void> {
-  await ensureUsersSchema();
+  await ensureHrSchema();
   const passwordHash = await hashPassword(password);
   
   await mysqlQuery`
-    UPDATE users
+    UPDATE hr_employees
     SET 
       password_hash = ${passwordHash},
       password_updated_at = NOW(),
@@ -428,11 +448,11 @@ export async function updateUserAvatar(
   userId: string,
   avatarUrl: string | null
 ): Promise<UserRecord> {
-  await ensureUsersSchema();
+  await ensureHrSchema();
   const sanitized = sanitizeNullableText(avatarUrl);
   
   const [result] = await pool.query<ResultSetHeader>(
-    'UPDATE users SET avatar_url = ?, updated_at = NOW() WHERE id = ?',
+    'UPDATE hr_employees SET avatar_url = ?, updated_at = NOW() WHERE id = ?',
     [sanitized, userId]
   );
   
@@ -444,7 +464,7 @@ export async function updateUserAvatar(
 }
 
 export async function ensureBusinessUserRecord(userId: string): Promise<UserRecord> {
-  await ensureUsersSchema();
+  await ensureHrSchema();
   const existing = await findUserById(userId);
   if (existing) return existing;
 
@@ -460,7 +480,7 @@ export async function ensureBusinessUserRecord(userId: string): Promise<UserReco
 
   try {
     await mysqlQuery`
-      INSERT INTO users (
+      INSERT INTO hr_employees (
         id, email, password_hash, roles, primary_role,
         first_name, last_name, display_name,
         phone, avatar_url, department, job_title,
@@ -511,9 +531,9 @@ export async function ensureBusinessUserRecord(userId: string): Promise<UserReco
  * 更新最后登录时间
  */
 export async function updateLastLogin(userId: string): Promise<void> {
-  await ensureUsersSchema();
+  await ensureHrSchema();
   await mysqlQuery`
-    UPDATE users
+    UPDATE hr_employees
     SET last_login_at = NOW()
     WHERE id = ${userId}
   `;
@@ -523,7 +543,7 @@ export async function updateLastLogin(userId: string): Promise<void> {
  * 列出用户（支持筛选和分页）
  */
 export async function listUsers(params: ListUsersParams = {}): Promise<ListUsersResult> {
-  await ensureUsersSchema();
+  await ensureHrSchema();
   
   const page = Math.max(1, params.page ?? 1);
   const pageSize = Math.min(Math.max(1, params.pageSize ?? 20), 100);
@@ -587,11 +607,11 @@ export async function listUsers(params: ListUsersParams = {}): Promise<ListUsers
   
   const [dataResult, countResult] = await Promise.all([
     pool.query<RawUserRow[]>(
-      `SELECT * FROM users ${whereClause} ${orderClause} LIMIT ? OFFSET ?`,
+      `SELECT * FROM hr_employees ${whereClause} ${orderClause} LIMIT ? OFFSET ?`,
       dataParams
     ),
     pool.query<Array<RowDataPacket & { total: number }>>(
-      `SELECT COUNT(*) AS total FROM users ${whereClause}`,
+      `SELECT COUNT(*) AS total FROM hr_employees ${whereClause}`,
       values
     ),
   ]);
@@ -611,9 +631,9 @@ export async function listUsers(params: ListUsersParams = {}): Promise<ListUsers
  * 删除用户（软删除 - 设置为不活跃）
  */
 export async function deactivateUser(userId: string): Promise<void> {
-  await ensureUsersSchema();
+  await ensureHrSchema();
   await mysqlQuery`
-    UPDATE users
+    UPDATE hr_employees
     SET is_active = 0, updated_at = NOW()
     WHERE id = ${userId}
   `;
@@ -623,9 +643,9 @@ export async function deactivateUser(userId: string): Promise<void> {
  * 激活用户
  */
 export async function activateUser(userId: string): Promise<void> {
-  await ensureUsersSchema();
+  await ensureHrSchema();
   await mysqlQuery`
-    UPDATE users
+    UPDATE hr_employees
     SET is_active = 1, updated_at = NOW()
     WHERE id = ${userId}
   `;
@@ -635,10 +655,10 @@ export async function activateUser(userId: string): Promise<void> {
  * 获取部门列表
  */
 export async function getDepartments(): Promise<string[]> {
-  await ensureUsersSchema();
+  await ensureHrSchema();
   const result = await mysqlQuery<RowDataPacket & { department: string }>`
     SELECT DISTINCT department
-    FROM users
+    FROM hr_employees
     WHERE department IS NOT NULL
     ORDER BY department
   `;
@@ -649,9 +669,9 @@ export async function getDepartments(): Promise<string[]> {
  * 获取某个经理的下属
  */
 export async function getSubordinates(managerId: string): Promise<UserProfile[]> {
-  await ensureUsersSchema();
+  await ensureHrSchema();
   const result = await mysqlQuery<RawUserRow>`
-    SELECT * FROM users
+    SELECT * FROM hr_employees
     WHERE manager_id = ${managerId}
       AND is_active = 1
     ORDER BY last_name, first_name

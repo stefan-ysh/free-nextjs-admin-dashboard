@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 
 import { mysqlPool, mysqlQuery } from '@/lib/mysql';
+import { ensureHrSchema } from '@/lib/hr/schema';
 import { ensureAuthSchema } from './schema';
 import { hashPassword } from './password';
 import { AUTH_ROLE_VALUES, AuthUserRole } from './roles';
@@ -13,6 +14,10 @@ export type UserRole = AuthUserRole;
 export type SocialLinks = Record<string, string | null>;
 
 const pool = mysqlPool();
+
+async function ensureAuthAndHrSchemas() {
+  await Promise.all([ensureAuthSchema(), ensureHrSchema()]);
+}
 
 type RawUserRow = RowDataPacket & {
   id: string;
@@ -45,7 +50,7 @@ export type UserRecord = {
   email: string;
   password_hash: string;
   role: UserRole; // Keep for backward compatibility
-  roles: UserRole[]; // Array of roles from users table
+  roles: UserRole[]; // Array of roles from hr_employees table
   primary_role: UserRole;
   first_name: string | null;
   last_name: string | null;
@@ -97,6 +102,24 @@ function parseJsonArray<T = string>(value: unknown): T[] {
   return [];
 }
 
+function buildDisplayName(row: RawUserRow): string {
+  const candidates: Array<string | null | undefined> = [
+    row.display_name,
+    row.first_name && row.last_name ? `${row.last_name}${row.first_name}` : null,
+    row.first_name,
+    row.last_name,
+    row.email,
+  ];
+
+  for (const value of candidates) {
+    if (value && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return '未命名';
+}
+
 function normalizeSocialLinks(input: unknown): SocialLinks {
   if (!input || typeof input !== 'object') {
     return {};
@@ -119,6 +142,7 @@ function mapUser(row: RawUserRow | undefined): UserRecord | null {
 
   const roles = parseJsonArray<UserRole>(row.roles);
   const primaryRole = row.primary_role as UserRole;
+  const displayName = buildDisplayName(row);
 
   return {
     id: row.id,
@@ -129,7 +153,7 @@ function mapUser(row: RawUserRow | undefined): UserRecord | null {
     role: primaryRole, // For backward compatibility
     first_name: row.first_name,
     last_name: row.last_name,
-    display_name: row.display_name,
+    display_name: displayName,
     job_title: row.job_title,
     phone: row.phone,
     bio: row.bio,
@@ -161,18 +185,18 @@ function cleanSocialLinks(links: SocialLinks | null | undefined): Record<string,
 }
 
 export async function findUserByEmail(email: string): Promise<UserRecord | null> {
-  await ensureAuthSchema();
+  await ensureAuthAndHrSchemas();
   const [rows] = await pool.query<RawUserRow[]>(
-    'SELECT * FROM users WHERE email = ? LIMIT 1',
+    'SELECT * FROM hr_employees WHERE email = ? LIMIT 1',
     [email.toLowerCase()]
   );
   return mapUser(rows[0]);
 }
 
 export async function findUserById(id: string): Promise<UserRecord | null> {
-  await ensureAuthSchema();
+  await ensureAuthAndHrSchemas();
   const [rows] = await pool.query<RawUserRow[]>(
-    'SELECT * FROM users WHERE id = ? LIMIT 1',
+    'SELECT * FROM hr_employees WHERE id = ? LIMIT 1',
     [id]
   );
   return mapUser(rows[0]);
@@ -184,7 +208,7 @@ export async function createUser(params: {
   role?: UserRole;
   displayName?: string;
 }): Promise<UserRecord> {
-  await ensureAuthSchema();
+  await ensureAuthAndHrSchemas();
   const email = params.email.toLowerCase();
   const existing = await findUserByEmail(email);
   if (existing) {
@@ -196,11 +220,11 @@ export async function createUser(params: {
   const role = params.role ?? 'staff';
   const displayName = params.displayName?.trim() || email.split('@')[0];
 
-  // Convert single role to roles array for users table
+  // Convert single role to roles array for hr_employees table
   const rolesJson = JSON.stringify([role]);
 
   await pool.query(
-    `INSERT INTO users (id, email, password_hash, roles, primary_role, display_name, is_active, email_verified, created_at, updated_at)
+    `INSERT INTO hr_employees (id, email, password_hash, roles, primary_role, display_name, is_active, email_verified, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, 1, 0, NOW(), NOW())`,
     [id, email, passwordHash, rolesJson, role, displayName]
   );
@@ -209,10 +233,10 @@ export async function createUser(params: {
 }
 
 export async function updateUserPassword(userId: string, password: string): Promise<void> {
-  await ensureAuthSchema();
+  await ensureAuthAndHrSchemas();
   const passwordHash = await hashPassword(password);
   await pool.query(
-    'UPDATE users SET password_hash = ?, password_updated_at = NOW(), updated_at = NOW() WHERE id = ?',
+    'UPDATE hr_employees SET password_hash = ?, password_updated_at = NOW(), updated_at = NOW() WHERE id = ?',
     [passwordHash, userId]
   );
 }
@@ -238,7 +262,7 @@ function sanitizeNullableText(value: string | null): string | null {
 }
 
 export async function updateUserProfile(userId: string, input: UpdateUserProfileInput): Promise<UserRecord> {
-  await ensureAuthSchema();
+  await ensureAuthAndHrSchemas();
 
   const payload = {
     firstName: sanitizeNullableText(input.firstName),
@@ -255,7 +279,7 @@ export async function updateUserProfile(userId: string, input: UpdateUserProfile
   };
 
   const [result] = await pool.query<ResultSetHeader>(
-    `UPDATE users
+    `UPDATE hr_employees
       SET
         first_name = ?,
         last_name = ?,
@@ -294,10 +318,10 @@ export async function updateUserProfile(userId: string, input: UpdateUserProfile
 }
 
 export async function updateUserAvatar(userId: string, avatarUrl: string | null): Promise<UserRecord> {
-  await ensureAuthSchema();
+  await ensureAuthAndHrSchemas();
   const sanitized = sanitizeNullableText(avatarUrl);
   const [result] = await pool.query<ResultSetHeader>(
-    'UPDATE users SET avatar_url = ?, updated_at = NOW() WHERE id = ?',
+    'UPDATE hr_employees SET avatar_url = ?, updated_at = NOW() WHERE id = ?',
     [sanitized, userId]
   );
 

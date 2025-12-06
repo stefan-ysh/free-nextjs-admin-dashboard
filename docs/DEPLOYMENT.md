@@ -21,18 +21,18 @@
 
 1. **克隆并安装依赖**
    ```bash
-   git clone https://github.com/stefan-ysh/free-nextjs-admin-dashboard.git
-   cd free-nextjs-admin-dashboard
+  git clone https://github.com/stefan-ysh/free-nextjs-admin-dashboard.git admin_cosmorigin
+  cd admin_cosmorigin
    npm install
    ```
 2. **创建 `.env.local`**（参考仓库中的 `.env.example`）
    ```ini
-  MYSQL_URL="mysql://root:changeme@127.0.0.1:3306/tailadmin_local?timezone=Z"
-  LOCAL_STORAGE_ROOT="/srv/tailadmin/storage"
+  MYSQL_URL="mysql://root:changeme@127.0.0.1:3306/admin_cosmorigin?timezone=Z"
+  LOCAL_STORAGE_ROOT="/srv/admin_cosmorigin/storage"
    ```
 3. **启动数据库服务并创建库**
    ```bash
-  mysql -uroot -p -e "CREATE DATABASE IF NOT EXISTS tailadmin_local CHARACTER SET utf8mb4;"
+  mysql -uroot -p -e "CREATE DATABASE IF NOT EXISTS admin_cosmorigin CHARACTER SET utf8mb4;"
    ```
 4. **构建并启动**
    ```bash
@@ -41,16 +41,16 @@
    ```
 5. **常驻运行示例（systemd）**
    ```ini
-   # /etc/systemd/system/tailadmin.service
+  # /etc/systemd/system/admin-cosmorigin.service
    [Unit]
-   Description=TailAdmin Finance
+  Description=admin_cosmorigin
    After=network.target
 
    [Service]
-   WorkingDirectory=/opt/free-nextjs-admin-dashboard
+  WorkingDirectory=/opt/admin_cosmorigin
    Environment=NODE_ENV=production
    Environment=PORT=3000
-   EnvironmentFile=/opt/free-nextjs-admin-dashboard/.env.local
+  EnvironmentFile=/opt/admin_cosmorigin/.env.local
    ExecStart=/usr/bin/npm start
    Restart=always
    User=www-data
@@ -59,13 +59,13 @@
    WantedBy=multi-user.target
    ```
    ```bash
-   sudo systemctl daemon-reload
-   sudo systemctl enable tailadmin --now
+  sudo systemctl daemon-reload
+  sudo systemctl enable admin-cosmorigin --now
    ```
 6. **使用 PM2 的示例**
    ```bash
    npm install -g pm2
-   pm2 start npm --name tailadmin -- start
+  pm2 start npm --name admin-cosmorigin -- start
    pm2 save
    pm2 startup    # 生成自启动脚本
    ```
@@ -81,10 +81,10 @@ version: '3.9'
 services:
   mysql:
     image: mysql:8.2
-    container_name: tailadmin-mysql
+    container_name: admin-cosmorigin-mysql
     environment:
       MYSQL_ROOT_PASSWORD: changeme
-      MYSQL_DATABASE: tailadmin_local
+      MYSQL_DATABASE: admin_cosmorigin
     volumes:
       - ./data/mysql:/var/lib/mysql
     ports:
@@ -92,12 +92,12 @@ services:
 
   app:
     build: .
-    container_name: tailadmin-app
+    container_name: admin-cosmorigin-app
     depends_on:
       - mysql
     environment:
       NODE_ENV: production
-      MYSQL_URL: mysql://root:changeme@mysql:3306/tailadmin_local?timezone=Z
+      MYSQL_URL: mysql://root:changeme@mysql:3306/admin_cosmorigin?timezone=Z
       LOCAL_STORAGE_ROOT: /data/storage
     volumes:
       - ./storage:/data/storage
@@ -128,8 +128,8 @@ docker compose up -d
 
 | 类型 | 命令 |
 |------|------|
-| MySQL | `mysqldump -uroot -p tailadmin_local > backup/mysql-$(date +%F).sql` |
-| 附件 | `rsync -av --delete /srv/tailadmin/storage backup/storage/` |
+| MySQL | `mysqldump -uroot -p admin_cosmorigin > backup/mysql-$(date +%F).sql` |
+| 附件 | `rsync -av --delete /srv/admin_cosmorigin/storage backup/storage/` |
 
 恢复时按顺序导入数据库，再同步文件目录即可。
 
@@ -161,7 +161,7 @@ docker compose up -d
 ## 8. 部署检查清单
 
 - [ ] `.env.local` 中的 `MYSQL_*`、`LOCAL_STORAGE_ROOT` 均已配置
-- [ ] 数据库可连通并已创建 `tailadmin_local`
+- [ ] 数据库可连通并已创建 `admin_cosmorigin`
 - [ ] 首次访问 `/finance` 成功创建表结构
 - [ ] `/api/files/*` 返回的附件可正常下载
 - [ ] 反向代理或防火墙放通了外部访问端口

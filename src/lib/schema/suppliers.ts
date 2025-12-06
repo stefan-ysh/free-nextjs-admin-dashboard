@@ -15,11 +15,11 @@ const DEFAULT_SUPPLIERS = [
 async function seedDefaultSuppliers(pool: Pool) {
   if (!DEFAULT_SUPPLIERS.length) return;
   const [creatorRows] = await pool.query<RowDataPacket[]>(
-    `SELECT id FROM users WHERE is_active = 1 ORDER BY created_at ASC LIMIT 1`
+    `SELECT id FROM hr_employees WHERE is_active = 1 ORDER BY created_at ASC LIMIT 1`
   );
   const creatorId = creatorRows[0]?.id as string | undefined;
   if (!creatorId) {
-    console.warn('[suppliers] skip default seeding, no user exists yet');
+    console.warn('[suppliers] skip default seeding, no employee exists yet');
     return;
   }
 
@@ -67,7 +67,7 @@ export async function ensureSuppliersSchema() {
       created_by CHAR(36) NOT NULL,
       is_deleted TINYINT(1) NOT NULL DEFAULT 0,
       deleted_at DATETIME(3) NULL,
-      CONSTRAINT fk_suppliers_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+      CONSTRAINT fk_suppliers_creator FOREIGN KEY (created_by) REFERENCES hr_employees(id) ON DELETE RESTRICT
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 

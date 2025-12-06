@@ -17,13 +17,31 @@ export type PermissionName = keyof typeof Permissions;
 
 const PLACEHOLDER_DATE = '1970-01-01T00:00:00.000Z';
 
+function normalizeAuthRoles(user: AuthUser): UserRole[] {
+  const rawRoles: string[] = Array.isArray(user.roles) && user.roles.length ? user.roles : user.role ? [user.role] : [];
+  const mapped = rawRoles.map(mapAuthRole);
+  if (!mapped.length) {
+    return [UserRole.EMPLOYEE];
+  }
+  return [...new Set(mapped)];
+}
+
+function resolvePrimaryRole(user: AuthUser, fallback: UserRole): UserRole {
+  if (user.primaryRole) {
+    return mapAuthRole(user.primaryRole);
+  }
+  return fallback;
+}
+
 function buildPermissionUser(user: AuthUser): UserProfile {
-  const mappedRole = mapAuthRole(user.role);
+  const resolvedRoles = normalizeAuthRoles(user);
+  const primaryRole = resolvePrimaryRole(user, resolvedRoles[0] ?? UserRole.EMPLOYEE);
+  const roles = resolvedRoles.length ? resolvedRoles : [primaryRole];
   return {
     id: user.id,
     email: user.email,
-    roles: [mappedRole],
-    primaryRole: mappedRole,
+    roles,
+    primaryRole,
     firstName: user.firstName,
     lastName: user.lastName,
     displayName: user.displayName ?? user.email.split('@')[0],

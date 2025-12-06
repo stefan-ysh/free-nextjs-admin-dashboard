@@ -82,7 +82,7 @@ export default function CustomerPicker({ value, onChange, disabled, helperText, 
     return () => {
       aborted = true;
       if (!controller.signal.aborted) {
-        controller.abort(new DOMException('CustomerPicker disposed', 'AbortError'));
+        controller.abort();
       }
     };
   }, [debounced, refreshKey]);
@@ -120,7 +120,7 @@ export default function CustomerPicker({ value, onChange, disabled, helperText, 
     return () => {
       aborted = true;
       if (!controller.signal.aborted) {
-        controller.abort(new DOMException('CustomerPicker dispose selected client request', 'AbortError'));
+        controller.abort();
       }
     };
   }, [value, clients]);

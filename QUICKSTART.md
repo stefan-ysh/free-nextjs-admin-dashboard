@@ -5,8 +5,8 @@
 ## 步骤 1: 克隆 & 安装依赖
 
 ```bash
-git clone https://github.com/stefan-ysh/free-nextjs-admin-dashboard.git
-cd free-nextjs-admin-dashboard
+git clone https://github.com/stefan-ysh/free-nextjs-admin-dashboard.git admin_cosmorigin
+cd admin_cosmorigin
 npm install
 ```
 
@@ -16,7 +16,7 @@ npm install
 ```bash
 # 以 Homebrew 为例
 brew services start mysql
-mysql -uroot -p -e "CREATE DATABASE IF NOT EXISTS tailadmin_local CHARACTER SET utf8mb4;"
+mysql -uroot -p -e "CREATE DATABASE IF NOT EXISTS admin_cosmorigin CHARACTER SET utf8mb4;"
 ```
 
 可以替换为 Docker、Windows 服务或远程自建数据库,只要连接字符串可用即可。
@@ -30,10 +30,10 @@ cp .env.example .env.local
 编辑 `.env.local`:
 ```ini
 # MySQL 连接(示例)
-MYSQL_URL="mysql://root:changeme@127.0.0.1:3306/tailadmin_local?timezone=Z"
+MYSQL_URL="mysql://root:changeme@127.0.0.1:3306/admin_cosmorigin?timezone=Z"
 
 # 本地文件存储根目录 (可选)
-LOCAL_STORAGE_ROOT="/Users/you/Documents/free-nextjs-admin-storage"
+LOCAL_STORAGE_ROOT="/Users/you/Documents/admin_cosmorigin-storage"
 ```
 
 > 项目会根据这些变量自动创建连接池,无需额外迁移脚本。
@@ -57,7 +57,7 @@ npm run dev
 - `projects` / `purchases` / `auth_users` 等
 
 ## 步骤 6: 上传附件 / 图片
-- 所有文件默认写入 `~/Documents/free-nextjs-admin-storage`
+- 所有文件默认写入 `~/Documents/admin_cosmorigin-storage`
 - 可通过 `LOCAL_STORAGE_ROOT` 指向 NAS / 外置硬盘
 - 访问路径统一为 `/api/files/<相对路径>`
 

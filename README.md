@@ -1,173 +1,95 @@
-# TailAdmin Next.js - Free Next.js Tailwind Admin Dashboard Template
+<div align="center">
 
-TailAdmin is a free and open-source admin dashboard template built on **Next.js and Tailwind CSS** providing developers with everything they need to create a feature-rich and data-driven: back-end, dashboard, or admin panel solution for any sort of web project.
+# admin_cosmorigin
 
-![TailAdmin - Next.js Dashboard Preview](./banner.png)
+Localized finance + procurement workspace built on **Next.js 16**, **React 19**, and **Tailwind CSS v4**. All business data lives in your own MySQL instance and every attachment is persisted to the local filesystem—no Vercel KV / Blob dependencies.
 
-With TailAdmin Next.js, you get access to all the necessary dashboard UI components, elements, and pages required to build a high-quality and complete dashboard or admin panel. Whether you're building a dashboard or admin panel for a complex web application or a simple website. 
+</div>
 
-TailAdmin utilizes the powerful features of **Next.js 15** and common features of Next.js such as server-side rendering (SSR), static site generation (SSG), and seamless API route integration. Combined with the advancements of **React 19** and the robustness of **TypeScript**, TailAdmin is the perfect solution to help get your project up and running quickly.
+> Originally derived from the TailAdmin template, now fully repurposed for self-hosted enterprise finance operations.
 
-## Overview
+## Current Scope (Dec 2025)
 
-TailAdmin provides essential UI components and layouts for building feature-rich, data-driven admin dashboards and control panels. It's built on:
+Only the modules shown in the sidebar screenshots are considered production-ready right now:
 
-- Next.js 15.x
-- React 19
-- TypeScript
-- Tailwind CSS V4
+- **仪表盘**: KPI snapshot rendered from local data.
+- **财务管理**: Income/expense ledger, attachments written to `LOCAL_STORAGE_ROOT`.
+- **采购管理**: Procurement ledger plus the dedicated approvals workbench.
+- **供应商管理**: CRUD over suppliers with default marketplace seeds.
+- **进销存**: Overview, product catalog, warehouse registry, and inventory movement log.
+- **组织架构**: Employee and department management (shares MySQL auth tables).
 
-### Quick Links
-- [✨ Visit Website](https://tailadmin.com)
-- [📄 Documentation](https://tailadmin.com/docs)
-- [⬇️ Download](https://tailadmin.com/download)
-- [🖌️ Figma Design File (Community Edition)](https://www.figma.com/community/file/1463141366275764364)
-- [⚡ Get PRO Version](https://tailadmin.com/pricing)
+Everything else from the original template remains parked for later iterations. Keep unfinished routes hidden behind feature flags or permissions when deploying.
 
-### Demos
-- [Free Version](https://nextjs-free-demo.tailadmin.com)
-- [Pro Version](https://nextjs-demo.tailadmin.com)
+## Tech Stack
 
-### Other Versions
-- [HTML Version](https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template)
-- [React Version](https://github.com/TailAdmin/free-react-tailwind-admin-dashboard)
-- [Vue.js Version](https://github.com/TailAdmin/vue-tailwind-admin-dashboard)
+- Next.js 16 App Router · React 19 · TypeScript
+- Tailwind CSS v4 + Radix UI + TanStack Table
+- MySQL (`mysql2/promise`) with zero-ORM DAOs
+- Local file store via `src/lib/storage/local.ts`
 
-## Installation
-
-### Prerequisites
-To get started with TailAdmin, ensure you have the following prerequisites installed and set up:
-
-- Node.js 18.x or later (recommended to use Node.js 20.x or later)
-
-### Cloning the Repository
-Clone the repository using the following command:
+## Getting Started
 
 ```bash
-git clone https://github.com/TailAdmin/free-nextjs-admin-dashboard.git
+git clone https://github.com/stefan-ysh/free-nextjs-admin-dashboard.git admin_cosmorigin
+cd admin_cosmorigin
+npm install
+cp .env.example .env.local
 ```
 
-> Windows Users: place the repository near the root of your drive if you face issues while cloning.
+1. **Provision MySQL**
+   ```bash
+   mysql -uroot -p -e "CREATE DATABASE IF NOT EXISTS admin_cosmorigin CHARACTER SET utf8mb4;"
+   ```
+2. **Configure environment** – set either `MYSQL_URL` or the individual `MYSQL_*` vars plus, optionally, `LOCAL_STORAGE_ROOT`.
+3. **Seed an administrator (optional)**
+   ```bash
+   npm run seed:admin -- admin@example.com SuperSecurePass finance_admin
+   ```
+4. **Run the dev server**
+   ```bash
+   npm run dev
+   ```
 
-1. Install dependencies:
-    ```bash
-    npm install
-    # or
-    yarn install
-    ```
-    > Use `--legacy-peer-deps` flag if you face peer-dependency error during installation.
+Visit `http://localhost:3000/finance` or `/purchases/approvals` to verify the scoped modules.
 
-2. Start the development server:
-    ```bash
-    npm run dev
-    # or
-    yarn dev
-    ```
+## Environment Defaults
 
-## Components
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `MYSQL_URL` | _unset_ | Prefer `mysql://user:pass@host:3306/admin_cosmorigin` for simplicity. |
+| `LOCAL_STORAGE_ROOT` | `~/Documents/admin_cosmorigin-storage` | All avatars + finance files land here. |
+| `UPLOAD_MAX_BYTES` | `5 MB` | Override if you need larger invoices. |
 
-TailAdmin is a pre-designed starting point for building a web-based dashboard using Next.js and Tailwind CSS. The template includes:
+The helper `src/lib/mysql.ts` derives a connection pool from either `MYSQL_URL` or individual host credentials, with the new default database name baked in.
 
-- Sophisticated and accessible sidebar
-- Data visualization components
-- Profile management and custom 404 page
-- Tables and Charts(Line and Bar)
-- Authentication forms and input elements
-- Alerts, Dropdowns, Modals, Buttons and more
-- Can't forget Dark Mode 🕶️
+## Available Scripts
 
-All components are built with React and styled using Tailwind CSS for easy customization.
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start Next.js in development mode. |
+| `npm run build && npm run start` | Production build + serve. |
+| `npm run lint` | ESLint via the Next.js config. |
+| `npm run seed:admin -- <email> <password> [role]` | Bootstrap an auth user with MySQL-backed credentials. |
+| `npm run import:finance` | Import the sample Excel ledger. |
+| `npm run import:employees` | Bulk load employee CSV records. |
+| `npm run migrate:finance-categories` | Sync updated finance categories. |
 
-## Feature Comparison
+## Documentation Map
 
-### Free Version
-- 1 Unique Dashboard
-- 30+ dashboard components
-- 50+ UI elements
-- Basic Figma design files
-- Community support
+- `docs/FINANCE_MODULE.md` – finance form/table specs
+- `docs/FINANCE_UI_UPDATE.md` – UI diff notes
+- `docs/INVENTORY_MODULE.md` – scope + schema for inventory
+- `docs/LOCAL_STORAGE_SETUP.md` – filesystem layout + permissions
+- `docs/DEPLOYMENT.md` – systemd / Docker compose samples
+- `README.zh-CN.md` – Chinese quick start
 
-### Pro Version
-- 5 Unique Dashboards: Analytics, Ecommerce, Marketing, CRM, Stocks (more coming soon)
-- 400+ dashboard components and UI elements
-- Complete Figma design file
-- Email support
+## Future Work
 
-To learn more about pro version features and pricing, visit our [pricing page](https://tailadmin.com/pricing).
-
-## Changelog
-
-### Version 2.0.2 - [March 25, 2025]
-
-- Upgraded to Next v15.2.3 for [CVE-2025-29927](https://nextjs.org/blog/cve-2025-29927) concerns
-- Included overrides vectormap for packages to prevent peer dependency errors during installation.
-- Migrated from react-flatpickr to flatpickr package for React 19 support
-
-### Version 2.0.1 - [February 27, 2025]
-
-#### Update Overview
-
-- Upgraded to Tailwind CSS v4 for better performance and efficiency.
-- Updated class usage to match the latest syntax and features.
-- Replaced deprecated class and optimized styles.
-
-#### Next Steps
-
-- Run npm install or yarn install to update dependencies.
-- Check for any style changes or compatibility issues.
-- Refer to the Tailwind CSS v4 [Migration Guide](https://tailwindcss.com/docs/upgrade-guide) on this release. if needed.
-- This update keeps the project up to date with the latest Tailwind improvements. 🚀
-
-### v2.0.0 (February 2025)
-A major update focused on Next.js 15 implementation and comprehensive redesign.
-
-#### Major Improvements
-- Complete redesign using Next.js 15 App Router and React Server Components
-- Enhanced user interface with Next.js-optimized components
-- Improved responsiveness and accessibility
-- New features including collapsible sidebar, chat screens, and calendar
-- Redesigned authentication using Next.js App Router and server actions
-- Updated data visualization using ApexCharts for React
-
-#### Breaking Changes
-
-- Migrated from Next.js 14 to Next.js 15
-- Chart components now use ApexCharts for React
-- Authentication flow updated to use Server Actions and middleware
-
-[Read more](https://tailadmin.com/docs/update-logs/nextjs) on this release.
-
-#### Breaking Changes
-- Migrated from Next.js 14 to Next.js 15
-- Chart components now use ApexCharts for React
-- Authentication flow updated to use Server Actions and middleware
-
-### v1.3.4 (July 01, 2024)
-- Fixed JSvectormap rendering issues
-
-### v1.3.3 (June 20, 2024)
-- Fixed build error related to Loader component
-
-### v1.3.2 (June 19, 2024)
-- Added ClickOutside component for dropdown menus
-- Refactored sidebar components
-- Updated Jsvectormap package
-
-### v1.3.1 (Feb 12, 2024)
-- Fixed layout naming consistency
-- Updated styles
-
-### v1.3.0 (Feb 05, 2024)
-- Upgraded to Next.js 14
-- Added Flatpickr integration
-- Improved form elements
-- Enhanced multiselect functionality
-- Added default layout component
+- Reactivate CRM/contract modules once procurement & finance harden.
+- Replace base64 upload shim with streaming multipart endpoints.
+- Add CSRF middleware described in `docs/SECURITY.md`.
 
 ## License
 
-TailAdmin Next.js Free Version is released under the MIT License.
-
-## Support
-
-If you find this project helpful, please consider giving it a star on GitHub. Your support helps us continue developing and maintaining this template.
+MIT. Attributions to TailAdmin remain in the commit history; any upstream assets retain their original license.

@@ -19,10 +19,12 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import React, { useState, useEffect, useRef } from "react";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const AppHeader: React.FC = () => {
   const [isApplicationMenuOpen, setApplicationMenuOpen] = useState(false);
   const { loading } = useAuth();
+  const { hasPermission } = usePermissions();
 
   const { isMobileOpen, toggleSidebar, toggleMobileSidebar } = useSidebar();
 
@@ -38,6 +40,10 @@ const AppHeader: React.FC = () => {
     setApplicationMenuOpen(!isApplicationMenuOpen);
   };
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const canCreateFinanceRecord = hasPermission('FINANCE_MANAGE');
+  const canCreateEmployee = hasPermission('USER_CREATE');
+  const hasQuickActions = canCreateFinanceRecord || canCreateEmployee;
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -103,34 +109,40 @@ const AppHeader: React.FC = () => {
         >
           <div className="flex items-center gap-2 2xsm:gap-3">
             {/* <!-- Quick Create Menu --> */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="default"
-                  size="icon"
-                  className="h-9 w-9"
-                  aria-label="Quick Create"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel>快速创建</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/finance?action=new" className="flex items-center gap-2 cursor-pointer">
-                    <DollarSign className="h-4 w-4" />
-                    <span>记一笔</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/employees?action=new" className="flex items-center gap-2 cursor-pointer">
-                    <Users className="h-4 w-4" />
-                    <span>新增员工</span>
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {hasQuickActions && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="default"
+                    size="icon"
+                    className="h-9 w-9"
+                    aria-label="Quick Create"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuLabel>快速创建</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {canCreateFinanceRecord && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/finance?action=new" className="flex items-center gap-2 cursor-pointer">
+                        <DollarSign className="h-4 w-4" />
+                        <span>记一笔</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  {canCreateEmployee && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/employees?action=new" className="flex items-center gap-2 cursor-pointer">
+                        <Users className="h-4 w-4" />
+                        <span>新增员工</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {/* <!-- Dark Mode Toggler --> */}
             <ThemeToggleButton />
             {/* <!-- Dark Mode Toggler --> */}

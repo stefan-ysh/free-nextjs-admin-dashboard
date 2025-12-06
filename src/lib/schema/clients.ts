@@ -35,8 +35,8 @@ export async function ensureClientsSchema() {
       created_by CHAR(36) NOT NULL,
       is_deleted TINYINT(1) NOT NULL DEFAULT 0,
       deleted_at DATETIME(3) NULL,
-      CONSTRAINT fk_clients_owner FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE SET NULL,
-      CONSTRAINT fk_clients_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+      CONSTRAINT fk_clients_owner FOREIGN KEY (owner_id) REFERENCES hr_employees(id) ON DELETE SET NULL,
+      CONSTRAINT fk_clients_creator FOREIGN KEY (created_by) REFERENCES hr_employees(id) ON DELETE RESTRICT
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
@@ -65,7 +65,7 @@ export async function ensureClientsSchema() {
       next_follow_up DATETIME(3) NULL,
       created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
       CONSTRAINT fk_client_logs_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
-      CONSTRAINT fk_client_logs_operator FOREIGN KEY (operator_id) REFERENCES users(id) ON DELETE RESTRICT
+      CONSTRAINT fk_client_logs_operator FOREIGN KEY (operator_id) REFERENCES hr_employees(id) ON DELETE RESTRICT
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 

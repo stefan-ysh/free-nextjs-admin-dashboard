@@ -1,7 +1,7 @@
 import { PaymentType, InvoiceStatus, InvoiceType as FinanceInvoiceType } from '@/types/finance';
 import type { Supplier, SupplierStatus } from '@/types/supplier';
 
-export { PaymentType, InvoiceStatus } from '@/types/finance';
+export { PaymentType, InvoiceStatus, InvoiceType } from '@/types/finance';
 
 /**
  * 购买渠道

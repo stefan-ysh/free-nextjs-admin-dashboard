@@ -4,7 +4,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import mime from 'mime';
 
-const DEFAULT_DIR_NAME = 'free-nextjs-admin-storage';
+const DEFAULT_DIR_NAME = 'admin_cosmorigin-storage';
 export const PUBLIC_PREFIX = '/api/files';
 const MAX_FILE_SIZE_BYTES = Number(process.env.UPLOAD_MAX_BYTES ?? 5 * 1024 * 1024);
 const ALLOWED_MIME_TYPES = new Set([

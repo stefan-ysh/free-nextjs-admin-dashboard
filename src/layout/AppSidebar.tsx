@@ -20,7 +20,6 @@ import {
   ShoppingCart as PurchaseIcon,
   UserCircle as UserCircleIcon,
   CircleGauge as PerformanceIcon,
-  Users2 as ClientIcon,
 } from "lucide-react";
 // import SidebarWidget from "./SidebarWidget";
 
@@ -97,12 +96,6 @@ const navItems: NavItem[] = [
         new: true,
       },
     ],
-  },
-  {
-    icon: <ClientIcon />,
-    name: "客户管理",
-    path: "/clients",
-    requiredPermission: "CLIENT_VIEW",
   },
   {
     icon: <UserCircleIcon />,

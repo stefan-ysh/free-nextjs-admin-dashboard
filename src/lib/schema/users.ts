@@ -1,61 +1,37 @@
-import { schemaPool, safeCreateIndex } from '@/lib/schema/mysql-utils';
+import type { RowDataPacket } from 'mysql2/promise';
 
-let initialized = false;
+import { ensureHrSchema } from '@/lib/hr/schema';
+import { schemaPool } from '@/lib/schema/mysql-utils';
 
+/**
+ * @deprecated 用户表已合并到 hr_employees，保留该方法是为了兼容旧的 ensureUsersSchema 调用。
+ */
 export async function ensureUsersSchema() {
-  if (initialized) return;
-
   const pool = schemaPool();
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id CHAR(36) NOT NULL PRIMARY KEY,
-      email VARCHAR(255) NOT NULL UNIQUE,
-      password_hash VARCHAR(255) NOT NULL,
-      roles JSON NOT NULL DEFAULT (JSON_ARRAY('employee')),
-      primary_role VARCHAR(64) NOT NULL DEFAULT 'employee',
-      first_name VARCHAR(120),
-      last_name VARCHAR(120),
-      display_name VARCHAR(255) NOT NULL,
-      phone VARCHAR(60),
-      avatar_url TEXT,
-      employee_code VARCHAR(120) UNIQUE,
-      department VARCHAR(120),
-      job_title VARCHAR(120),
-      employment_status ENUM('active','on_leave','terminated'),
-      hire_date DATE,
-      termination_date DATE,
-      manager_id CHAR(36),
-      location VARCHAR(255),
-      bio TEXT,
-      city VARCHAR(120),
-      country VARCHAR(120),
-      postal_code VARCHAR(40),
-      tax_id VARCHAR(120),
-      social_links JSON NOT NULL DEFAULT (JSON_OBJECT()),
-      custom_fields JSON NOT NULL DEFAULT (JSON_OBJECT()),
-      is_active TINYINT(1) NOT NULL DEFAULT 1,
-      email_verified TINYINT(1) NOT NULL DEFAULT 0,
-      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-      updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-      created_by CHAR(36),
-      last_login_at DATETIME(3),
-      password_updated_at DATETIME(3),
-      CONSTRAINT chk_users_roles_json CHECK (JSON_TYPE(roles) = 'ARRAY'),
-      CONSTRAINT chk_users_primary_role CHECK (JSON_CONTAINS(roles, JSON_QUOTE(primary_role), '$')),
-      CONSTRAINT chk_users_employee_consistency CHECK (
-        employee_code IS NULL OR employment_status IS NOT NULL
-      ),
-      CONSTRAINT fk_users_manager FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE SET NULL,
-      CONSTRAINT fk_users_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  // Drop any foreign keys that still reference the legacy users table before removing it
+  const [legacyFkRows] = await pool.query<
+    Array<RowDataPacket & { TABLE_NAME: string; CONSTRAINT_NAME: string }>
+  >(`
+    SELECT TABLE_NAME, CONSTRAINT_NAME
+    FROM information_schema.referential_constraints
+    WHERE constraint_schema = DATABASE()
+      AND referenced_table_name = 'users'
   `);
 
-  await safeCreateIndex('CREATE INDEX idx_users_email ON users(email)');
-  await safeCreateIndex('CREATE INDEX idx_users_department ON users(department)');
-  await safeCreateIndex('CREATE INDEX idx_users_status ON users(employment_status)');
-  await safeCreateIndex('CREATE INDEX idx_users_manager ON users(manager_id)');
-  await safeCreateIndex('CREATE INDEX idx_users_active ON users(is_active)');
+  for (const fk of legacyFkRows) {
+    await pool.query(`ALTER TABLE \`${fk.TABLE_NAME}\` DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\``);
 
-  initialized = true;
+    // Only reimbursement_logs keeps a renamed FK; recreate it pointing at hr_employees
+    if (fk.TABLE_NAME === 'reimbursement_logs' && fk.CONSTRAINT_NAME === 'fk_reimbursement_operator') {
+      await pool.query(
+        'ALTER TABLE reimbursement_logs ADD CONSTRAINT fk_reimbursement_operator FOREIGN KEY (operator_id) REFERENCES hr_employees(id) ON DELETE RESTRICT'
+      );
+    }
+  }
+
+  // 彻底移除遗留的 users/auth_users 表，防止后续代码意外写入
+  await pool.query('DROP TABLE IF EXISTS users');
+  await pool.query('DROP TABLE IF EXISTS auth_users');
+  await ensureHrSchema();
 }

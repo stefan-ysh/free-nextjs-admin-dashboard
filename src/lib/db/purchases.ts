@@ -288,7 +288,7 @@ function buildPurchaseFilterClause(params: ListPurchasesParams = {}, tableAlias 
       `LOWER(${column('purchase_number')}) LIKE ? OR ` +
       `LOWER(${column('item_name')}) LIKE ? OR ` +
       `LOWER(${column('purpose')}) LIKE ?` +
-    ')');
+      ')');
     values.push(search, search, search);
   }
 
@@ -621,10 +621,10 @@ export async function getPurchaseDetail(id: string): Promise<PurchaseDetail | nu
     purchaser: buildPurchaserProfile(purchaserUser, purchase.purchaserId),
     project: project
       ? {
-          id: project.id,
-          projectCode: project.projectCode,
-          projectName: project.projectName,
-        }
+        id: project.id,
+        projectCode: project.projectCode,
+        projectName: project.projectName,
+      }
       : null,
     approver: buildBasicUserProfile(approverUser),
     rejecter: buildBasicUserProfile(rejecterUser),
@@ -902,7 +902,7 @@ export async function updatePurchase(id: string, input: UpdatePurchaseInput): Pr
   return (await findPurchaseById(id))!;
 }
 
-// submit purchase (draft/rejected -> pending_approval)
+// submit purchase (draft/rejected -> approved) - Auto-approve flow
 export async function submitPurchase(purchaseId: string, operatorId: string): Promise<PurchaseRecord> {
   await ensurePurchasesSchema();
   const existing = await findPurchaseById(purchaseId);
@@ -910,12 +910,17 @@ export async function submitPurchase(purchaseId: string, operatorId: string): Pr
   if (!(existing.status === 'draft' || existing.status === 'rejected')) throw new Error('NOT_SUBMITTABLE');
   if (!hasInvoiceEvidence(existing)) throw new Error('INVOICE_FILES_REQUIRED');
 
+  // Auto-approve: transition directly to 'approved'
   await mysqlQuery`
     UPDATE purchases
-    SET status = 'pending_approval', submitted_at = NOW(), updated_at = NOW()
+    SET status = 'approved', 
+        submitted_at = NOW(), 
+        approved_at = NOW(), 
+        approved_by = ${operatorId}, 
+        updated_at = NOW()
     WHERE id = ${purchaseId}
   `;
-  await insertLog(purchaseId, 'submit', existing.status, 'pending_approval', operatorId, null);
+  await insertLog(purchaseId, 'submit', existing.status, 'approved', operatorId, '提交并自动通过审批');
   return (await findPurchaseById(purchaseId))!;
 }
 

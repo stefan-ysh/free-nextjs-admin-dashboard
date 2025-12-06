@@ -14,7 +14,7 @@ function resolvePoolOptions(): PoolOptions {
       port: Number(parsed.port || '3306'),
       user: decodeURIComponent(parsed.username || 'root'),
       password: decodeURIComponent(parsed.password || ''),
-      database: decodeURIComponent(parsed.pathname.replace(/^\//, '') || 'tailadmin_local'),
+      database: decodeURIComponent(parsed.pathname.replace(/^\//, '') || 'admin_cosmorigin'),
       waitForConnections: true,
       connectionLimit,
       decimalNumbers: true,
@@ -26,7 +26,7 @@ function resolvePoolOptions(): PoolOptions {
   const port = Number(process.env.MYSQL_PORT ?? '3306');
   const user = process.env.MYSQL_USER?.trim() || 'root';
   const password = process.env.MYSQL_PASSWORD ?? '';
-  const database = process.env.MYSQL_DATABASE?.trim() || 'tailadmin_local';
+  const database = process.env.MYSQL_DATABASE?.trim() || 'admin_cosmorigin';
 
   return {
     host,

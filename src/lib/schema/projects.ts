@@ -47,8 +47,8 @@ export async function ensureProjectsSchema() {
         (budget IS NULL OR budget >= 0) AND
         actual_cost >= 0
       ),
-      CONSTRAINT fk_projects_manager FOREIGN KEY (project_manager_id) REFERENCES users(id) ON DELETE RESTRICT,
-      CONSTRAINT fk_projects_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+      CONSTRAINT fk_projects_manager FOREIGN KEY (project_manager_id) REFERENCES hr_employees(id) ON DELETE RESTRICT,
+      CONSTRAINT fk_projects_created_by FOREIGN KEY (created_by) REFERENCES hr_employees(id) ON DELETE RESTRICT
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 

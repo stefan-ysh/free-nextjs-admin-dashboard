@@ -6,6 +6,8 @@ export interface AuthUser {
   id: string;
   email: string;
   role: string;
+  roles: string[];
+  primaryRole: string;
   firstName: string | null;
   lastName: string | null;
   displayName: string | null;
@@ -41,10 +43,25 @@ async function fetchMe(): Promise<AuthUser | null> {
     const data = await res.json();
     if (!data?.data) return null;
     const payload = data.data as Record<string, unknown>;
+    const parseRoles = (input: unknown): string[] => {
+      if (Array.isArray(input)) {
+        return input.filter((value): value is string => typeof value === 'string');
+      }
+      if (typeof input === 'string' && input.trim()) {
+        return [input.trim()];
+      }
+      return [];
+    };
+    const role = String(payload.role ?? '');
+    const primaryRole = String(payload.primaryRole ?? role);
+    const roles = parseRoles(payload.roles);
+    const normalizedRoles = roles.length ? roles : [primaryRole].filter(Boolean);
     return {
       id: String(payload.id),
       email: String(payload.email ?? ''),
-      role: String(payload.role ?? ''),
+      role,
+      roles: normalizedRoles,
+      primaryRole,
       firstName: (payload.firstName as string | null | undefined) ?? null,
       lastName: (payload.lastName as string | null | undefined) ?? null,
       displayName: (payload.displayName as string | null | undefined) ?? null,

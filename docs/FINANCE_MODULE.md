@@ -151,10 +151,10 @@ cp .env.example .env.local
 
 编辑 `.env.local`:
 ```ini
-MYSQL_URL="mysql://user:password@127.0.0.1:3306/tailadmin_local"
+MYSQL_URL="mysql://user:password@127.0.0.1:3306/admin_cosmorigin"
 # 或分别指定 MYSQL_HOST / MYSQL_PORT / MYSQL_USER / MYSQL_PASSWORD / MYSQL_DATABASE
 
-LOCAL_STORAGE_ROOT="/Users/you/Documents/free-nextjs-admin-storage" # 可选
+LOCAL_STORAGE_ROOT="/Users/you/Documents/admin_cosmorigin-storage" # 可选
 ```
 
 4. **启动开发服务器**

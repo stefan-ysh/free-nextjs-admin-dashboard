@@ -1,5 +1,5 @@
 {
-  "name": "free-nextjs-admin-dashboard",
+  "name": "admin_cosmorigin",
   "version": "2.0.2",
   "private": true,
   "scripts": {
@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "import:finance": "tsx scripts/import-finance-excel.ts",
-    "seed:admin": "node scripts/create-admin.mjs",
+    "import:employees": "tsx scripts/import-employees.ts",
+    "seed:admin": "tsx scripts/create-admin.ts",
     "seed:departments": "node scripts/seed-departments.mjs",
     "migrate:finance-categories": "tsx scripts/migrate-finance-categories.ts"
   },
@@ -78,6 +79,7 @@
     "@types/react-dom": "^19",
     "@types/react-transition-group": "^4.4.12",
     "@types/webpack": "^5.28.5",
+    "baseline-browser-mapping": "^2.9.2",
     "dotenv": "^16.4.5",
     "eslint": "^9",
     "eslint-config-next": "15.1.3",

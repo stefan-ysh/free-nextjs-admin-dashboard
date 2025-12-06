@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 import {
   ArrowDownRight,
   ArrowUpRight,
-  Briefcase,
   ClipboardList,
   TrendingUp,
   Users,
@@ -16,8 +15,6 @@ import type { UserProfile } from '@/types/user';
 import { formatDateTimeLocal } from '@/lib/dates';
 import { getInventoryStats } from '@/lib/db/inventory';
 import { getStats as getFinanceStats } from '@/lib/db/finance';
-import { getProjectStats } from '@/lib/db/projects';
-import { getClientStats } from '@/lib/db/clients';
 import { getEmployeeDashboardStats } from '@/lib/hr/employees';
 import InventoryStatsCards from '@/components/inventory/InventoryStatsCards';
 import InventoryLowStockList from '@/components/inventory/InventoryLowStockList';
@@ -100,28 +97,22 @@ export default async function AdminDashboardPage() {
   const { user } = await requireCurrentUser();
   const profile = await toPermissionUser(user);
 
-  const [inventoryPermission, financePermission, hrPermission, clientPermission, projectPermission] = await Promise.all([
+  const [inventoryPermission, financePermission, hrPermission] = await Promise.all([
     checkPermission(profile, Permissions.INVENTORY_VIEW_DASHBOARD),
     checkPermission(profile, Permissions.FINANCE_VIEW_ALL),
     checkPermission(profile, Permissions.USER_VIEW_ALL),
-    checkPermission(profile, Permissions.CLIENT_VIEW),
-    checkPermission(profile, Permissions.PROJECT_VIEW_ALL),
   ]);
 
-  const [inventoryStats, financeStats, hrStats, clientStats, projectStats] = await Promise.all([
+  const [inventoryStats, financeStats, hrStats] = await Promise.all([
     inventoryPermission.allowed ? getInventoryStats() : null,
     financePermission.allowed ? getFinanceStats() : null,
     hrPermission.allowed ? getEmployeeDashboardStats() : null,
-    clientPermission.allowed ? getClientStats() : null,
-    projectPermission.allowed ? getProjectStats() : null,
   ]);
 
   const hasAnySection = [
     inventoryPermission.allowed,
     financePermission.allowed,
     hrPermission.allowed,
-    clientPermission.allowed,
-    projectPermission.allowed,
   ].some(Boolean);
 
   const greetingName = profile.displayName || profile.firstName || profile.email;
@@ -131,9 +122,7 @@ export default async function AdminDashboardPage() {
     [
       inventoryPermission.allowed && '库存',
       financePermission.allowed && '财务',
-      hrPermission.allowed && '人事',
-      clientPermission.allowed && '客户',
-      projectPermission.allowed && '项目',
+      hrPermission.allowed && '组织架构',
     ].filter(Boolean) as string[]
   ).join(' / ');
   const quickFacts = [
@@ -227,63 +216,6 @@ export default async function AdminDashboardPage() {
                   </CardContent>
                 </Card>
               ) : null}
-            </DashboardSection>
-          )}
-
-          {projectPermission.allowed && (
-            <DashboardSection title="合同与项目" description="项目执行进度与成本结构">
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                <MetricCard label="项目总数" value={formatNumber(projectStats?.totalProjects)} icon={<Briefcase className="h-5 w-5 text-slate-500" />} />
-                <MetricCard label="进行中" value={formatNumber(projectStats?.activeProjects)} helper="Active" tone="info" />
-                <MetricCard label="已完成" value={formatNumber(projectStats?.completedProjects)} helper="Completed" tone="positive" />
-                <MetricCard label="预算总额" value={formatCurrency(projectStats?.totalBudget)} helper="含全部项目" />
-                <MetricCard label="实际成本" value={formatCurrency(projectStats?.totalActualCost)} helper="累计成本" />
-                <MetricCard label="成本使用率" value={`${projectStats ? projectStats.costUtilization.toFixed(1) : '0.0'}%`} helper="Actual / Budget" tone="info" />
-              </div>
-            </DashboardSection>
-          )}
-
-          {clientPermission.allowed && (
-            <DashboardSection title="客户与信用" description="客户状态、授信与占款情况">
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <MetricCard label="客户总数" value={formatNumber(clientStats?.totalClients)} icon={<Users className="h-5 w-5 text-slate-500" />} />
-                <MetricCard label="活跃客户" value={formatNumber(clientStats?.activeClients)} helper="Active" tone="positive" />
-                <MetricCard label="近期新增" value={formatNumber(clientStats?.newClients30d)} helper="近 30 天" tone="info" />
-                <MetricCard label="待回款" value={formatCurrency(clientStats?.outstanding)} helper="Outstanding" tone="negative" />
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <Card className='border-none'>
-                  <CardHeader>
-                    <CardTitle className="text-base">授信额度</CardTitle>
-                    <CardDescription>当前所有客户授信总额。</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-semibold text-foreground">{formatCurrency(clientStats?.totalCredit)}</p>
-                    <p className="mt-2 text-xs text-muted-foreground">包含公司与个人客户</p>
-                  </CardContent>
-                </Card>
-                <Card className='border-none'>
-                  <CardHeader>
-                    <CardTitle className="text-base">占款排名</CardTitle>
-                    <CardDescription>Outstanding Top 5</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {clientStats?.topOutstandingClients?.length ? (
-                      clientStats.topOutstandingClients.slice(0, 5).map((client) => (
-                        <div key={client.id} className="flex items-center justify-between text-sm">
-                          <div>
-                            <p className="font-medium text-foreground">{client.displayName}</p>
-                            <p className="text-xs text-muted-foreground">状态：{client.status}</p>
-                          </div>
-                          <p className="font-semibold text-rose-500">{formatCurrency(client.outstandingAmount)}</p>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground">暂无待回款客户。</p>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
             </DashboardSection>
           )}
 

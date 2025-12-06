@@ -1,6 +1,6 @@
 # 进销存（Inventory）模块设计
 
-> 目标：在现有 TailAdmin Next.js 管理后台中，新增一个可自托管的轻量级进销存子系统，覆盖“采购入库 → 库存调拨 → 销售出库 → 数据分析”闭环，复用当前的权限体系、MySQL 存储与 Tailwind UI 规范。
+> 目标：在 admin_cosmorigin (Next.js App Router) 中新增一个可自托管的轻量级进销存子系统，覆盖“采购入库 → 库存调拨 → 销售出库 → 数据分析”闭环，复用当前的权限体系、MySQL 存储与 Tailwind UI 规范。
 
 ## 1. 功能范围
 

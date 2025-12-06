@@ -12,9 +12,9 @@ brew services start mysql
 
 ### 初始化数据库
 ```sql
-CREATE DATABASE IF NOT EXISTS tailadmin_local CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS 'tailadmin'@'localhost' IDENTIFIED BY 'change-me';
-GRANT ALL PRIVILEGES ON tailadmin_local.* TO 'tailadmin'@'localhost';
+CREATE DATABASE IF NOT EXISTS admin_cosmorigin CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'cosmorigin'@'localhost' IDENTIFIED BY 'change-me';
+GRANT ALL PRIVILEGES ON admin_cosmorigin.* TO 'cosmorigin'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
@@ -23,16 +23,16 @@ FLUSH PRIVILEGES;
 项目根目录创建 `.env.local`：
 
 ```ini
-MYSQL_URL="mysql://tailadmin:change-me@127.0.0.1:3306/tailadmin_local"
+MYSQL_URL="mysql://cosmorigin:change-me@127.0.0.1:3306/admin_cosmorigin"
 # 或分别指定
 # MYSQL_HOST=127.0.0.1
 # MYSQL_PORT=3306
-# MYSQL_USER=tailadmin
+# MYSQL_USER=cosmorigin
 # MYSQL_PASSWORD=change-me
-# MYSQL_DATABASE=tailadmin_local
+# MYSQL_DATABASE=admin_cosmorigin
 
-# 可选：指定文件实际保存目录（默认 ~/Documents/free-nextjs-admin-storage）
-LOCAL_STORAGE_ROOT="/Users/you/Documents/free-nextjs-admin-storage"
+# 可选：指定文件实际保存目录（默认 ~/Documents/admin_cosmorigin-storage）
+LOCAL_STORAGE_ROOT="/Users/you/Documents/admin_cosmorigin-storage"
 ```
 
 应用会在首次访问财务/头像相关功能时自动创建：
@@ -42,7 +42,7 @@ LOCAL_STORAGE_ROOT="/Users/you/Documents/free-nextjs-admin-storage"
 
 ## 3. 文件与图片存储
 
-- 默认路径：`~/Documents/free-nextjs-admin-storage`
+- 默认路径：`~/Documents/admin_cosmorigin-storage`
 - 头像、发票附件等全部通过 `/api/files/...` 访问
 - 删除记录或更新附件时会同步清理对应文件
 

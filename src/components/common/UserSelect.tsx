@@ -60,24 +60,29 @@ export default function UserSelect({
                 <SelectValue placeholder={loading ? '加载中...' : placeholder} />
             </SelectTrigger>
             <SelectContent>
-                {users.map((user) => (
-                    <SelectItem key={user.id} value={user.id}>
-                        <div className="flex items-center gap-2">
-                            <Avatar className="h-5 w-5">
-                                <AvatarImage src={user.avatarUrl || undefined} />
-                                <AvatarFallback className="text-[10px]">
-                                    {user.displayName.slice(0, 2)}
-                                </AvatarFallback>
-                            </Avatar>
-                            <span>{user.displayName}</span>
-                            {user.primaryRole && (
-                                <span className="text-xs text-muted-foreground">
-                                    ({USER_ROLE_LABELS[user.primaryRole] || user.primaryRole})
-                                </span>
-                            )}
-                        </div>
-                    </SelectItem>
-                ))}
+                {users.map((user) => {
+                    const displayName = user.displayName?.trim() || user.email || user.employeeCode || '未命名';
+                    const fallbackText = displayName.slice(0, 2).toUpperCase();
+
+                    return (
+                        <SelectItem key={user.id} value={user.id}>
+                            <div className="flex items-center gap-2">
+                                <Avatar className="h-5 w-5">
+                                    <AvatarImage src={user.avatarUrl || undefined} />
+                                    <AvatarFallback className="text-[10px]">
+                                        {fallbackText}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <span>{displayName}</span>
+                                {user.primaryRole && (
+                                    <span className="text-xs text-muted-foreground">
+                                        ({USER_ROLE_LABELS[user.primaryRole] || user.primaryRole})
+                                    </span>
+                                )}
+                            </div>
+                        </SelectItem>
+                    );
+                })}
             </SelectContent>
         </Select>
     );

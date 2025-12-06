@@ -30,6 +30,8 @@ export async function GET() {
         id: user.id,
         email: user.email,
         role: user.role,
+        roles: user.roles,
+        primaryRole: user.primary_role,
         firstName: user.first_name,
         lastName: user.last_name,
         displayName: user.display_name,

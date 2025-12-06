@@ -65,12 +65,12 @@ export async function ensurePurchasesSchema() {
       CONSTRAINT chk_purchases_total CHECK (total_amount >= 0),
       CONSTRAINT chk_purchases_fee CHECK (fee_amount >= 0),
       CONSTRAINT chk_purchases_total_consistency CHECK (ABS(total_amount - (quantity * unit_price)) <= 0.01),
-      CONSTRAINT fk_purchases_purchaser FOREIGN KEY (purchaser_id) REFERENCES users(id) ON DELETE RESTRICT,
-      CONSTRAINT fk_purchases_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
+      CONSTRAINT fk_purchases_purchaser FOREIGN KEY (purchaser_id) REFERENCES hr_employees(id) ON DELETE RESTRICT,
+      CONSTRAINT fk_purchases_created_by FOREIGN KEY (created_by) REFERENCES hr_employees(id) ON DELETE RESTRICT,
       CONSTRAINT fk_purchases_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
-      CONSTRAINT fk_purchases_approved_by FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL,
-      CONSTRAINT fk_purchases_rejected_by FOREIGN KEY (rejected_by) REFERENCES users(id) ON DELETE SET NULL,
-      CONSTRAINT fk_purchases_paid_by FOREIGN KEY (paid_by) REFERENCES users(id) ON DELETE SET NULL,
+      CONSTRAINT fk_purchases_approved_by FOREIGN KEY (approved_by) REFERENCES hr_employees(id) ON DELETE SET NULL,
+      CONSTRAINT fk_purchases_rejected_by FOREIGN KEY (rejected_by) REFERENCES hr_employees(id) ON DELETE SET NULL,
+      CONSTRAINT fk_purchases_paid_by FOREIGN KEY (paid_by) REFERENCES hr_employees(id) ON DELETE SET NULL,
       CONSTRAINT fk_purchases_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
@@ -105,7 +105,7 @@ export async function ensurePurchasesSchema() {
       comment TEXT,
       created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
       CONSTRAINT fk_reimbursement_purchase FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE CASCADE,
-      CONSTRAINT fk_reimbursement_operator FOREIGN KEY (operator_id) REFERENCES users(id) ON DELETE RESTRICT
+      CONSTRAINT fk_reimbursement_operator FOREIGN KEY (operator_id) REFERENCES hr_employees(id) ON DELETE RESTRICT
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 

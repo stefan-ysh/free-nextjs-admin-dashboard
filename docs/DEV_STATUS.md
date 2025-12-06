@@ -53,7 +53,7 @@
 ## 🔧 本地数据库模式
 
 - MySQL: `finance_records / finance_categories / projects / purchases / auth_users / reimbursement_logs` 已通过 `ensure*Schema` 自动创建
-- 附件: 写入 `LOCAL_STORAGE_ROOT` (默认 `~/Documents/free-nextjs-admin-storage`)
+- 附件: 写入 `LOCAL_STORAGE_ROOT` (默认 `~/Documents/admin_cosmorigin-storage`)
 
 > 若数据库不可用,API 会抛出 `ECONNREFUSED` 或 `ER_NO_SUCH_TABLE`,请先确认 `.env.local` 与服务状态。
 

@@ -1,11 +1,15 @@
-# 财务管理系统 - Next.js Admin Dashboard
+# admin_cosmorigin - 财务 / 采购一体化后台
 
-基于 TailAdmin Next.js 模板打造的企业财务与采购一体化后台,已经完成“完全本地化”改造: 所有结构化数据写入自建数据库,附件与头像都落地到本机磁盘,不再依赖 Vercel KV / Blob 等云端服务。
+源自 TailAdmin 模板,现已完全本地化: 结构化数据全部存入自建 MySQL,附件与头像写入 `LOCAL_STORAGE_ROOT`, 不再依赖 Vercel KV / Blob。
+
+> 当前只交付侧边栏截图中的模块(仪表盘、财务、采购、供应商、进销存、组织架构)。其他功能会在后续迭代逐步开放。
 
 ## ✨ 模块亮点
-- 📊 **收支记录**: 收入/支出全量信息、合同金额、手续费、发票等字段一次性管理
-- 📁 **本地文件存储**: 附件写入 `LOCAL_STORAGE_ROOT`, 支持自定义目录与备份策略
-- 🧾 **采购/项目联动**: 采购、项目、员工与财务模块统一运行在本地 MySQL, 数据同源方便统计与审计
+- 📊 **财务管理**: 合同金额、手续费、发票、附件、收支分类一站式维护
+- 🧾 **采购联动**: 采购台账 + 审批工作台, 审批完成自动写入财务流水
+- 🧋 **供应商 / 进销存**: 供应商库 + 商品/仓库/库存流水, 数据随时回写 MySQL
+- 🧑‍🤝‍🧑 **组织架构**: 员工/部门共享同一认证体系, `seed:admin` 一键创建管理员
+- 📁 **本地文件存储**: 所有附件与头像都进入自定义目录, 方便物理备份
 
 - 🔐 **自托管认证**: NextAuth + MySQL, 通过 `npm run seed:admin` 快速创建管理员
 - 🌓 **深色模式与中文 UI**: 组件、图表、表单、日期选择器都对深色模式与中文本地化做了适配
@@ -20,14 +24,14 @@
 ## 📦 快速开始
 
 ```bash
-git clone https://github.com/stefan-ysh/free-nextjs-admin-dashboard.git
-cd free-nextjs-admin-dashboard
+git clone https://github.com/stefan-ysh/free-nextjs-admin-dashboard.git admin_cosmorigin
+cd admin_cosmorigin
 npm install
 cp .env.example .env.local
 ```
 
 1. **准备数据库**
-    - 启动本地 MySQL,创建数据库 `tailadmin_local`
+    - 启动本地 MySQL,创建数据库 `admin_cosmorigin`
 2. **配置环境变量**
     - 根据 `.env.example` 填写 `MYSQL_*`/`MYSQL_URL`
     - 可选: 自定义 `LOCAL_STORAGE_ROOT`
@@ -76,7 +80,8 @@ cp .env.example .env.local
 | 模块 | 数据源 | 说明 |
 |------|--------|------|
 | 财务 (finance) | MySQL | `src/lib/db/finance.ts` + `src/lib/schema/finance.ts` 自动建表,适合大批量统计查询 |
-| 采购 / 项目 / 员工 / 认证 | MySQL | 与财务模块共享 `mysql2/promise` 连接,访问统一的结构化数据 |
+| 采购 / 员工 / 供应商 | MySQL | 复用统一的连接池,审批动作会把流水写回财务表 |
+| 进销存 | MySQL | 商品、仓库、库存流水均落在本地数据库,便于追溯 |
 | 附件 / 头像 | 本地文件夹 | 由 `src/lib/storage/local.ts` 统一管理,对外暴露 `/api/files/*` 访问路径 |
 
 更多细节参阅 [docs/LOCAL_STORAGE_SETUP.md](./docs/LOCAL_STORAGE_SETUP.md)。
@@ -126,7 +131,7 @@ src/
 
 ## 🙋 常见问题
 - **还需要安装多种数据库吗?** 不需要, 现在所有模块都运行在 MySQL 上, 只安装一个数据库即可。
-- **附件存在哪里?** 默认在 `~/Documents/free-nextjs-admin-storage`,通过 `LOCAL_STORAGE_ROOT` 可修改。
+- **附件存在哪里?** 默认在 `~/Documents/admin_cosmorigin-storage`,通过 `LOCAL_STORAGE_ROOT` 可修改。
 - **如何备份?** 使用 `mysqldump` 导出数据库,配合 rsync/TimeMachine 备份文件目录即可。
 - **还能用远程 KV 吗?** 相关代码已移除,如需云端方案可自行接入 S3、Supabase Storage 等服务。
 
