@@ -20,6 +20,9 @@ export async function getCurrentUser(): Promise<CurrentUserContext | null> {
 
   const user = await findUserById(session.user_id);
   if (!user) return null;
+  if (!user.is_active || user.employment_status === 'terminated') {
+    return null;
+  }
 
   return { token, session, user };
 }

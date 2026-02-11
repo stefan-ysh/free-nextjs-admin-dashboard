@@ -5,8 +5,12 @@ import { toast } from 'sonner';
 
 import PurchaseDetailModal from '@/components/purchases/PurchaseDetailModal';
 import PurchaseTable, { type PurchaseRowPermissions } from '@/components/purchases/PurchaseTable';
+import PurchasePayDialog from '@/components/purchases/PurchasePayDialog';
 import RejectionReasonDialog from '@/components/purchases/RejectionReasonDialog';
-import { useConfirm } from '@/hooks/useConfirm';
+import ApprovalCommentDialog from '@/components/purchases/ApprovalCommentDialog';
+import TransferApprovalDialog from '@/components/purchases/TransferApprovalDialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   type PurchaseDetail,
@@ -39,15 +43,21 @@ type PurchaseActionResponse = {
 
 type PermissionSnapshot = {
   canApprove: boolean;
+  canTransfer: boolean;
   canReject: boolean;
   canPay: boolean;
 };
 
 export default function PurchaseApprovalsClient() {
-  const confirm = useConfirm();
   const { loading: permissionLoading, hasPermission } = usePermissions();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [minAmount, setMinAmount] = useState('');
+  const [maxAmount, setMaxAmount] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [overdueHours, setOverdueHours] = useState('48');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [records, setRecords] = useState<PurchaseRecord[]>([]);
@@ -60,10 +70,23 @@ export default function PurchaseApprovalsClient() {
     open: false,
     purchase: null,
   });
+  const [payDialog, setPayDialog] = useState<{ open: boolean; purchase: PurchaseRecord | PurchaseDetail | null }>({
+    open: false,
+    purchase: null,
+  });
+  const [approveDialog, setApproveDialog] = useState<{ open: boolean; purchase: PurchaseRecord | PurchaseDetail | null }>({
+    open: false,
+    purchase: null,
+  });
+  const [transferDialog, setTransferDialog] = useState<{ open: boolean; purchase: PurchaseRecord | PurchaseDetail | null }>({
+    open: false,
+    purchase: null,
+  });
 
   const permissions: PermissionSnapshot = useMemo(
     () => ({
       canApprove: hasPermission('PURCHASE_APPROVE'),
+      canTransfer: hasPermission('PURCHASE_APPROVE'),
       canReject: hasPermission('PURCHASE_REJECT'),
       canPay: hasPermission('PURCHASE_PAY'),
     }),
@@ -89,6 +112,10 @@ export default function PurchaseApprovalsClient() {
         pageSize: '50',
       });
       if (debouncedSearch) params.set('search', debouncedSearch);
+      if (minAmount.trim()) params.set('minAmount', minAmount.trim());
+      if (maxAmount.trim()) params.set('maxAmount', maxAmount.trim());
+      if (startDate) params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
       const response = await fetch(`/api/purchases/approvals?${params.toString()}`, {
         headers: { Accept: 'application/json' },
       });
@@ -102,7 +129,7 @@ export default function PurchaseApprovalsClient() {
     } finally {
       setLoading(false);
     }
-  }, [permissionLoading, canAccess, debouncedSearch]);
+  }, [permissionLoading, canAccess, debouncedSearch, minAmount, maxAmount, startDate, endDate]);
 
   useEffect(() => {
     if (!permissionLoading && canAccess) {
@@ -153,9 +180,11 @@ export default function PurchaseApprovalsClient() {
           void loadPurchaseDetail(purchaseId);
         }
         toast.success(options?.successMessage ?? '操作已完成');
+        return true;
       } catch (err) {
         console.error('审批操作失败', err);
         toast.error(err instanceof Error ? err.message : '操作失败，请稍后重试');
+        return false;
       } finally {
         setMutatingId(null);
       }
@@ -163,24 +192,18 @@ export default function PurchaseApprovalsClient() {
     [loadPurchaseDetail]
   );
 
-  const handleApprove = useCallback(
-    async (purchase: PurchaseRecord) => {
-      const confirmed = await confirm({
-        title: '确认通过该采购申请？',
-        description: '通过后将进入打款阶段。',
-        confirmText: '通过',
-        cancelText: '取消',
-      });
-      if (!confirmed) return;
-      void performAction(purchase.id, 'approve', {}, { successMessage: '已通过该采购申请' });
-    },
-    [confirm, performAction]
-  );
+  const handleApprove = useCallback((purchase: PurchaseRecord) => {
+    setApproveDialog({ open: true, purchase });
+  }, []);
 
   const rejecting = Boolean(rejectDialog.purchase && mutatingId === rejectDialog.purchase.id);
 
   const handleReject = useCallback((purchase: PurchaseRecord) => {
     setRejectDialog({ open: true, purchase });
+  }, []);
+
+  const handleTransfer = useCallback((purchase: PurchaseRecord) => {
+    setTransferDialog({ open: true, purchase });
   }, []);
 
   const handleRejectDialogClose = () => {
@@ -194,24 +217,93 @@ export default function PurchaseApprovalsClient() {
     setRejectDialog({ open: false, purchase: null });
   };
 
-  const handlePay = useCallback(
-    async (purchase: PurchaseRecord) => {
-      const confirmed = await confirm({
-        title: '确认标记为已打款？',
-        description: '将自动生成财务支出记录。',
-        confirmText: '确认打款',
-        cancelText: '取消',
-      });
-      if (!confirmed) return;
-      void performAction(purchase.id, 'pay', {}, { successMessage: '已标记为已打款' });
-    },
-    [confirm, performAction]
-  );
+  const handlePay = useCallback((purchase: PurchaseRecord | PurchaseDetail) => {
+    setPayDialog({ open: true, purchase });
+  }, []);
+
+  const handlePayDialogClose = () => {
+    if (mutatingId && payDialog.purchase && mutatingId === payDialog.purchase.id) return;
+    setPayDialog({ open: false, purchase: null });
+  };
+
+  const handleApproveDialogClose = () => {
+    if (mutatingId && approveDialog.purchase && mutatingId === approveDialog.purchase.id) return;
+    setApproveDialog({ open: false, purchase: null });
+  };
+
+  const handleApproveSubmit = async (comment: string) => {
+    if (!approveDialog.purchase) return;
+    const success = await performAction(
+      approveDialog.purchase.id,
+      'approve',
+      { comment },
+      { successMessage: '已通过该采购申请' }
+    );
+    if (success) {
+      setApproveDialog({ open: false, purchase: null });
+    }
+  };
+
+  const handlePaySubmit = async (amount: number, note?: string) => {
+    if (!payDialog.purchase) return;
+    const success = await performAction(
+      payDialog.purchase.id,
+      'pay',
+      { amount, note },
+      { successMessage: '已记录打款' }
+    );
+    if (success) {
+      setPayDialog({ open: false, purchase: null });
+    }
+  };
+
+  const handleTransferDialogClose = () => {
+    if (mutatingId && transferDialog.purchase && mutatingId === transferDialog.purchase.id) return;
+    setTransferDialog({ open: false, purchase: null });
+  };
+
+  const handleTransferSubmit = async (payload: { approverId: string; comment: string }) => {
+    if (!transferDialog.purchase) return;
+    const success = await performAction(
+      transferDialog.purchase.id,
+      'transfer',
+      { toApproverId: payload.approverId, comment: payload.comment },
+      { successMessage: '已转交审批' }
+    );
+    if (success) {
+      setTransferDialog({ open: false, purchase: null });
+    }
+  };
+
+  const getPendingHours = useCallback((purchase: PurchaseRecord) => {
+    if (!purchase.submittedAt) return 0;
+    const submitted = new Date(purchase.submittedAt).getTime();
+    if (Number.isNaN(submitted)) return 0;
+    return Math.max(0, (Date.now() - submitted) / 36e5);
+  }, []);
+
+  const visibleRecords = useMemo(() => {
+    if (!overdueOnly) return records;
+    const threshold = Number(overdueHours) || 48;
+    return records.filter((record) => getPendingHours(record) >= threshold);
+  }, [records, overdueOnly, overdueHours, getPendingHours]);
+
+  const getRowClassName = useCallback((purchase: PurchaseRecord) => {
+    const threshold = Number(overdueHours) || 48;
+    if (getPendingHours(purchase) >= threshold) {
+      return 'bg-rose-50/70 dark:bg-rose-900/15';
+    }
+    return '';
+  }, [getPendingHours, overdueHours]);
 
   const handleView = useCallback(
     (purchase: PurchaseRecord) => {
       setSelectedPurchase({
         ...purchase,
+        payments: [],
+        paidAmount: 0,
+        remainingAmount: purchase.totalAmount + (purchase.feeAmount ?? 0),
+        dueAmount: purchase.totalAmount + (purchase.feeAmount ?? 0),
         purchaser: {
           id: purchase.purchaserId,
           displayName: purchase.purchaserId,
@@ -223,6 +315,9 @@ export default function PurchaseApprovalsClient() {
           ? { id: purchase.projectId, projectCode: purchase.projectId, projectName: '—' }
           : null,
         approver: null,
+        pendingApprover: purchase.pendingApproverId
+          ? { id: purchase.pendingApproverId, displayName: purchase.pendingApproverId }
+          : null,
         rejecter: null,
         payer: null,
         logs: [],
@@ -243,13 +338,19 @@ export default function PurchaseApprovalsClient() {
     (purchase: PurchaseRecord): PurchaseRowPermissions => ({
       canEdit: false,
       canDelete: false,
+      canDuplicate: false,
       canSubmit: false,
       canWithdraw: false,
       canApprove: permissions.canApprove && isPurchaseApprovable(purchase.status),
+      canTransfer: permissions.canTransfer && isPurchaseApprovable(purchase.status),
       canReject: permissions.canReject && isPurchaseApprovable(purchase.status),
-      canPay: permissions.canPay && isPurchasePayable(purchase.status),
+      canPay:
+        permissions.canPay &&
+        isPurchasePayable(purchase.status) &&
+        purchase.reimbursementStatus === 'reimbursement_pending',
+      canSubmitReimbursement: false,
     }),
-    [permissions.canApprove, permissions.canPay, permissions.canReject]
+    [permissions.canApprove, permissions.canPay, permissions.canReject, permissions.canTransfer]
   );
 
   const handleManualRefresh = () => {
@@ -258,16 +359,23 @@ export default function PurchaseApprovalsClient() {
 
   const selectedPurchasePermissions: PurchaseRowPermissions | undefined = selectedPurchase
     ? {
-        canEdit: false,
-        canDelete: false,
-        canSubmit: false,
-        canWithdraw: false,
-        canApprove:
-          permissions.canApprove && isPurchaseApprovable(selectedPurchase.status as PurchaseStatus),
-        canReject:
-          permissions.canReject && isPurchaseApprovable(selectedPurchase.status as PurchaseStatus),
-        canPay: permissions.canPay && isPurchasePayable(selectedPurchase.status as PurchaseStatus),
-      }
+      canEdit: false,
+      canDelete: false,
+      canDuplicate: false,
+      canSubmit: false,
+      canWithdraw: false,
+      canApprove:
+        permissions.canApprove && isPurchaseApprovable(selectedPurchase.status as PurchaseStatus),
+      canTransfer:
+        permissions.canTransfer && isPurchaseApprovable(selectedPurchase.status as PurchaseStatus),
+      canReject:
+        permissions.canReject && isPurchaseApprovable(selectedPurchase.status as PurchaseStatus),
+      canPay:
+        permissions.canPay &&
+        isPurchasePayable(selectedPurchase.status as PurchaseStatus) &&
+        selectedPurchase.reimbursementStatus === 'reimbursement_pending',
+      canSubmitReimbursement: false,
+    }
     : undefined;
 
   if (permissionLoading) {
@@ -288,44 +396,76 @@ export default function PurchaseApprovalsClient() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900 sm:p-5">
+      <div className="surface-toolbar p-4 sm:p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <input
+          <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="按单号 / 物品 / 申请人检索"
-            className="h-10 flex-1 rounded-md border border-gray-300 px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            className="h-10 flex-1"
           />
+          <Input
+            value={minAmount}
+            onChange={(event) => setMinAmount(event.target.value)}
+            placeholder="最小金额"
+            className="h-10 w-28"
+          />
+          <Input
+            value={maxAmount}
+            onChange={(event) => setMaxAmount(event.target.value)}
+            placeholder="最大金额"
+            className="h-10 w-28"
+          />
+          <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-10 w-44" />
+          <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-10 w-44" />
+          <select
+            value={overdueHours}
+            onChange={(event) => setOverdueHours(event.target.value)}
+            className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+          >
+            <option value="24">超时阈值24h</option>
+            <option value="48">超时阈值48h</option>
+            <option value="72">超时阈值72h</option>
+          </select>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input type="checkbox" checked={overdueOnly} onChange={(event) => setOverdueOnly(event.target.checked)} />
+            仅看超时
+          </label>
           {error && <p className="text-xs text-rose-500 dark:text-rose-300">{error}</p>}
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
               onClick={handleManualRefresh}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200"
+              variant="outline"
+              size="sm"
               disabled={loading}
             >
               刷新
-            </button>
+            </Button>
           </div>
           
         </div>
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+      <div className="surface-table">
         <div className="flex min-h-[420px] max-h-[calc(100vh-280px)] flex-col overflow-hidden">
           <PurchaseTable
-            purchases={records}
+            purchases={visibleRecords}
             loading={loading}
             mutatingId={mutatingId}
             getRowPermissions={getRowPermissions}
+            getRowClassName={getRowClassName}
             scrollAreaClassName="h-full max-h-full"
             onView={handleView}
             onEdit={() => {}}
+            onDuplicate={() => {}}
             onDelete={() => {}}
             onSubmit={() => {}}
             onApprove={handleApprove}
+            onTransfer={handleTransfer}
             onReject={handleReject}
             onWithdraw={() => {}}
             onPay={handlePay}
+            onSubmitReimbursement={() => {}}
           />
         </div>
       </div>
@@ -340,6 +480,7 @@ export default function PurchaseApprovalsClient() {
           detailError={detailError}
           onReloadDetail={() => selectedPurchase && void loadPurchaseDetail(selectedPurchase.id)}
           onApprove={permissions.canApprove ? (purchase) => handleApprove(purchase) : undefined}
+          onTransfer={permissions.canTransfer ? (purchase) => handleTransfer(purchase) : undefined}
           onReject={permissions.canReject ? (purchase) => handleReject(purchase) : undefined}
           onPay={permissions.canPay ? (purchase) => handlePay(purchase) : undefined}
         />
@@ -351,6 +492,30 @@ export default function PurchaseApprovalsClient() {
         onSubmit={(reason) => handleRejectSubmit(reason)}
         defaultReason={rejectDialog.purchase?.rejectionReason ?? '资料不完整'}
         submitting={rejecting}
+      />
+
+      <PurchasePayDialog
+        open={payDialog.open}
+        purchase={payDialog.purchase}
+        onOpenChange={(open) => {
+          if (!open) handlePayDialogClose();
+        }}
+        onSubmit={handlePaySubmit}
+        busy={Boolean(mutatingId && payDialog.purchase && mutatingId === payDialog.purchase.id)}
+      />
+
+      <ApprovalCommentDialog
+        open={approveDialog.open}
+        onClose={handleApproveDialogClose}
+        onSubmit={handleApproveSubmit}
+        submitting={Boolean(mutatingId && approveDialog.purchase)}
+      />
+
+      <TransferApprovalDialog
+        open={transferDialog.open}
+        onClose={handleTransferDialogClose}
+        onSubmit={handleTransferSubmit}
+        submitting={Boolean(mutatingId && transferDialog.purchase)}
       />
     </div>
   );

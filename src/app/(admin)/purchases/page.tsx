@@ -34,7 +34,7 @@ export default function PurchasesPage() {
 		canApprovePurchase,
 	} = permissionSnapshot;
 
-	const canViewPurchases = canViewAllPurchases || canViewDepartmentPurchases;
+	const canViewPurchases = canViewAllPurchases || canViewDepartmentPurchases || canCreatePurchase;
 	const viewScopeLabel = canViewAllPurchases
 		? '全部采购记录'
 		: canViewDepartmentPurchases
@@ -58,7 +58,7 @@ export default function PurchasesPage() {
 	} else if (!canViewPurchases) {
 		bodyContent = (
 			<div className="rounded-lg border border-rose-200 bg-white p-6 text-sm text-rose-600 shadow-sm dark:border-rose-900/60 dark:bg-gray-900 dark:text-rose-200">
-				当前账户无权访问采购模块。需要 PURCHASE_VIEW_ALL 或 PURCHASE_VIEW_DEPARTMENT 权限，请联系管理员开通。
+				当前账户无权访问采购模块。需要 PURCHASE_CREATE、PURCHASE_VIEW_ALL 或 PURCHASE_VIEW_DEPARTMENT 权限，请联系管理员开通。
 			</div>
 		);
 	} else {

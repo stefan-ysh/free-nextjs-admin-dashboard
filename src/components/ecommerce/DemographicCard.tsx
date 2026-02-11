@@ -1,7 +1,12 @@
 "use client";
 import Image from "next/image";
 
-import CountryMap from "./CountryMap";
+import dynamic from "next/dynamic";
+
+const CountryMap = dynamic(() => import("./CountryMap"), {
+  ssr: false,
+  loading: () => <div className="h-[200px] w-full animate-pulse bg-gray-100 dark:bg-gray-800 rounded" />,
+});
 import { MoreHorizontal as MoreDotIcon } from "lucide-react";
 import {
   DropdownMenu,

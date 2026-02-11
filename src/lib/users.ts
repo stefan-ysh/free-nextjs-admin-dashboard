@@ -1,12 +1,15 @@
 import { randomUUID } from 'crypto';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
+import { unstable_cache } from 'next/cache';
 
 import { mysqlPool, mysqlQuery } from '@/lib/mysql';
 import { ensureHrSchema } from '@/lib/hr/schema';
 import { ensureAuthSchema } from '@/lib/auth/schema';
 import { hashPassword } from '@/lib/auth/password';
+import { invalidateSessionsForUser } from '@/lib/auth/session';
 import { findUserById as findAuthUserById } from '@/lib/auth/user';
 import { mapAuthRole } from '@/lib/auth/roles';
+import { revalidateTag } from 'next/cache';
 import {
   UserRecord,
   UserProfile,
@@ -117,7 +120,7 @@ function mapUser(row: RawUserRow | undefined): UserRecord | null {
   if (!row) return null;
   const roles = parseJsonArray<UserRole>(row.roles);
   const displayName = buildDisplayName(row);
-  
+
   return {
     id: row.id,
     email: row.email,
@@ -168,7 +171,7 @@ function toProfile(user: UserRecord): UserProfile {
  */
 function normalizeSocialLinks(input: unknown): SocialLinks {
   if (!input || typeof input !== 'object') return {};
-  
+
   const normalized: SocialLinks = {};
   for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
     if (typeof key !== 'string' || !key) continue;
@@ -244,13 +247,13 @@ export async function createUser(
   createdBy?: string
 ): Promise<UserRecord> {
   await ensureHrSchema();
-  
+
   const email = input.email.toLowerCase();
   const existing = await findUserByEmail(email);
   if (existing) {
     throw new Error('EMAIL_EXISTS');
   }
-  
+
   // 如果提供了员工编号，检查是否重复
   if (input.employeeCode) {
     const existingEmployee = await findUserByEmployeeCode(input.employeeCode);
@@ -258,15 +261,15 @@ export async function createUser(
       throw new Error('EMPLOYEE_CODE_EXISTS');
     }
   }
-  
+
   const id = randomUUID();
   const passwordHash = await hashPassword(input.password);
   const roles = input.roles ?? [UserRole.EMPLOYEE];
   const primaryRole = input.primaryRole ?? roles[0];
-  const displayName = input.displayName?.trim() || 
-                      `${input.firstName || ''} ${input.lastName || ''}`.trim() ||
-                      email.split('@')[0];
-  
+  const displayName = input.displayName?.trim() ||
+    `${input.firstName || ''} ${input.lastName || ''}`.trim() ||
+    email.split('@')[0];
+
   await mysqlQuery`
     INSERT INTO hr_employees (
       id, email, password_hash, roles, primary_role,
@@ -287,7 +290,11 @@ export async function createUser(
       ${createdBy ?? null}
     )
   `;
-  
+
+  if (input.department) {
+    revalidateTag('departments', 'default');
+  }
+
   return (await findUserById(id))!;
 }
 
@@ -299,7 +306,7 @@ export async function updateUserProfile(
   input: UpdateUserProfileInput
 ): Promise<UserRecord> {
   await ensureHrSchema();
-  
+
   const [result] = await pool.query<ResultSetHeader>(
     `UPDATE hr_employees
       SET
@@ -329,11 +336,11 @@ export async function updateUserProfile(
       userId,
     ]
   );
-  
+
   if (result.affectedRows === 0) {
     throw new Error('USER_NOT_FOUND');
   }
-  
+
   return (await findUserById(userId))!;
 }
 
@@ -345,7 +352,7 @@ export async function updateEmployeeInfo(
   input: UpdateEmployeeInfoInput
 ): Promise<UserRecord> {
   await ensureHrSchema();
-  
+
   // 如果要更新员工编号，检查是否重复
   if (input.employeeCode) {
     const existing = await findUserByEmployeeCode(input.employeeCode);
@@ -353,7 +360,7 @@ export async function updateEmployeeInfo(
       throw new Error('EMPLOYEE_CODE_EXISTS');
     }
   }
-  
+
   const [result] = await pool.query<ResultSetHeader>(
     `UPDATE hr_employees
       SET
@@ -379,11 +386,15 @@ export async function updateEmployeeInfo(
       userId,
     ]
   );
-  
+
   if (result.affectedRows === 0) {
     throw new Error('USER_NOT_FOUND');
   }
-  
+
+  if (input.department) {
+    revalidateTag('departments', 'default');
+  }
+
   return (await findUserById(userId))!;
 }
 
@@ -397,16 +408,16 @@ export async function updateUserRoles(
 ): Promise<UserRecord> {
   await ensureHrSchema();
   await ensureAuthSchema();
-  
+
   if (roles.length === 0) {
     throw new Error('ROLES_REQUIRED');
   }
-  
+
   const newPrimaryRole = primaryRole ?? roles[0];
   if (!roles.includes(newPrimaryRole)) {
     throw new Error('PRIMARY_ROLE_NOT_IN_ROLES');
   }
-  
+
   const [result] = await pool.query<ResultSetHeader>(
     `UPDATE hr_employees
       SET
@@ -416,7 +427,7 @@ export async function updateUserRoles(
       WHERE id = ?`,
     [JSON.stringify(roles), newPrimaryRole, userId]
   );
-  
+
   if (result.affectedRows === 0) {
     throw new Error('USER_NOT_FOUND');
   }
@@ -430,12 +441,14 @@ export async function updateUserRoles(
 export async function updateUserPassword(userId: string, password: string): Promise<void> {
   await ensureHrSchema();
   const passwordHash = await hashPassword(password);
-  
+
   await mysqlQuery`
     UPDATE hr_employees
     SET 
       password_hash = ${passwordHash},
       password_updated_at = NOW(),
+      failed_login_attempts = 0,
+      locked_until = NULL,
       updated_at = NOW()
     WHERE id = ${userId}
   `;
@@ -450,16 +463,16 @@ export async function updateUserAvatar(
 ): Promise<UserRecord> {
   await ensureHrSchema();
   const sanitized = sanitizeNullableText(avatarUrl);
-  
+
   const [result] = await pool.query<ResultSetHeader>(
     'UPDATE hr_employees SET avatar_url = ?, updated_at = NOW() WHERE id = ?',
     [sanitized, userId]
   );
-  
+
   if (result.affectedRows === 0) {
     throw new Error('USER_NOT_FOUND');
   }
-  
+
   return (await findUserById(userId))!;
 }
 
@@ -544,12 +557,12 @@ export async function updateLastLogin(userId: string): Promise<void> {
  */
 export async function listUsers(params: ListUsersParams = {}): Promise<ListUsersResult> {
   await ensureHrSchema();
-  
+
   const page = Math.max(1, params.page ?? 1);
   const pageSize = Math.min(Math.max(1, params.pageSize ?? 20), 100);
   const sortBy = params.sortBy ?? 'updatedAt';
   const sortOrder = params.sortOrder === 'asc' ? 'ASC' : 'DESC';
-  
+
   const sortColumnMap: Record<string, string> = {
     createdAt: 'created_at',
     updatedAt: 'updated_at',
@@ -558,10 +571,10 @@ export async function listUsers(params: ListUsersParams = {}): Promise<ListUsers
     employmentStatus: 'employment_status',
   };
   const sortColumn = sortColumnMap[sortBy] || 'updated_at';
-  
+
   const conditions: string[] = [];
   const values: unknown[] = [];
-  
+
   // 搜索条件
   if (params.search) {
     const search = `%${params.search.trim().toLowerCase()}%`;
@@ -574,37 +587,37 @@ export async function listUsers(params: ListUsersParams = {}): Promise<ListUsers
     )`);
     values.push(search, search, search, search, search);
   }
-  
+
   // 角色筛选
   if (params.roles && params.roles.length > 0) {
     const roleClauses = params.roles.map(() => 'JSON_CONTAINS(roles, JSON_QUOTE(?), "$")');
     conditions.push(`(${roleClauses.join(' OR ')})`);
     params.roles.forEach(role => values.push(role));
   }
-  
+
   // 部门筛选
   if (params.department) {
     conditions.push('department = ?');
     values.push(params.department.trim());
   }
-  
+
   // 雇佣状态筛选
   if (params.employmentStatus && params.employmentStatus !== 'all') {
     conditions.push('employment_status = ?');
     values.push(params.employmentStatus);
   }
-  
+
   // 激活状态筛选
   if (params.isActive !== undefined) {
     conditions.push('is_active = ?');
     values.push(params.isActive ? 1 : 0);
   }
-  
+
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   const orderClause = `ORDER BY ${sortColumn} ${sortOrder}, id ASC`;
-  
+
   const dataParams = [...values, pageSize, (page - 1) * pageSize];
-  
+
   const [dataResult, countResult] = await Promise.all([
     pool.query<RawUserRow[]>(
       `SELECT * FROM hr_employees ${whereClause} ${orderClause} LIMIT ? OFFSET ?`,
@@ -615,10 +628,10 @@ export async function listUsers(params: ListUsersParams = {}): Promise<ListUsers
       values
     ),
   ]);
-  
+
   const rows = dataResult[0] ?? [];
   const total = countResult[0]?.[0]?.total ?? 0;
-  
+
   return {
     items: rows.map(row => toProfile(mapUser(row)!)),
     total: Number(total),
@@ -637,6 +650,7 @@ export async function deactivateUser(userId: string): Promise<void> {
     SET is_active = 0, updated_at = NOW()
     WHERE id = ${userId}
   `;
+  await invalidateSessionsForUser(userId);
 }
 
 /**
@@ -654,16 +668,20 @@ export async function activateUser(userId: string): Promise<void> {
 /**
  * 获取部门列表
  */
-export async function getDepartments(): Promise<string[]> {
-  await ensureHrSchema();
-  const result = await mysqlQuery<RowDataPacket & { department: string }>`
-    SELECT DISTINCT department
-    FROM hr_employees
-    WHERE department IS NOT NULL
-    ORDER BY department
-  `;
-  return result.rows.map(row => row.department);
-}
+export const getDepartments = unstable_cache(
+  async (): Promise<string[]> => {
+    await ensureHrSchema();
+    const result = await mysqlQuery<RowDataPacket & { department: string }>`
+      SELECT DISTINCT department
+      FROM hr_employees
+      WHERE department IS NOT NULL
+      ORDER BY department
+    `;
+    return result.rows.map(row => row.department);
+  },
+  ['departments-list'],
+  { tags: ['departments'], revalidate: 3600 }
+);
 
 /**
  * 获取某个经理的下属

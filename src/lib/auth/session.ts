@@ -66,6 +66,11 @@ export async function invalidateSessionsForDeviceType(userId: string, deviceType
   await mysqlQuery`DELETE FROM auth_sessions WHERE user_id = ${userId} AND device_type = ${deviceType}`;
 }
 
+export async function invalidateSessionsForUser(userId: string): Promise<void> {
+  await ensureAuthSchema();
+  await mysqlQuery`DELETE FROM auth_sessions WHERE user_id = ${userId}`;
+}
+
 export async function findActiveSession(token: string): Promise<SessionRecord | null> {
   await ensureAuthSchema();
   const [rows] = await pool.query<RawSessionRow[]>(

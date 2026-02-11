@@ -1,11 +1,12 @@
 'use client';
 
 import * as React from 'react';
-import { format, parseISO, isValid } from 'date-fns';
+import { parseISO, isValid } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { CalendarIcon } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { formatDateOnly } from '@/lib/dates';
 import { Button, type ButtonProps } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -23,12 +24,40 @@ type DatePickerProps = {
   defaultMonth?: Date;
 } & Omit<ButtonProps, 'value' | 'onChange'>;
 
-const DISPLAY_FORMAT = "yyyy年MM月dd日 EEEE";
-const OUTPUT_FORMAT = 'yyyy-MM-dd';
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const CHINA_TIMEZONE = 'Asia/Shanghai';
+
+const dateLabelFormatter = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: CHINA_TIMEZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  weekday: 'long',
+});
+
+function formatChinaDateLabel(date: Date): string {
+  const parts = dateLabelFormatter.formatToParts(date);
+  const resolved: Partial<Record<string, string>> = {};
+  for (const part of parts) {
+    if (part.type !== 'literal') {
+      resolved[part.type] = part.value;
+    }
+  }
+  const year = resolved.year ?? '';
+  const month = resolved.month ?? '';
+  const day = resolved.day ?? '';
+  const weekday = resolved.weekday ?? '';
+  return `${year}年${month}月${day}日 ${weekday}`.trim();
+}
 
 function parseValue(value?: string | null) {
   if (!value) return undefined;
   try {
+    if (DATE_ONLY_PATTERN.test(value)) {
+      const [year, month, day] = value.split('-').map(Number);
+      const parsed = new Date(year, month - 1, day);
+      return isValid(parsed) ? parsed : undefined;
+    }
     const parsed = parseISO(value);
     return isValid(parsed) ? parsed : undefined;
   } catch (error) {
@@ -59,12 +88,14 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
     React.useImperativeHandle(ref, () => triggerRef.current as HTMLButtonElement);
 
     const parsedDate = React.useMemo(() => parseValue(value), [value]);
-    const displayLabel = parsedDate ? format(parsedDate, DISPLAY_FORMAT, { locale: zhCN }) : placeholder;
+    const displayLabel = parsedDate ? formatChinaDateLabel(parsedDate) : placeholder;
 
     const handleSelect = React.useCallback(
       (date?: Date) => {
         if (!date) return;
-        onChange(format(date, OUTPUT_FORMAT));
+        const formatted = formatDateOnly(date);
+        if (!formatted) return;
+        onChange(formatted);
         setOpen(false);
       },
       [onChange]

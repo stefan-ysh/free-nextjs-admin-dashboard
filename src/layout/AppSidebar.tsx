@@ -62,8 +62,20 @@ const navItems: NavItem[] = [
   {
     icon: <FinanceIcon />,
     name: "财务管理",
-    path: "/finance",
-    requiredPermission: "FINANCE_VIEW_ALL",
+    requiredAnyPermissions: ["FINANCE_VIEW_ALL", "PURCHASE_PAY"],
+    subItems: [
+      {
+        name: "财务流水",
+        path: "/finance",
+        requiredPermission: "FINANCE_VIEW_ALL",
+      },
+      {
+        name: "付款任务",
+        path: "/finance/payments",
+        requiredPermission: "PURCHASE_PAY",
+        new: true,
+      },
+    ],
   },
   // {
   //   icon: <ContractIcon />,
@@ -77,6 +89,7 @@ const navItems: NavItem[] = [
     icon: <PurchaseIcon />,
     name: "采购管理",
     requiredAnyPermissions: [
+      "PURCHASE_CREATE",
       "PURCHASE_VIEW_ALL",
       "PURCHASE_VIEW_DEPARTMENT",
       "PURCHASE_APPROVE",
@@ -87,13 +100,71 @@ const navItems: NavItem[] = [
       {
         name: "采购台账",
         path: "/purchases",
-        requiredAnyPermissions: ["PURCHASE_VIEW_ALL", "PURCHASE_VIEW_DEPARTMENT"],
+        requiredAnyPermissions: ["PURCHASE_CREATE", "PURCHASE_VIEW_ALL", "PURCHASE_VIEW_DEPARTMENT"],
       },
       {
         name: "采购审批",
         path: "/purchases/approvals",
         requiredAnyPermissions: ["PURCHASE_APPROVE", "PURCHASE_REJECT", "PURCHASE_PAY"],
         new: true,
+      },
+      {
+        name: "流程监控",
+        path: "/purchases/monitor",
+        requiredAnyPermissions: ["PURCHASE_VIEW_ALL", "PURCHASE_APPROVE", "PURCHASE_REJECT", "PURCHASE_PAY"],
+      },
+      {
+        name: "流程列表",
+        path: "/purchases/workflow",
+        requiredPermission: "PURCHASE_APPROVE",
+      },
+      {
+        name: "审计日志",
+        path: "/purchases/audit",
+        requiredAnyPermissions: ["PURCHASE_VIEW_ALL", "PURCHASE_APPROVE", "PURCHASE_PAY"],
+      },
+    ],
+  },
+  {
+    icon: <DashboardIcon />,
+    name: "工作台",
+    requiredAnyPermissions: [
+      "PURCHASE_CREATE",
+      "PURCHASE_VIEW_DEPARTMENT",
+      "PURCHASE_VIEW_ALL",
+      "PURCHASE_APPROVE",
+      "PURCHASE_REJECT",
+      "PURCHASE_PAY",
+    ],
+    subItems: [
+      {
+        name: "待办",
+        path: "/workflow/todo",
+        requiredAnyPermissions: ["PURCHASE_APPROVE", "PURCHASE_REJECT", "PURCHASE_PAY", "PURCHASE_CREATE"],
+      },
+      {
+        name: "已办",
+        path: "/workflow/done",
+        requiredAnyPermissions: [
+          "PURCHASE_CREATE",
+          "PURCHASE_VIEW_DEPARTMENT",
+          "PURCHASE_VIEW_ALL",
+          "PURCHASE_APPROVE",
+          "PURCHASE_REJECT",
+          "PURCHASE_PAY",
+        ],
+      },
+      {
+        name: "通知",
+        path: "/workflow/notifications",
+        requiredAnyPermissions: [
+          "PURCHASE_CREATE",
+          "PURCHASE_VIEW_DEPARTMENT",
+          "PURCHASE_VIEW_ALL",
+          "PURCHASE_APPROVE",
+          "PURCHASE_REJECT",
+          "PURCHASE_PAY",
+        ],
       },
     ],
   },
@@ -113,30 +184,23 @@ const navItems: NavItem[] = [
         requiredPermission: "INVENTORY_VIEW_DASHBOARD",
       },
       {
-        name: "商品管理",
-        path: "/inventory/items",
-        requiredPermission: "INVENTORY_MANAGE_ITEMS",
+        name: "入库单",
+        path: "/inventory/inbound",
+        requiredPermission: "INVENTORY_OPERATE_INBOUND",
       },
       {
-        name: "仓库管理",
-        path: "/inventory/warehouses",
-        requiredPermission: "INVENTORY_MANAGE_WAREHOUSE",
+        name: "出库单",
+        path: "/inventory/outbound",
+        requiredPermission: "INVENTORY_OPERATE_OUTBOUND",
       },
-      // 注释：入库/出库已改为Drawer模式，从侧边栏隐藏（2024-11-27）
-      // 保留页面文件，可通过URL直接访问
-      // {
-      //   name: "入库单",
-      //   path: "/inventory/inbound",
-      //   requiredPermission: "INVENTORY_OPERATE_INBOUND",
-      // },
-      // {
-      //   name: "出库单",
-      //   path: "/inventory/outbound",
-      //   requiredPermission: "INVENTORY_OPERATE_OUTBOUND",
-      // },
       {
         name: "库存流水",
         path: "/inventory/movements",
+        requiredPermission: "INVENTORY_VIEW_ALL",
+      },
+      {
+        name: "调拨单",
+        path: "/inventory/transfers",
         requiredPermission: "INVENTORY_VIEW_ALL",
       },
     ],
@@ -353,41 +417,22 @@ const AppSidebar: React.FC = () => {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 z-30 flex h-screen flex-col border-r border-border bg-white text-gray-900 transition-all duration-300 dark:border-border dark:bg-gray-900',
+        'fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-border bg-white text-gray-900 transition-all duration-300 dark:border-border dark:bg-gray-900',
         'mt-16 px-5 lg:mt-0',
-        isExpanded || isMobileOpen || isHovered ? 'w-[290px]' : 'w-[90px]',
+        isExpanded || isMobileOpen || isHovered ? 'w-[260px]' : 'w-[72px]',
         isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       )}
       onMouseEnter={() => !isExpanded && setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       <div className={cn('py-8 flex', showLabels ? 'justify-start' : 'justify-center lg:justify-center')}>
-        <Link href="/">
-          {showLabels ? (
-            <>
-              <Image
-                className="dark:hidden"
-                src="/images/logo/logo.svg"
-                alt="Logo"
-                width={150}
-                height={40}
-              />
-              <Image
-                className="hidden dark:block"
-                src="/images/logo/logo.png"
-                alt="Logo"
-                width={150}
-                height={40}
-              />
-            </>
-          ) : (
-            <Image
-              src="/images/logo/logo-icon.svg"
-              alt="Logo"
-              width={32}
-              height={32}
-            />
-          )}
+        <Link href="/" className="mx-auto">
+          <Image
+            src="/images/logo/logo.png"
+            alt="Logo"
+            width={150}
+            height={40}
+          />
         </Link>
       </div>
       <div className="flex flex-1 flex-col overflow-hidden">

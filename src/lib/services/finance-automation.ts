@@ -1,13 +1,13 @@
 import { InvoiceType as FinanceInvoiceType, FinanceRecord, FinanceRecordMetadata, InvoiceInfo, InvoiceStatus, PaymentType, TransactionType } from '@/types/finance';
 import { getDefaultCategoryLabels, matchCategoryLabel } from '@/constants/finance-categories';
 
-import type { PurchaseRecord } from '@/types/purchase';
+import type { PurchaseRecord, PurchasePayment } from '@/types/purchase';
 import type { InventoryMovement, InventoryItem, Warehouse } from '@/types/inventory';
 import type { ProjectPayment, ProjectRecord } from '@/types/project';
 import { getInventoryItem, getWarehouse } from '@/lib/db/inventory';
 import {
   createRecord,
-  findRecordByPurchaseId,
+  findRecordByPurchasePaymentId,
   findRecordByInventoryMovementId,
   findRecordByProjectPaymentId,
   updateRecord,
@@ -409,15 +409,21 @@ function resolveProjectIncomePayer(payment: ProjectPayment, project?: ProjectRec
   return pickString(meta, ['payer', 'payor', 'customerName', 'clientName']) ?? project?.clientName ?? undefined;
 }
 
-export async function createPurchaseExpense(purchase: PurchaseRecord, operatorId: string): Promise<FinanceRecord> {
+export async function createPurchaseExpense(
+  purchase: PurchaseRecord,
+  paymentId: string,
+  paymentAmount: number,
+  operatorId: string,
+  paymentDate: string
+): Promise<FinanceRecord> {
   const basePayload = {
     name: `采购支出 - ${purchase.itemName}`,
     type: TransactionType.EXPENSE,
     category: PURCHASE_EXPENSE_CATEGORY,
-    date: toIsoDateString(purchase.paidAt ?? purchase.purchaseDate),
-    contractAmount: purchase.totalAmount,
-    fee: purchase.feeAmount ?? 0,
-    quantity: purchase.quantity,
+    date: toIsoDateString(paymentDate),
+    contractAmount: paymentAmount,
+    fee: 0,
+    quantity: 1,
     paymentType: purchase.paymentType,
     paymentChannel: purchase.paymentChannel ?? undefined,
     payer: purchase.payerName ?? undefined,
@@ -429,12 +435,16 @@ export async function createPurchaseExpense(purchase: PurchaseRecord, operatorId
     sourceType: 'purchase' as const,
     status: 'cleared' as const,
     purchaseId: purchase.id,
+    purchasePaymentId: paymentId,
     supplierId: purchase.supplierId ?? null,
     projectId: purchase.projectId ?? undefined,
-    metadata: buildPurchaseMetadata(purchase),
+    metadata: {
+      ...buildPurchaseMetadata(purchase),
+      paymentAmount,
+    },
   } satisfies Omit<FinanceRecord, 'id' | 'createdAt' | 'updatedAt' | 'totalAmount'>;
 
-  const existing = await findRecordByPurchaseId(purchase.id);
+  const existing = await findRecordByPurchasePaymentId(paymentId);
   if (existing) {
     const updated = await updateRecord(existing.id, basePayload);
     if (!updated) {

@@ -103,6 +103,10 @@ export async function POST(request: Request) {
     if (!body || typeof body !== 'object') {
       return badRequestResponse('请求体格式错误');
     }
+    const initialPassword = typeof body.initialPassword === 'string' ? body.initialPassword.trim() : '';
+    if (!initialPassword) {
+      return badRequestResponse('请设置初始密码');
+    }
 
     const trimmedAvatarDataUrl = typeof body.avatarDataUrl === 'string' ? body.avatarDataUrl.trim() : '';
     if (trimmedAvatarDataUrl) {
@@ -110,7 +114,6 @@ export async function POST(request: Request) {
     }
 
     const result = await createEmployee({
-      userId: body.userId,
       employeeCode: body.employeeCode,
       firstName: body.firstName,
       lastName: body.lastName,
@@ -118,6 +121,8 @@ export async function POST(request: Request) {
       avatarUrl: uploadedAvatarPath ?? null,
       email: body.email,
       phone: body.phone,
+      wecomUserId: body.wecomUserId,
+      initialPassword,
       department: body.department,
       departmentId: body.departmentId,
       jobTitle: body.jobTitle,
@@ -156,6 +161,21 @@ export async function POST(request: Request) {
     if (error instanceof Error) {
       if (error.message === 'UNAUTHENTICATED') {
         return unauthorizedResponse();
+      }
+      if (error.message === 'EMAIL_EXISTS') {
+        return badRequestResponse('邮箱已存在');
+      }
+      if (error.message === 'PHONE_EXISTS') {
+        return badRequestResponse('手机号已存在');
+      }
+      if (error.message === 'EMPLOYEE_CODE_EXISTS') {
+        return badRequestResponse('员工编号已存在');
+      }
+      if (error.message === 'WECOM_USER_ID_EXISTS') {
+        return badRequestResponse('企业微信账号已被其他员工占用');
+      }
+      if (error.message === 'MISSING_PASSWORD') {
+        return badRequestResponse('请设置初始密码');
       }
       if (error.message.startsWith('MISSING_')) {
         return badRequestResponse('缺少必填字段');

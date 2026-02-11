@@ -14,6 +14,7 @@ import {
 import { checkPermission, Permissions } from '@/lib/permissions';
 import { FinanceRecord, FinanceApiResponse, TransactionType, PaymentType } from '@/types/finance';
 import { financeRecordSchema } from '@/lib/validations/finance';
+import { formatDateOnly } from '@/lib/dates';
 
 type MysqlError = {
   code?: string;
@@ -39,7 +40,8 @@ function parseNumberParam(value: string | null): number | undefined {
 }
 
 function generateTransactionNo(date: string) {
-  const datePart = (date || new Date().toISOString().slice(0, 10)).replace(/-/g, '');
+  const today = formatDateOnly(new Date()) ?? new Date().toISOString().slice(0, 10);
+  const datePart = (date || today).replace(/-/g, '');
   const suffix = randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
   return `FIN-${datePart}-${suffix}`;
 }

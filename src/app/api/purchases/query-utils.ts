@@ -3,6 +3,7 @@ import {
   isPurchaseStatus,
   isPurchaseChannel,
   isPaymentMethod,
+  isPurchaseOrganization,
 } from '@/types/purchase';
 
 const SORT_FIELDS = ['createdAt', 'updatedAt', 'purchaseDate', 'totalAmount', 'status', 'submittedAt'] as const;
@@ -34,6 +35,11 @@ export function parsePurchaseListParams(searchParams: URLSearchParams): ListPurc
 
   const supplierId = searchParams.get('supplierId');
   if (supplierId) params.supplierId = supplierId;
+
+  const organizationTypeParam = searchParams.get('organizationType');
+  if (isPurchaseOrganization(organizationTypeParam)) {
+    params.organizationType = organizationTypeParam;
+  }
 
   const purchaseChannelParam = searchParams.get('purchaseChannel');
   if (isPurchaseChannel(purchaseChannelParam)) {

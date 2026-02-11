@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -131,55 +132,57 @@ export default function UserInfoCard({ profile, onUpdate, loading = false }: Use
             <DialogTitle>编辑基础信息</DialogTitle>
             <DialogDescription>更新您的个人资料以便团队成员了解您。</DialogDescription>
           </DialogHeader>
-          <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
-            <div className="grid grid-cols-1 gap-x-6 gap-y-5 lg:grid-cols-2">
-              <div className="space-y-2">
-                <Label>名</Label>
-                <Input
-                  type="text"
-                  value={formState.firstName}
-                  onChange={(event) => setFormState((prev) => ({ ...prev, firstName: event.target.value }))}
-                />
+          <DialogBody>
+            <form id="user-info-form" className="flex flex-col gap-6" onSubmit={handleSubmit}>
+              <div className="grid grid-cols-1 gap-x-6 gap-y-5 lg:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>名</Label>
+                  <Input
+                    type="text"
+                    value={formState.firstName}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, firstName: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>姓</Label>
+                  <Input
+                    type="text"
+                    value={formState.lastName}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, lastName: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>邮箱</Label>
+                  <Input type="email" value={profile?.email ?? ""} disabled />
+                </div>
+                <div className="space-y-2">
+                  <Label>手机号</Label>
+                  <Input
+                    type="tel"
+                    value={formState.phone}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, phone: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2 lg:col-span-2">
+                  <Label>个人简介</Label>
+                  <Textarea
+                    rows={4}
+                    value={formState.bio}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, bio: event.target.value }))}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>姓</Label>
-                <Input
-                  type="text"
-                  value={formState.lastName}
-                  onChange={(event) => setFormState((prev) => ({ ...prev, lastName: event.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>邮箱</Label>
-                <Input type="email" value={profile?.email ?? ""} disabled />
-              </div>
-              <div className="space-y-2">
-                <Label>手机号</Label>
-                <Input
-                  type="tel"
-                  value={formState.phone}
-                  onChange={(event) => setFormState((prev) => ({ ...prev, phone: event.target.value }))}
-                />
-              </div>
-              <div className="space-y-2 lg:col-span-2">
-                <Label>个人简介</Label>
-                <Textarea
-                  rows={4}
-                  value={formState.bio}
-                  onChange={(event) => setFormState((prev) => ({ ...prev, bio: event.target.value }))}
-                />
-              </div>
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <DialogFooter>
-              <Button size="sm" variant="outline" type="button" onClick={closeModal} disabled={saving}>
-                取消
-              </Button>
-              <Button size="sm" type="submit" disabled={saving}>
-                {saving ? "保存中..." : "保存修改"}
-              </Button>
-            </DialogFooter>
-          </form>
+              {error && <p className="text-sm text-destructive">{error}</p>}
+            </form>
+          </DialogBody>
+          <DialogFooter>
+            <Button size="sm" variant="outline" type="button" onClick={closeModal} disabled={saving}>
+              取消
+            </Button>
+            <Button size="sm" type="submit" form="user-info-form" disabled={saving}>
+              {saving ? "保存中..." : "保存修改"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

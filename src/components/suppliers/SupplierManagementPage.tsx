@@ -471,8 +471,8 @@ export default function SupplierManagementPage() {
         )}
       </div>
 
-      <div className="rounded-lg border border-border bg-card p-3 shadow-sm">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center">
+      <div className="surface-toolbar p-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center">
           <Input
             placeholder="搜索名称 / 税号 / 联系方式"
             value={search}
@@ -480,7 +480,7 @@ export default function SupplierManagementPage() {
               setSearch(event.target.value);
               setPage(1);
             }}
-            className="md:max-w-xs"
+            className="h-10 md:max-w-xs"
           />
           <Select
             value={filterStatus}
@@ -489,7 +489,7 @@ export default function SupplierManagementPage() {
               setPage(1);
             }}
           >
-            <SelectTrigger className="md:w-40">
+            <SelectTrigger className="h-10 md:w-40">
               <SelectValue placeholder="状态" />
             </SelectTrigger>
             <SelectContent>
@@ -499,13 +499,69 @@ export default function SupplierManagementPage() {
               <SelectItem value="blacklisted">黑名单</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={() => setRefreshKey((prev) => prev + 1)} disabled={loading}>
+          <Button variant="outline" size="sm" className="h-10" onClick={() => setRefreshKey((prev) => prev + 1)} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : '刷新'}
           </Button>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+      <div className="surface-table">
+        <div className="md:hidden">
+          <div className="space-y-3 p-4">
+            {loading || permissionLoading ? (
+              <div className="rounded-2xl border border-border/60 bg-background/70 p-6 text-center text-sm text-muted-foreground">
+                数据加载中...
+              </div>
+            ) : suppliers.length ? (
+              suppliers.map((supplier) => (
+                <div key={supplier.id} className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-foreground">{supplier.name}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{supplier.category || '未分类'}</div>
+                    </div>
+                    <Badge className={cn('text-xs', statusBadgeClass[supplier.status])}>{statusLabels[supplier.status]}</Badge>
+                  </div>
+                  <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+                    <div className="flex items-center justify-between gap-3">
+                      <span>联系人</span>
+                      <span className="text-foreground">
+                        {supplier.contacts?.length ? supplier.contacts[0].name : '未填写'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span>联系方式</span>
+                      <span className="text-foreground">
+                        {supplier.contacts?.length ? (supplier.contacts[0].mobile || supplier.contacts[0].email || '—') : '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span>付款信息</span>
+                      <span className="text-foreground">
+                        {supplier.bankAccounts?.length ? supplier.bankAccounts[0].bankName : '未配置'}
+                      </span>
+                    </div>
+                  </div>
+                  {canManage && (
+                    <div className="mt-4 flex justify-end gap-2">
+                      <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => handleEditDialog(supplier)}>
+                        编辑
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-8 px-3 text-destructive" onClick={() => handleConfirmDelete(supplier)}>
+                        删除
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-6 text-center text-sm text-muted-foreground">
+                暂无数据
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="hidden md:block">
         <Table
           stickyHeader
           scrollAreaClassName="max-h-[calc(100vh-350px)] custom-scrollbar"
@@ -582,6 +638,7 @@ export default function SupplierManagementPage() {
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       <div className="flex flex-col gap-3 border-t border-transparent px-2 py-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
@@ -796,6 +853,7 @@ export default function SupplierManagementPage() {
                               name={`primary-contact-${editingSupplier?.id ?? 'new'}`}
                               checked={Boolean(contact.isPrimary)}
                               onChange={() => handleSetPrimaryContact(index)}
+                              className="h-4 w-4 accent-primary"
                             />
                             <span>主联系人</span>
                           </div>
@@ -860,6 +918,7 @@ export default function SupplierManagementPage() {
                               name={`primary-bank-${editingSupplier?.id ?? 'new'}`}
                               checked={Boolean(account.isPrimary)}
                               onChange={() => handleSetPrimaryBank(index)}
+                              className="h-4 w-4 accent-primary"
                             />
                             <span>主账户</span>
                           </div>

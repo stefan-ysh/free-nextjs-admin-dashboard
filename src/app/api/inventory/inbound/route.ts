@@ -32,7 +32,6 @@ export async function POST(request: NextRequest) {
     if (payload.quantity <= 0) {
       return NextResponse.json({ error: '数量必须大于 0' }, { status: 400 });
     }
-
     const data = await createInboundRecord(payload, permissionUser.id);
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {

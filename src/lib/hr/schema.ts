@@ -51,6 +51,7 @@ export async function ensureHrSchema() {
       last_name VARCHAR(120) NOT NULL,
       display_name VARCHAR(255),
       phone VARCHAR(60),
+      wecom_user_id VARCHAR(128),
       avatar_url TEXT,
       employee_code VARCHAR(120),
       department VARCHAR(120),
@@ -88,8 +89,21 @@ export async function ensureHrSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS hr_department_budgets (
+      department_id CHAR(36) NOT NULL,
+      budget_year INT NOT NULL,
+      budget_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
+      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+      PRIMARY KEY (department_id, budget_year),
+      CONSTRAINT fk_hr_department_budget_department FOREIGN KEY (department_id) REFERENCES hr_departments(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
   await ensureColumn('hr_employees', 'email', 'VARCHAR(255) NULL');
   await ensureColumn('hr_employees', 'password_hash', 'VARCHAR(255) NULL');
+  await ensureColumn('hr_employees', 'wecom_user_id', 'VARCHAR(128) NULL');
   await ensureColumn('hr_employees', 'roles', "JSON NOT NULL DEFAULT (JSON_ARRAY('employee'))");
   await ensureColumn('hr_employees', 'primary_role', "VARCHAR(64) NOT NULL DEFAULT 'employee'");
   await ensureColumn('hr_employees', 'bio', 'TEXT NULL');
@@ -103,6 +117,8 @@ export async function ensureHrSchema() {
   await ensureColumn('hr_employees', 'created_by', 'CHAR(36) NULL');
   await ensureColumn('hr_employees', 'last_login_at', 'DATETIME(3) NULL');
   await ensureColumn('hr_employees', 'password_updated_at', 'DATETIME(3) NULL');
+  await ensureColumn('hr_employees', 'failed_login_attempts', 'INT NOT NULL DEFAULT 0');
+  await ensureColumn('hr_employees', 'locked_until', 'DATETIME(3) NULL');
   await ensureColumn('hr_employees', 'department_id', 'CHAR(36) NULL');
   await ensureColumn('hr_employees', 'job_grade_id', 'CHAR(36) NULL');
   await ensureColumn('hr_employees', 'national_id', 'VARCHAR(64) NULL');
@@ -112,6 +128,24 @@ export async function ensureHrSchema() {
   await ensureColumn('hr_employees', 'education_background', 'VARCHAR(160) NULL');
   await safeCreateIndex('CREATE UNIQUE INDEX hr_employees_employee_code_idx ON hr_employees(employee_code)');
   await safeCreateIndex('CREATE UNIQUE INDEX hr_employees_email_idx ON hr_employees(email)');
+  try {
+    await safeCreateIndex('CREATE UNIQUE INDEX hr_employees_phone_idx ON hr_employees(phone)');
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code !== 'ER_DUP_ENTRY') {
+      throw error;
+    }
+    console.warn('[hr_employees] Duplicate phone detected; skip unique index creation.');
+  }
+  try {
+    await safeCreateIndex('CREATE UNIQUE INDEX hr_employees_wecom_user_id_idx ON hr_employees(wecom_user_id)');
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code !== 'ER_DUP_ENTRY') {
+      throw error;
+    }
+    console.warn('[hr_employees] Duplicate wecom_user_id detected; skip unique index creation.');
+  }
   await safeCreateIndex('CREATE INDEX hr_employees_department_idx ON hr_employees(department)');
   await safeCreateIndex('CREATE INDEX hr_employees_department_id_idx ON hr_employees(department_id)');
   await safeCreateIndex('CREATE INDEX hr_employees_status_idx ON hr_employees(employment_status)');
@@ -119,6 +153,7 @@ export async function ensureHrSchema() {
   await safeCreateIndex('CREATE INDEX hr_employees_manager_idx ON hr_employees(manager_id)');
   await safeCreateIndex('CREATE INDEX hr_employees_active_idx ON hr_employees(is_active)');
   await safeCreateIndex('CREATE INDEX hr_employees_primary_role_idx ON hr_employees(primary_role)');
+  await safeCreateIndex('CREATE INDEX hr_department_budgets_year_idx ON hr_department_budgets(budget_year)');
   await ensureForeignKey(
     'hr_employees',
     'fk_hr_department_link',

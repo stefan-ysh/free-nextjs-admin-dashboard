@@ -19,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
+import { formatDateOnly, toChinaDateTimeIso } from '@/lib/dates';
 import type { CalendarEventCategory, CalendarEventRecord, CalendarEventPayload } from '@/types/calendar';
 import ModalShell from '@/components/common/ModalShell';
 
@@ -78,7 +79,7 @@ function formatDateInput(value?: string) {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toISOString().slice(0, 10);
+  return formatDateOnly(date) ?? '';
 }
 
 function formatTimeInput(value?: string) {
@@ -89,8 +90,7 @@ function formatTimeInput(value?: string) {
 }
 
 function combineDateTime(date: string, time: string): string {
-  const safeTime = time || '00:00';
-  return new Date(`${date}T${safeTime}:00`).toISOString();
+  return toChinaDateTimeIso(date, time);
 }
 
 function toFormState(event: CalendarEventRecord): CalendarFormState {
@@ -324,8 +324,8 @@ const Calendar = () => {
     const endDate = formState.endDate || formState.startDate;
     const startTime = formState.allDay ? '00:00' : formState.startTime || '09:00';
     const endTime = formState.allDay ? '23:59' : formState.endTime || startTime;
-    const start = new Date(`${formState.startDate}T${startTime}:00`).getTime();
-    const end = new Date(`${endDate}T${endTime}:00`).getTime();
+    const start = new Date(toChinaDateTimeIso(formState.startDate, startTime)).getTime();
+    const end = new Date(toChinaDateTimeIso(endDate, endTime)).getTime();
     if (end < start) {
       toast.error('结束时间不能早于开始时间');
       return false;
@@ -404,7 +404,7 @@ const Calendar = () => {
 
   return (
     <TooltipProvider>
-      <div className="flex h-full flex-col rounded-2xl border border-border bg-white p-5 dark:border-border dark:bg-white/[0.03] md:p-6">
+      <div className="surface-card flex h-full flex-col p-5 md:p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">团队日程</h2>
@@ -544,8 +544,8 @@ const Calendar = () => {
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  <DatePicker label="开始日期" value={formState.startDate} onChange={(value) => setFormState((prev) => ({ ...prev, startDate: value, endDate: prev.endDate || value }))} clearable={false} />
-                  <DatePicker label="结束日期" value={formState.endDate} onChange={(value) => setFormState((prev) => ({ ...prev, endDate: value }))} clearable={false} />
+                  <DatePicker label="开始日期" value={formState.startDate} onChange={(value: string) => setFormState((prev) => ({ ...prev, startDate: value, endDate: prev.endDate || value }))} clearable={false} />
+                  <DatePicker label="结束日期" value={formState.endDate} onChange={(value: string) => setFormState((prev) => ({ ...prev, endDate: value }))} clearable={false} />
                 </div>
 
                 <div className="flex items-center justify-between rounded-lg border border-dashed border-border px-4 py-3 dark:border-border">

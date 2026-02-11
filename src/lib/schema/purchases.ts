@@ -19,6 +19,7 @@ export async function ensurePurchasesSchema() {
       id CHAR(36) NOT NULL PRIMARY KEY,
       purchase_number VARCHAR(40) NOT NULL UNIQUE,
       purchase_date DATE NOT NULL,
+      organization_type ENUM('school','company') NOT NULL DEFAULT 'company',
       item_name VARCHAR(255) NOT NULL,
       specification TEXT,
       quantity DECIMAL(10,2) NOT NULL,
@@ -45,12 +46,25 @@ export async function ensurePurchasesSchema() {
       has_project TINYINT(1) NOT NULL DEFAULT 0,
       project_id CHAR(36),
       status ENUM('draft','pending_approval','approved','rejected','paid','cancelled') NOT NULL DEFAULT 'draft',
+      reimbursement_status ENUM('none','invoice_pending','reimbursement_pending','reimbursement_rejected','reimbursed') NOT NULL DEFAULT 'none',
+      reimbursement_submitted_at DATETIME(3),
+      reimbursement_submitted_by CHAR(36),
+      reimbursement_rejected_at DATETIME(3),
+      reimbursement_rejected_by CHAR(36),
+      reimbursement_rejected_reason TEXT,
       submitted_at DATETIME(3),
+      pending_approver_id CHAR(36),
+      workflow_step_index INT,
+      workflow_nodes JSON,
       approved_at DATETIME(3),
       approved_by CHAR(36),
       rejected_at DATETIME(3),
       rejected_by CHAR(36),
       rejection_reason TEXT,
+      payment_issue_open TINYINT(1) NOT NULL DEFAULT 0,
+      payment_issue_reason TEXT,
+      payment_issue_at DATETIME(3),
+      payment_issue_by CHAR(36),
       paid_at DATETIME(3),
       paid_by CHAR(36),
       notes TEXT,
@@ -68,8 +82,12 @@ export async function ensurePurchasesSchema() {
       CONSTRAINT fk_purchases_purchaser FOREIGN KEY (purchaser_id) REFERENCES hr_employees(id) ON DELETE RESTRICT,
       CONSTRAINT fk_purchases_created_by FOREIGN KEY (created_by) REFERENCES hr_employees(id) ON DELETE RESTRICT,
       CONSTRAINT fk_purchases_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+      CONSTRAINT fk_purchases_pending_approver FOREIGN KEY (pending_approver_id) REFERENCES hr_employees(id) ON DELETE SET NULL,
+      CONSTRAINT fk_purchases_reimbursement_submitted_by FOREIGN KEY (reimbursement_submitted_by) REFERENCES hr_employees(id) ON DELETE SET NULL,
+      CONSTRAINT fk_purchases_reimbursement_rejected_by FOREIGN KEY (reimbursement_rejected_by) REFERENCES hr_employees(id) ON DELETE SET NULL,
       CONSTRAINT fk_purchases_approved_by FOREIGN KEY (approved_by) REFERENCES hr_employees(id) ON DELETE SET NULL,
       CONSTRAINT fk_purchases_rejected_by FOREIGN KEY (rejected_by) REFERENCES hr_employees(id) ON DELETE SET NULL,
+      CONSTRAINT fk_purchases_payment_issue_by FOREIGN KEY (payment_issue_by) REFERENCES hr_employees(id) ON DELETE SET NULL,
       CONSTRAINT fk_purchases_paid_by FOREIGN KEY (paid_by) REFERENCES hr_employees(id) ON DELETE SET NULL,
       CONSTRAINT fk_purchases_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -77,6 +95,11 @@ export async function ensurePurchasesSchema() {
 
   // Ensure newer columns exist for legacy databases
   await ensureColumn('purchases', 'fee_amount', "DECIMAL(12,2) NOT NULL DEFAULT 0");
+  await ensureColumn(
+    'purchases',
+    'organization_type',
+    "ENUM('school','company') NOT NULL DEFAULT 'company'"
+  );
   await ensureColumn(
     'purchases',
     'payment_type',
@@ -93,12 +116,39 @@ export async function ensurePurchasesSchema() {
   );
   await ensureColumn('purchases', 'invoice_number', 'VARCHAR(120)');
   await ensureColumn('purchases', 'invoice_issue_date', 'DATE');
+  await ensureColumn('purchases', 'pending_approver_id', 'CHAR(36) NULL');
+  await ensureColumn(
+    'purchases',
+    'reimbursement_status',
+    "ENUM('none','invoice_pending','reimbursement_pending','reimbursement_rejected','reimbursed') NOT NULL DEFAULT 'none'"
+  );
+  await ensureColumn('purchases', 'reimbursement_submitted_at', 'DATETIME(3) NULL');
+  await ensureColumn('purchases', 'reimbursement_submitted_by', 'CHAR(36) NULL');
+  await ensureColumn('purchases', 'reimbursement_rejected_at', 'DATETIME(3) NULL');
+  await ensureColumn('purchases', 'reimbursement_rejected_by', 'CHAR(36) NULL');
+  await ensureColumn('purchases', 'reimbursement_rejected_reason', 'TEXT NULL');
+  await pool.query(`
+    UPDATE purchases
+    SET reimbursement_status = CASE
+      WHEN status = 'paid' THEN 'reimbursed'
+      WHEN status = 'approved' THEN 'invoice_pending'
+      ELSE reimbursement_status
+    END
+    WHERE reimbursement_status = 'none'
+      AND status IN ('approved', 'paid')
+  `);
+  await ensureColumn('purchases', 'workflow_step_index', 'INT NULL');
+  await ensureColumn('purchases', 'workflow_nodes', 'JSON NULL');
+  await ensureColumn('purchases', 'payment_issue_open', 'TINYINT(1) NOT NULL DEFAULT 0');
+  await ensureColumn('purchases', 'payment_issue_reason', 'TEXT NULL');
+  await ensureColumn('purchases', 'payment_issue_at', 'DATETIME(3) NULL');
+  await ensureColumn('purchases', 'payment_issue_by', 'CHAR(36) NULL');
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS reimbursement_logs (
       id CHAR(36) NOT NULL PRIMARY KEY,
       purchase_id CHAR(36) NOT NULL,
-      action ENUM('submit','approve','reject','pay','cancel','withdraw') NOT NULL,
+      action ENUM('submit','approve','reject','pay','cancel','withdraw','transfer','issue','resolve') NOT NULL,
       from_status ENUM('draft','pending_approval','approved','rejected','paid','cancelled') NOT NULL,
       to_status ENUM('draft','pending_approval','approved','rejected','paid','cancelled') NOT NULL,
       operator_id CHAR(36) NOT NULL,
@@ -109,15 +159,51 @@ export async function ensurePurchasesSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
+  await pool.query(
+    "ALTER TABLE reimbursement_logs MODIFY COLUMN action ENUM('submit','approve','reject','pay','cancel','withdraw','transfer','issue','resolve') NOT NULL"
+  );
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS purchase_payments (
+      id CHAR(36) NOT NULL PRIMARY KEY,
+      purchase_id CHAR(36) NOT NULL,
+      amount DECIMAL(15,2) NOT NULL,
+      paid_at DATETIME(3) NOT NULL,
+      paid_by CHAR(36) NOT NULL,
+      note TEXT,
+      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      CONSTRAINT fk_purchase_payments_purchase FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE CASCADE,
+      CONSTRAINT fk_purchase_payments_payer FOREIGN KEY (paid_by) REFERENCES hr_employees(id) ON DELETE RESTRICT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS purchase_workflow_configs (
+      id CHAR(36) NOT NULL PRIMARY KEY,
+      workflow_key VARCHAR(64) NOT NULL UNIQUE,
+      name VARCHAR(120) NOT NULL,
+      enabled TINYINT(1) NOT NULL DEFAULT 1,
+      nodes JSON NOT NULL,
+      updated_by CHAR(36),
+      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+      CONSTRAINT fk_purchase_workflow_updated_by FOREIGN KEY (updated_by) REFERENCES hr_employees(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
   await safeCreateIndex('CREATE INDEX idx_purchases_number ON purchases(purchase_number)');
   await safeCreateIndex('CREATE INDEX idx_purchases_purchaser ON purchases(purchaser_id)');
   await safeCreateIndex('CREATE INDEX idx_purchases_status ON purchases(status)');
+  await safeCreateIndex('CREATE INDEX idx_purchases_reimbursement_status ON purchases(reimbursement_status)');
   await safeCreateIndex('CREATE INDEX idx_purchases_project ON purchases(project_id)');
   await safeCreateIndex('CREATE INDEX idx_purchases_date ON purchases(purchase_date)');
   await safeCreateIndex('CREATE INDEX idx_purchases_created_by ON purchases(created_by)');
   await safeCreateIndex('CREATE INDEX idx_purchases_supplier ON purchases(supplier_id)');
   await safeCreateIndex('CREATE INDEX idx_reimbursement_logs_purchase ON reimbursement_logs(purchase_id)');
   await safeCreateIndex('CREATE INDEX idx_reimbursement_logs_created ON reimbursement_logs(created_at)');
+  await safeCreateIndex('CREATE INDEX idx_purchase_payments_purchase ON purchase_payments(purchase_id)');
+  await safeCreateIndex('CREATE INDEX idx_purchase_payments_paid_at ON purchase_payments(paid_at)');
+  await safeCreateIndex('CREATE INDEX idx_purchase_workflow_enabled ON purchase_workflow_configs(enabled)');
 
   initialized = true;
 }

@@ -1,11 +1,14 @@
 import type { NextConfig } from "next";
 import type { RuleSetRule } from "webpack";
+import path from "path";
 
 const nextConfig: NextConfig = {
   productionBrowserSourceMaps: false,
   output: "standalone",
+  outputFileTracingRoot: path.resolve(__dirname),
   reactStrictMode: true,
   turbopack: {
+    root: path.resolve(__dirname),
     rules: {
       "*.svg": {
         loaders: ["@svgr/webpack"],

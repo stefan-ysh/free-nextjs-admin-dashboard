@@ -34,7 +34,6 @@ import {
 	JobGradeOption,
 } from './types';
 import AvatarUpload from './AvatarUpload';
-import CustomFields from './CustomFields';
 import { useEmployeeOptions } from './useEmployeeOptions';
 
 type EmployeeFormProps = {
@@ -45,11 +44,6 @@ type EmployeeFormProps = {
 	jobGradeOptions?: JobGradeOption[];
 	formId?: string;
 	hideActions?: boolean;
-};
-
-type CustomFieldRow = {
-	key: string;
-	value: string;
 };
 
 const STATUS_OPTIONS = ['active', 'on_leave', 'terminated'] as const;
@@ -75,21 +69,15 @@ const extractDateInput = (value?: string | null) => {
 	return trimmed;
 };
 
-const initializeCustomFields = (data?: Employee | null): CustomFieldRow[] => {
-	if (!data?.customFields) return [{ key: '', value: '' }];
-	const entries = Object.entries(data.customFields)
-		.filter(([key]) => typeof key === 'string')
-		.map(([key, rawValue]) => ({ key, value: rawValue == null ? '' : String(rawValue) }));
-	return entries.length ? entries : [{ key: '', value: '' }];
-};
-
 const buildDefaultValues = (data?: Employee | null): EmployeeFormValues => ({
 	employeeCode: data?.employeeCode ?? '',
+	wecomUserId: data?.wecomUserId ?? '',
 	firstName: data?.firstName ?? '',
 	lastName: data?.lastName ?? '',
 	displayName: data?.displayName ?? '',
 	email: data?.email ?? '',
 	phone: data?.phone ?? '',
+	initialPassword: '',
 	department: data?.department ?? '',
 	departmentId: data?.departmentId ?? '',
 	nationalId: data?.nationalId ?? '',
@@ -104,12 +92,12 @@ const buildDefaultValues = (data?: Employee | null): EmployeeFormValues => ({
 	address: data?.address ?? '',
 	organization: data?.organization ?? '',
 	educationBackground: data?.educationBackground ?? '',
-	customFields: initializeCustomFields(data),
 	statusChangeNote: '',
 });
 
 const employeeSchema = z.object({
 	employeeCode: z.string().optional(),
+	wecomUserId: z.string().optional(),
 	firstName: z
 		.string()
 		.min(1, '请输入名')
@@ -125,6 +113,7 @@ const employeeSchema = z.object({
 		.or(z.literal(''))
 		.optional(),
 	phone: z.string().optional(),
+	initialPassword: z.string().optional(),
 	department: z.string().optional(),
 	departmentId: z.string().optional(),
 	nationalId: z.string().optional(),
@@ -140,14 +129,6 @@ const employeeSchema = z.object({
 	organization: z.string().optional(),
 	educationBackground: z.string().optional(),
 	statusChangeNote: z.string().optional(),
-	customFields: z
-		.array(
-			z.object({
-				key: z.string().optional(),
-				value: z.string().optional(),
-			})
-		)
-		.optional(),
 });
 
 type EmployeeFormValues = z.infer<typeof employeeSchema>;
@@ -155,6 +136,7 @@ type EmployeeFormValues = z.infer<typeof employeeSchema>;
 export default function EmployeeForm({ initialData, onSubmit, onCancel, departmentOptions, jobGradeOptions, formId, hideActions = false }: EmployeeFormProps) {
 	const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
 	const [removeAvatar, setRemoveAvatar] = useState(false);
+	const isCreating = !initialData;
 
 	const { departments: availableDepartments, jobGrades: availableJobGrades } = useEmployeeOptions({
 		initialDepartments: departmentOptions,
@@ -196,21 +178,20 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 	const hasReadonlyStatus = useMemo(() => initialData?.employmentStatus === 'terminated', [initialData]);
 
 	const handleFormSubmit = handleSubmit(async (values) => {
-		const customFieldEntries = (values.customFields ?? [])
-			.filter((row) => row?.key && row.key.trim())
-			.reduce<Record<string, string>>((acc, row) => {
-				if (!row?.key) return acc;
-				acc[row.key.trim()] = row?.value?.trim() ?? '';
-				return acc;
-			}, {});
+		if (isCreating && !values.initialPassword?.trim()) {
+			form.setError('initialPassword', { message: '请输入初始密码' });
+			return;
+		}
 
 		const payload: EmployeeFormSubmitPayload = {
 			employeeCode: sanitizeText(values.employeeCode),
+			wecomUserId: sanitizeText(values.wecomUserId),
 			firstName: values.firstName.trim(),
 			lastName: values.lastName.trim(),
 			displayName: sanitizeText(values.displayName),
 			email: sanitizeText(values.email),
 			phone: sanitizeText(values.phone),
+			initialPassword: isCreating ? sanitizeText(values.initialPassword) : null,
 			department: sanitizeText(values.department),
 			departmentId: sanitizeText(values.departmentId),
 			nationalId: sanitizeText(values.nationalId),
@@ -225,7 +206,6 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 			address: sanitizeText(values.address),
 			organization: sanitizeText(values.organization),
 			educationBackground: sanitizeText(values.educationBackground),
-			customFields: Object.keys(customFieldEntries).length ? customFieldEntries : null,
 			statusChangeNote: statusChanged ? sanitizeText(values.statusChangeNote) : null,
 		};
 
@@ -258,7 +238,7 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 					disabled={formState.isSubmitting}
 				/>
 
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
 					<FormField
 						control={control}
 						name="employeeCode"
@@ -317,7 +297,7 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 					/>
 				</div>
 
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
 					<FormField
 						control={control}
 						name="email"
@@ -344,9 +324,43 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 							</FormItem>
 						)}
 					/>
+					<FormField
+						control={control}
+						name="wecomUserId"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>企业微信账号</FormLabel>
+								<FormControl>
+									<Input placeholder="企业微信 UserId，用于精准通知" {...field} />
+								</FormControl>
+								<FormDescription>用于企业微信应用消息推送，不填则回退群机器人。</FormDescription>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
 				</div>
+				{isCreating && (
+					<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+						<FormField
+							control={control}
+							name="initialPassword"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>
+										初始密码 <span className="text-destructive">*</span>
+									</FormLabel>
+									<FormControl>
+										<Input type="password" placeholder="设置初始登录密码" {...field} />
+									</FormControl>
+									<FormDescription>员工可用邮箱/手机号/员工编号登录。</FormDescription>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+					</div>
+				)}
 
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
 					<FormField
 						control={control}
 						name="nationalId"
@@ -390,7 +404,7 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 					/>
 				</div>
 
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
 					<FormField
 						control={control}
 						name="organization"
@@ -433,7 +447,7 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 					)}
 				/>
 
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
 					<FormField
 						control={control}
 						name="departmentId"
@@ -610,7 +624,7 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 					/>
 				)}
 
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
 					<FormField
 						control={control}
 						name="managerId"
@@ -638,8 +652,6 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 						)}
 					/>
 				</div>
-
-				<CustomFields control={control} name="customFields" disabled={formState.isSubmitting} />
 
 				{!hideActions && (
 					<div className="flex justify-end gap-4">

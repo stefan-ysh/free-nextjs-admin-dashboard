@@ -27,14 +27,24 @@
 git clone https://github.com/stefan-ysh/free-nextjs-admin-dashboard.git admin_cosmorigin
 cd admin_cosmorigin
 npm install
-cp .env.example .env.local
 ```
 
 1. **准备数据库**
     - 启动本地 MySQL,创建数据库 `admin_cosmorigin`
 2. **配置环境变量**
-    - 根据 `.env.example` 填写 `MYSQL_*`/`MYSQL_URL`
+    - 手动创建 `.env.local` 并填写 `MYSQL_*` 或 `MYSQL_URL`
     - 可选: 自定义 `LOCAL_STORAGE_ROOT`
+    - 示例:
+      ```dotenv
+      MYSQL_URL="mysql://root:password@127.0.0.1:3306/admin_cosmorigin"
+      # 或者拆分配置
+      # MYSQL_HOST="127.0.0.1"
+      # MYSQL_PORT="3306"
+      # MYSQL_USER="root"
+      # MYSQL_PASSWORD="password"
+      # MYSQL_DATABASE="admin_cosmorigin"
+      LOCAL_STORAGE_ROOT="/Users/you/Documents/admin_cosmorigin-storage"
+      ```
 3. **创建管理员 (可选)**
     ```bash
     npm run seed:admin -- admin@example.com SuperSecurePass finance_admin
@@ -91,7 +101,33 @@ cp .env.example .env.local
 - [LOCAL_STORAGE_SETUP.md](./docs/LOCAL_STORAGE_SETUP.md): 本地文件目录与权限
 - [DEPLOYMENT.md](./docs/DEPLOYMENT.md): 本地 / 自托管部署示例
 - [FINANCE_UI_UPDATE.md](./docs/FINANCE_UI_UPDATE.md): UI & 交互调整记录
-- [DEV_STATUS.md](./docs/DEV_STATUS.md): 当前开发状态与测试项
+- [TEST_CHECKLIST.md](./docs/TEST_CHECKLIST.md): 端到端测试清单
+- [PROCUREMENT_SYSTEM_MASTER_LIST.md](./docs/PROCUREMENT_SYSTEM_MASTER_LIST.md): 需求追踪与交付状态
+- [WECOM_INTEGRATION.md](./docs/WECOM_INTEGRATION.md): 企业微信通知接入与二次开发说明
+
+## 🔄 采购与报销流程（当前实现）
+
+当前流程为：
+
+`采购申请 -> 管理员审批 -> 通知申请人可采购 -> 货到补发票并提交报销 -> 财务确认打款 -> 通知申请人`
+
+关键规则：
+
+1. 提交采购不再强制上传发票。
+2. 审批通过后进入报销状态 `invoice_pending`。
+3. 申请人点击“提交报销”后才进入财务待办（`reimbursement_pending`）。
+4. 财务完成打款后，报销状态更新为 `reimbursed`。
+
+## 🧩 表单抽屉宽度规范
+
+为避免“抽屉表单过窄、字段挤压”，项目统一采用 3 档宽度常量：
+
+- `FORM_DRAWER_WIDTH_COMPACT`: `w-full sm:max-w-2xl`
+- `FORM_DRAWER_WIDTH_STANDARD`: `w-full sm:max-w-3xl lg:max-w-4xl`
+- `FORM_DRAWER_WIDTH_WIDE`: `w-full sm:max-w-4xl xl:max-w-5xl`
+
+定义位置：`src/components/common/form-drawer-width.ts`。  
+新增表单抽屉时请优先复用常量，避免重复硬编码 `sm:max-w-*`。
 
 ## 📁 项目结构 (核心部分)
 ```

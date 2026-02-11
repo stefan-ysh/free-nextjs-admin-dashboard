@@ -74,11 +74,11 @@ export default function SignInForm() {
       <form onSubmit={handleSubmit}>
         <div className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="email">邮箱 / 账号</Label>
+            <Label htmlFor="email">账号</Label>
             <Input
               id="email"
               name="email"
-              placeholder="name@example.com"
+              placeholder="邮箱/手机号/员工编号"
               type="text"
               autoCapitalize="none"
               autoComplete="email"
@@ -97,7 +97,7 @@ export default function SignInForm() {
               <Input
                 id="password"
                 name="password"
-                placeholder="••••••••"
+                placeholder="请输入"
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
                 disabled={isLoading}

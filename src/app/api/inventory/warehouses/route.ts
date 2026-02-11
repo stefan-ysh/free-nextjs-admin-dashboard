@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { createWarehouse, listWarehouses } from '@/lib/db/inventory';
+import { listOperationalWarehouses } from '@/lib/db/inventory';
 import type { WarehousePayload } from '@/types/inventory';
 import { sanitizeWarehousePayload, validateWarehousePayload } from './validator';
 
@@ -15,7 +15,7 @@ function isDuplicateError(error: unknown) {
 
 export async function GET() {
   try {
-    const data = await listWarehouses();
+    const data = await listOperationalWarehouses();
     return NextResponse.json({ data });
   } catch (error) {
     console.error('[inventory.warehouses] failed to load warehouses', error);
@@ -25,15 +25,13 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const raw = (await request.json()) as Partial<WarehousePayload>;
-    const payload = sanitizeWarehousePayload(raw);
-    const errorMessage = validateWarehousePayload(payload);
-    if (errorMessage) {
-      return NextResponse.json({ error: errorMessage }, { status: 400 });
-    }
-
-    const data = await createWarehouse(payload as WarehousePayload);
-    return NextResponse.json({ data }, { status: 201 });
+    const _raw = (await request.json()) as Partial<WarehousePayload>;
+    const _payload = sanitizeWarehousePayload(_raw);
+    const _errorMessage = validateWarehousePayload(_payload);
+    return NextResponse.json(
+      { error: '仓库已固定为“学校/单位”两类，不支持新增。' },
+      { status: 403 }
+    );
   } catch (error) {
     console.error('[inventory.warehouses] failed to create warehouse', error);
     if (isDuplicateError(error)) {

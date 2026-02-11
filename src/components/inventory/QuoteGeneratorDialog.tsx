@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 import {
     Dialog,
+    DialogBody,
     DialogContent,
     DialogDescription,
     DialogFooter,
@@ -109,7 +110,7 @@ export default function QuoteGeneratorDialog({ selectedItems, onOpenChange, trig
                     </Button>
                 )}
             </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+            <DialogContent className="max-w-4xl">
                 <DialogHeader>
                     <DialogTitle>生成报价单</DialogTitle>
                     <DialogDescription>
@@ -117,7 +118,7 @@ export default function QuoteGeneratorDialog({ selectedItems, onOpenChange, trig
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="flex-1 overflow-y-auto py-4 space-y-6">
+                <DialogBody className="space-y-6">
                     <div className="grid gap-2">
                         <Label htmlFor="customer">客户名称</Label>
                         <Input
@@ -215,7 +216,7 @@ export default function QuoteGeneratorDialog({ selectedItems, onOpenChange, trig
                             </table>
                         </div>
                     </div>
-                </div>
+                </DialogBody>
 
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setOpen(false)}>取消</Button>

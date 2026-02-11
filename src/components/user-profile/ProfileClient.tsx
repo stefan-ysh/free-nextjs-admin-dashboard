@@ -272,7 +272,7 @@ export default function ProfileClient() {
   );
 
   return (
-    <div className="rounded-2xl border border-border bg-white p-5 dark:border-border dark:bg-white/[0.03] lg:p-6">
+    <div className="surface-card p-5 lg:p-6">
       {profileError && (
         <p className="mb-4 text-sm text-error-500">{profileError}</p>
       )}

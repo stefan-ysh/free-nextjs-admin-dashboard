@@ -56,7 +56,7 @@ export default function ContractsClient() {
 	return (
 		<div className="space-y-6">
 
-			<div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+			<div className="surface-card p-6">
 				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div>
 						<div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">

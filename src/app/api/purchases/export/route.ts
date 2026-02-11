@@ -29,6 +29,7 @@ function buildCsv(records: PurchaseRecord[]): string {
     '采购单号',
     '状态',
     '采购日期',
+    '采购组织',
     '物品名称',
     '规格/型号',
     '数量',
@@ -58,6 +59,11 @@ function buildCsv(records: PurchaseRecord[]): string {
   const channelLabels: Record<PurchaseRecord['purchaseChannel'], string> = {
     online: '线上',
     offline: '线下',
+  };
+
+  const organizationLabels: Record<PurchaseRecord['organizationType'], string> = {
+    school: '学校',
+    company: '单位',
   };
 
   const paymentLabels: Record<PurchaseRecord['paymentMethod'], string> = {
@@ -92,6 +98,7 @@ function buildCsv(records: PurchaseRecord[]): string {
     purchase.purchaseNumber,
     getPurchaseStatusText(purchase.status),
     purchase.purchaseDate,
+    organizationLabels[purchase.organizationType] ?? purchase.organizationType,
     purchase.itemName,
     purchase.specification ?? '',
     purchase.quantity,

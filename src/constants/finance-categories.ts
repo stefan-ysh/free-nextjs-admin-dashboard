@@ -35,6 +35,11 @@ const FALLBACK_GROUP_LABEL: Record<TransactionType, string> = {
   [TransactionType.EXPENSE]: '其他',
 };
 
+const DEFAULT_PINNED_CATEGORY_LABELS: Record<TransactionType, string[]> = {
+  [TransactionType.INCOME]: ['主营业务收入', '投资收益', '其他收入'],
+  [TransactionType.EXPENSE]: ['办公费用', '差旅及交通', '加班餐费', '工资薪酬', '租金及物业', '通讯费'],
+};
+
 export const FINANCE_CATEGORY_OPTIONS: FinanceCategoryOption[] = [
   // ==================== 收入类别 ====================
   {
@@ -316,6 +321,10 @@ export function getDefaultCategoryLabels(type: TransactionType): string[] {
   return FINANCE_CATEGORY_OPTIONS.filter((option) => option.type === type).map((option) => option.label);
 }
 
+export function getPinnedCategoryLabels(type: TransactionType): string[] {
+  return DEFAULT_PINNED_CATEGORY_LABELS[type] ?? [];
+}
+
 export function matchCategoryLabel(type: TransactionType, rawName?: string | null): string | undefined {
   if (!rawName) return undefined;
   const normalized = rawName.trim();
@@ -328,11 +337,16 @@ export function matchCategoryLabel(type: TransactionType, rawName?: string | nul
   return aliasMatch?.label;
 }
 
-export function getCategoryGroups(type: TransactionType, labels?: string[]): FinanceCategoryGroup[] {
+export function getCategoryGroups(
+  type: TransactionType,
+  labels?: string[],
+  pinnedLabels: string[] = []
+): FinanceCategoryGroup[] {
   const orderedGroups = GROUP_ORDER[type];
   const fallbackGroup = FALLBACK_GROUP_LABEL[type];
   const availableLabels = labels ? new Set(labels) : undefined;
   const grouped = new Map<string, FinanceCategoryOption[]>();
+  const optionsByLabel = new Map<string, FinanceCategoryOption>();
 
   const registerOption = (option: FinanceCategoryOption) => {
     const groupLabel = option.group || fallbackGroup;
@@ -340,6 +354,7 @@ export function getCategoryGroups(type: TransactionType, labels?: string[]): Fin
       grouped.set(groupLabel, []);
     }
     grouped.get(groupLabel)!.push(option);
+    optionsByLabel.set(option.label, option);
   };
 
   FINANCE_CATEGORY_OPTIONS.forEach((option) => {
@@ -360,10 +375,30 @@ export function getCategoryGroups(type: TransactionType, labels?: string[]): Fin
     });
   }
 
-  return orderedGroups
+  const pinnedSet = new Set(pinnedLabels);
+  const pinnedOptions = pinnedLabels
+    .map((label) => optionsByLabel.get(label))
+    .filter((option): option is FinanceCategoryOption => Boolean(option));
+
+  if (pinnedOptions.length) {
+    grouped.forEach((options, groupLabel) => {
+      grouped.set(
+        groupLabel,
+        options.filter((option) => !pinnedSet.has(option.label))
+      );
+    });
+  }
+
+  const ordered = orderedGroups
     .map((groupLabel) => ({
       label: groupLabel,
       options: grouped.get(groupLabel) ?? [],
     }))
     .filter((group) => group.options.length);
+
+  if (!pinnedOptions.length) {
+    return ordered;
+  }
+
+  return [{ label: '常用', options: pinnedOptions }, ...ordered];
 }

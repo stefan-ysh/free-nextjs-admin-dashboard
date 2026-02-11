@@ -74,6 +74,48 @@ function sanitizeSortOrder(value: unknown): number {
   return Math.round(num);
 }
 
+async function seedDefaultDepartments(): Promise<void> {
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'SELECT COUNT(*) AS total FROM hr_departments'
+  );
+  const total = Number(rows[0]?.total ?? 0);
+  if (total > 0) return;
+
+  const defaults: Array<{
+    name: string;
+    code: string;
+    description: string;
+    sortOrder: number;
+  }> = [
+    { name: '总经办', code: 'EXEC', description: '公司管理与战略决策', sortOrder: 10 },
+    { name: '行政人事部', code: 'HR', description: '行政、人事与企业文化', sortOrder: 20 },
+    { name: '财务部', code: 'FIN', description: '财务核算与资金管理', sortOrder: 30 },
+    { name: '采购部', code: 'PROC', description: '采购与供应资源管理', sortOrder: 40 },
+    { name: '供应链与仓储', code: 'SCM', description: '仓储、物流与供应链协同', sortOrder: 50 },
+    { name: '运营部', code: 'OPS', description: '业务运营与交付管理', sortOrder: 60 },
+    { name: '销售部', code: 'SALES', description: '业务拓展与客户管理', sortOrder: 70 },
+    { name: '市场部', code: 'MKT', description: '品牌与市场推广', sortOrder: 80 },
+    { name: '客服与支持', code: 'CS', description: '客户支持与售后服务', sortOrder: 90 },
+    { name: '研发部', code: 'RND', description: '产品与技术研发', sortOrder: 100 },
+    { name: '信息技术部', code: 'IT', description: '内部系统与信息化支持', sortOrder: 110 },
+    { name: '质量管理部', code: 'QA', description: '质量体系与流程保障', sortOrder: 120 },
+    { name: '法务与合规', code: 'LEGAL', description: '合同与合规管理', sortOrder: 130 },
+    { name: '项目管理部', code: 'PMO', description: '项目管理与跨部门协作', sortOrder: 140 },
+  ];
+
+  const insertSql = `INSERT INTO hr_departments (id, name, code, parent_id, description, sort_order)
+    VALUES (?, ?, ?, NULL, ?, ?)`;
+  for (const dept of defaults) {
+    await pool.query(insertSql, [
+      randomUUID(),
+      dept.name,
+      dept.code,
+      dept.description,
+      dept.sortOrder,
+    ]);
+  }
+}
+
 async function assertUniqueCode(code: string | null, excludeId?: string) {
   if (!code) return;
   const params: unknown[] = [code];
@@ -120,6 +162,7 @@ export async function getDepartmentById(id: string): Promise<DepartmentRecord | 
 
 export async function listDepartments(): Promise<DepartmentRecord[]> {
   await ensureHrSchema();
+  await seedDefaultDepartments();
   const [rows] = await pool.query<RawDepartmentRow[]>(
     `SELECT id, name, code, parent_id, description, sort_order, created_at, updated_at
      FROM hr_departments

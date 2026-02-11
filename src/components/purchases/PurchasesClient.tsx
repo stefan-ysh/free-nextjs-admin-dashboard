@@ -7,35 +7,46 @@ import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import ProjectSelector from '@/components/common/ProjectSelector';
+import { FORM_DRAWER_WIDTH_WIDE } from '@/components/common/form-drawer-width';
 import SupplierSelector from '@/components/common/SupplierSelector';
 import DatePicker from '@/components/ui/DatePicker';
-import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
+import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import UserSelect from '@/components/common/UserSelect';
 import PurchaseDetailModal from './PurchaseDetailModal';
 import PurchaseTable, { type PurchaseRowPermissions } from './PurchaseTable';
+import PurchasePayDialog from './PurchasePayDialog';
+import PurchaseInboundDrawer from './PurchaseInboundDrawer';
 import RejectionReasonDialog from './RejectionReasonDialog';
+import ApprovalCommentDialog from './ApprovalCommentDialog';
+import TransferApprovalDialog from './TransferApprovalDialog';
 import {
   type PurchaseDetail,
   type PurchaseRecord,
   type PurchaseStatus,
   type PurchaseChannel,
+  type PurchaseOrganization,
   type PaymentMethod,
   type PurchaseStats,
   PURCHASE_STATUSES,
   PURCHASE_CHANNELS,
+  PURCHASE_ORGANIZATIONS,
   PAYMENT_METHODS,
   isPurchaseSubmittable,
   isPurchaseWithdrawable,
   isPurchaseApprovable,
   isPurchasePayable,
+  isReimbursementSubmittable,
   getPurchaseStatusText,
 } from '@/types/purchase';
 import { canDeletePurchase, canEditPurchase } from '@/lib/permissions';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useConfirm } from '@/hooks/useConfirm';
+import { formatDateOnly } from '@/lib/dates';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
@@ -58,6 +69,7 @@ type PurchaseFilters = {
   search: string;
   status: 'all' | PurchaseStatus;
   purchaseChannel: 'all' | PurchaseChannel;
+  organizationType: 'all' | PurchaseOrganization;
   paymentMethod: 'all' | PaymentMethod;
   startDate: string | null;
   endDate: string | null;
@@ -72,6 +84,7 @@ const DEFAULT_FILTERS: PurchaseFilters = {
   search: '',
   status: 'all',
   purchaseChannel: 'all',
+  organizationType: 'all',
   paymentMethod: 'all',
   startDate: null,
   endDate: null,
@@ -85,6 +98,11 @@ const DEFAULT_FILTERS: PurchaseFilters = {
 const CHANNEL_LABELS: Record<PurchaseChannel, string> = {
   online: '线上',
   offline: '线下',
+};
+
+const ORGANIZATION_LABELS: Record<PurchaseOrganization, string> = {
+  school: '学校',
+  company: '单位',
 };
 
 const PAYMENT_LABELS: Record<PaymentMethod, string> = {
@@ -102,6 +120,7 @@ const amountFormatter = new Intl.NumberFormat('zh-CN', {
 });
 
 function createFallbackDetail(record: PurchaseRecord): PurchaseDetail {
+  const dueAmount = record.totalAmount + (record.feeAmount ?? 0);
   return {
     ...record,
     purchaser: {
@@ -115,8 +134,13 @@ function createFallbackDetail(record: PurchaseRecord): PurchaseDetail {
       ? { id: record.projectId, projectCode: record.projectId, projectName: '—' }
       : null,
     approver: record.approvedBy ? { id: record.approvedBy, displayName: record.approvedBy } : null,
+    pendingApprover: record.pendingApproverId ? { id: record.pendingApproverId, displayName: record.pendingApproverId } : null,
     rejecter: record.rejectedBy ? { id: record.rejectedBy, displayName: record.rejectedBy } : null,
     payer: record.paidBy ? { id: record.paidBy, displayName: record.paidBy } : null,
+    payments: [],
+    paidAmount: 0,
+    remainingAmount: dueAmount,
+    dueAmount,
     logs: [],
     supplier: null,
   };
@@ -133,6 +157,7 @@ function buildQuery(
   if (filters.search.trim()) params.set('search', filters.search.trim());
   if (filters.status !== 'all') params.set('status', filters.status);
   if (filters.purchaseChannel !== 'all') params.set('purchaseChannel', filters.purchaseChannel);
+  if (filters.organizationType !== 'all') params.set('organizationType', filters.organizationType);
   if (filters.paymentMethod !== 'all') params.set('paymentMethod', filters.paymentMethod);
   if (filters.startDate) params.set('startDate', filters.startDate);
   if (filters.endDate) params.set('endDate', filters.endDate);
@@ -179,6 +204,7 @@ type PermissionSnapshot = {
   canApprove: boolean;
   canReject: boolean;
   canPay: boolean;
+  canReceive: boolean;
 };
 
 export default function PurchasesClient() {
@@ -211,6 +237,26 @@ export default function PurchasesClient() {
     open: false,
     purchase: null,
   });
+  const [withdrawDialog, setWithdrawDialog] = useState<{ open: boolean; purchase: PurchaseRecord | PurchaseDetail | null }>({
+    open: false,
+    purchase: null,
+  });
+  const [approveDialog, setApproveDialog] = useState<{ open: boolean; purchase: PurchaseRecord | PurchaseDetail | null }>({
+    open: false,
+    purchase: null,
+  });
+  const [transferDialog, setTransferDialog] = useState<{ open: boolean; purchase: PurchaseRecord | PurchaseDetail | null }>({
+    open: false,
+    purchase: null,
+  });
+  const [payDialog, setPayDialog] = useState<{ open: boolean; purchase: PurchaseRecord | PurchaseDetail | null }>({
+    open: false,
+    purchase: null,
+  });
+  const [inboundDrawer, setInboundDrawer] = useState<{ open: boolean; purchase: PurchaseRecord | PurchaseDetail | null }>({
+    open: false,
+    purchase: null,
+  });
   const confirm = useConfirm();
 
   const permissions: PermissionSnapshot = useMemo(
@@ -222,11 +268,12 @@ export default function PurchasesClient() {
       canApprove: hasPermission('PURCHASE_APPROVE'),
       canReject: hasPermission('PURCHASE_REJECT'),
       canPay: hasPermission('PURCHASE_PAY'),
+      canReceive: hasPermission('INVENTORY_OPERATE_INBOUND'),
     }),
     [hasPermission]
   );
 
-  const canViewPurchases = permissions.canViewAll || permissions.canViewDepartment;
+  const canViewPurchases = permissions.canViewAll || permissions.canViewDepartment || permissions.canCreate;
 
   const handleFilterChange = useCallback((patch: Partial<PurchaseFilters>) => {
     startTransition(() => {
@@ -440,7 +487,8 @@ export default function PurchasesClient() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `purchases-${new Date().toISOString().split('T')[0]}.csv`;
+      const today = formatDateOnly(new Date()) ?? new Date().toISOString().split('T')[0];
+      link.download = `purchases-${today}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -501,6 +549,13 @@ export default function PurchasesClient() {
         key: 'channel',
         label: `渠道：${CHANNEL_LABELS[filters.purchaseChannel]}`,
         onRemove: () => handleFilterChange({ purchaseChannel: 'all' }),
+      });
+    }
+    if (filters.organizationType !== 'all') {
+      chips.push({
+        key: 'organization',
+        label: `组织：${ORGANIZATION_LABELS[filters.organizationType]}`,
+        onRemove: () => handleFilterChange({ organizationType: 'all' }),
       });
     }
     if (filters.paymentMethod !== 'all') {
@@ -568,9 +623,11 @@ export default function PurchasesClient() {
         }
         setReloadToken((token) => token + 1);
         toast.success(options?.successMessage ?? '操作已完成');
+        return true;
       } catch (err) {
         console.error('采购操作失败', err);
         toast.error(err instanceof Error ? err.message : '操作失败，请稍后再试');
+        return false;
       } finally {
         setMutatingId(null);
       }
@@ -589,29 +646,21 @@ export default function PurchasesClient() {
   };
 
   const handleWithdraw = async (purchase: PurchaseRecord) => {
-    const confirmed = await confirm({
-      title: '确定撤回该采购申请吗？',
-      confirmText: '撤回',
-      cancelText: '取消',
-    });
-    if (!confirmed) return;
-    void performAction(purchase.id, 'withdraw', {}, { successMessage: '采购申请已撤回' });
+    setWithdrawDialog({ open: true, purchase });
   };
 
-  const handleApprove = async (purchase: PurchaseRecord) => {
-    const confirmed = await confirm({
-      title: '确认通过该采购申请？',
-      confirmText: '通过',
-      cancelText: '取消',
-    });
-    if (!confirmed) return;
-    void performAction(purchase.id, 'approve', {}, { successMessage: '采购申请已通过审批' });
+  const handleApprove = (purchase: PurchaseRecord) => {
+    setApproveDialog({ open: true, purchase });
   };
 
   const rejecting = Boolean(rejectDialog.purchase && mutatingId === rejectDialog.purchase.id);
 
   const handleReject = (purchase: PurchaseRecord) => {
     setRejectDialog({ open: true, purchase });
+  };
+
+  const handleTransfer = (purchase: PurchaseRecord) => {
+    setTransferDialog({ open: true, purchase });
   };
 
   const handleRejectDialogClose = () => {
@@ -625,15 +674,93 @@ export default function PurchasesClient() {
     setRejectDialog({ open: false, purchase: null });
   };
 
-  const handlePay = async (purchase: PurchaseRecord) => {
+  const handleWithdrawDialogClose = () => {
+    if (mutatingId && withdrawDialog.purchase && mutatingId === withdrawDialog.purchase.id) return;
+    setWithdrawDialog({ open: false, purchase: null });
+  };
+
+  const handleWithdrawSubmit = async (reason: string) => {
+    if (!withdrawDialog.purchase) return;
+    await performAction(withdrawDialog.purchase.id, 'withdraw', { reason }, { successMessage: '采购申请已撤回' });
+    setWithdrawDialog({ open: false, purchase: null });
+  };
+
+  const handlePay = (purchase: PurchaseRecord | PurchaseDetail) => {
+    setPayDialog({ open: true, purchase });
+  };
+
+  const handleSubmitReimbursement = async (purchase: PurchaseRecord) => {
     const confirmed = await confirm({
-      title: '确认标记该采购为已打款？',
-      description: '此操作表明款项已发放。',
-      confirmText: '确认打款',
+      title: '确认提交报销申请？',
+      description: '提交后将通知财务进入待办队列。',
+      confirmText: '提交报销',
       cancelText: '取消',
     });
     if (!confirmed) return;
-    void performAction(purchase.id, 'pay', {}, { successMessage: '采购已标记为已打款' });
+    void performAction(
+      purchase.id,
+      'submit_reimbursement',
+      {},
+      { successMessage: '报销申请已提交，等待财务确认' }
+    );
+  };
+
+  const handleReceive = (purchase: PurchaseRecord | PurchaseDetail) => {
+    setInboundDrawer({ open: true, purchase });
+  };
+
+  const handlePayDialogClose = () => {
+    if (mutatingId && payDialog.purchase && mutatingId === payDialog.purchase.id) return;
+    setPayDialog({ open: false, purchase: null });
+  };
+
+  const handleApproveDialogClose = () => {
+    if (mutatingId && approveDialog.purchase && mutatingId === approveDialog.purchase.id) return;
+    setApproveDialog({ open: false, purchase: null });
+  };
+
+  const handleApproveSubmit = async (comment: string) => {
+    if (!approveDialog.purchase) return;
+    const success = await performAction(
+      approveDialog.purchase.id,
+      'approve',
+      { comment },
+      { successMessage: '采购申请已通过审批' }
+    );
+    if (success) {
+      setApproveDialog({ open: false, purchase: null });
+    }
+  };
+
+  const handlePaySubmit = async (amount: number, note?: string) => {
+    if (!payDialog.purchase) return;
+    const success = await performAction(
+      payDialog.purchase.id,
+      'pay',
+      { amount, note },
+      { successMessage: '已记录打款' }
+    );
+    if (success) {
+      setPayDialog({ open: false, purchase: null });
+    }
+  };
+
+  const handleTransferDialogClose = () => {
+    if (mutatingId && transferDialog.purchase && mutatingId === transferDialog.purchase.id) return;
+    setTransferDialog({ open: false, purchase: null });
+  };
+
+  const handleTransferSubmit = async (payload: { approverId: string; comment: string }) => {
+    if (!transferDialog.purchase) return;
+    const success = await performAction(
+      transferDialog.purchase.id,
+      'transfer',
+      { toApproverId: payload.approverId, comment: payload.comment },
+      { successMessage: '已转交审批' }
+    );
+    if (success) {
+      setTransferDialog({ open: false, purchase: null });
+    }
   };
 
   const handleDelete = async (purchase: PurchaseRecord) => {
@@ -668,10 +795,13 @@ export default function PurchasesClient() {
         return {
           canEdit: false,
           canDelete: false,
+          canDuplicate: false,
           canSubmit: false,
           canApprove: false,
+          canTransfer: false,
           canReject: false,
           canPay: false,
+          canSubmitReimbursement: false,
           canWithdraw: false,
         };
       }
@@ -680,18 +810,47 @@ export default function PurchasesClient() {
       return {
         canEdit: canEditPurchase(permissionUser, { createdBy: purchase.createdBy, status: purchase.status }),
         canDelete: canDeletePurchase(permissionUser, { createdBy: purchase.createdBy, status: purchase.status }),
+        canDuplicate: permissions.canCreate && (isOwner || permissions.canViewAll),
         canSubmit: isOwner && isPurchaseSubmittable(purchase.status),
         canWithdraw: isOwner && isPurchaseWithdrawable(purchase.status),
         canApprove: permissions.canApprove && isPurchaseApprovable(purchase.status),
+        canTransfer: permissions.canApprove && isPurchaseApprovable(purchase.status),
         canReject: permissions.canReject && isPurchaseApprovable(purchase.status),
-        canPay: permissions.canPay && isPurchasePayable(purchase.status),
+        canPay:
+          permissions.canPay &&
+          isPurchasePayable(purchase.status) &&
+          purchase.reimbursementStatus === 'reimbursement_pending',
+        canSubmitReimbursement: isOwner && isReimbursementSubmittable(purchase),
       };
     },
-    [permissionUser, permissions.canApprove, permissions.canPay, permissions.canReject]
+    [permissionUser, permissions.canApprove, permissions.canCreate, permissions.canPay, permissions.canReject, permissions.canViewAll]
   );
 
   const handleEdit = (purchase: PurchaseRecord) => {
     router.push(`/purchases/${purchase.id}/edit`);
+  };
+
+  const handleDuplicate = async (purchase: PurchaseRecord) => {
+    setMutatingId(purchase.id);
+    try {
+      const response = await fetch(`/api/purchases/${purchase.id}/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'duplicate' }),
+      });
+      const payload: PurchaseActionResponse = await response.json();
+      if (!response.ok || !payload.success || !payload.data) {
+        throw new Error(payload.error || '复制申请失败');
+      }
+      toast.success('已复制为新草稿，正在跳转编辑页');
+      router.push(`/purchases/${payload.data.id}/edit`);
+      router.refresh();
+    } catch (err) {
+      console.error('复制采购失败', err);
+      toast.error(err instanceof Error ? err.message : '复制失败，请稍后再试');
+    } finally {
+      setMutatingId(null);
+    }
   };
 
   const handleCloseDetail = () => {
@@ -701,6 +860,11 @@ export default function PurchasesClient() {
   };
 
   const selectedPurchasePermissions = selectedPurchase ? getRowPermissions(selectedPurchase) : undefined;
+  const canReceive = Boolean(
+    permissions.canReceive &&
+    selectedPurchase &&
+    (selectedPurchase.status === 'approved' || selectedPurchase.status === 'paid')
+  );
   const selectedPurchaseBusy = selectedPurchase ? mutatingId === selectedPurchase.id : false;
 
   if (permissionLoading) {
@@ -714,7 +878,7 @@ export default function PurchasesClient() {
   if (!canViewPurchases) {
     return (
       <div className="rounded-lg border border-rose-200 bg-white p-6 text-sm text-rose-600 shadow-sm dark:border-rose-900/60 dark:bg-gray-900 dark:text-rose-200">
-        当前账户无权访问采购模块。需要 PURCHASE_VIEW_ALL 或 PURCHASE_VIEW_DEPARTMENT 权限，请联系管理员开通。
+        当前账户无权访问采购模块。需要 PURCHASE_CREATE、PURCHASE_VIEW_ALL 或 PURCHASE_VIEW_DEPARTMENT 权限，请联系管理员开通。
       </div>
     );
   }
@@ -762,15 +926,15 @@ export default function PurchasesClient() {
       </div>
 
       {/* Filters & Actions Bar */}
-      <div className="rounded-lg border border-border bg-card p-3 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+      <div className="surface-toolbar p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           {/* Search Input */}
-          <div className="relative flex-1">
-            <input
+          <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+            <Input
               value={filters.search}
               onChange={(event) => handleFilterChange({ search: event.target.value })}
               placeholder="按单号 / 物品 / 用途检索"
-              className="h-9 w-full rounded-md border border-border px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
+              className="h-10 w-full"
             />
           </div>
 
@@ -782,104 +946,134 @@ export default function PurchasesClient() {
                   value={filters.purchaserId}
                   onChange={(val) => handleFilterChange({ purchaserId: val })}
                   placeholder="筛选申请人..."
-                  className="h-9"
+                  className="h-10"
                 />
               </div>
             )}
 
             <Drawer open={filterSheetOpen} onOpenChange={setFilterSheetOpen} direction="right">
               <DrawerTrigger asChild>
-                <button
-                  type="button"
-                  className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm text-gray-700 hover:bg-gray-100 dark:border-border dark:text-gray-200"
-                >
-                  筛选条件
+                <Button variant="outline" size="sm" className="h-10 px-4">
+                  筛选
                   {activeFilterChips.length > 0 && (
-                    <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-blue-600/10 px-1.5 text-xs font-semibold text-blue-600 dark:bg-blue-500/20 dark:text-blue-200">
+                    <Badge className="ml-1 rounded-full px-2 py-0 text-[10px]" variant="secondary">
                       {activeFilterChips.length}
-                    </span>
+                    </Badge>
                   )}
-                </button>
+                </Button>
               </DrawerTrigger>
-              <DrawerContent side="right" className="flex h-full flex-col sm:max-w-xl">
-                <DrawerHeader className="border-b px-6 py-4">
+              <DrawerContent side="right" className={FORM_DRAWER_WIDTH_WIDE}>
+                <DrawerHeader>
                   <DrawerTitle>筛选条件</DrawerTitle>
                   <DrawerDescription>组合多个条件以快速定位采购记录。</DrawerDescription>
                 </DrawerHeader>
-                <div className="flex-1 overflow-y-auto px-6 py-4">
+                <DrawerBody>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">状态</label>
-                      <select
+                      <Select
                         value={filters.status}
-                        onChange={(event) => handleFilterChange({ status: event.target.value as PurchaseFilters['status'] })}
-                        className="h-10 w-full rounded-md border border-border px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
+                        onValueChange={(value) => handleFilterChange({ status: value as PurchaseFilters['status'] })}
                       >
-                        <option value="all">全部状态</option>
-                        {PURCHASE_STATUSES.map((status) => (
-                          <option key={status} value={status}>
-                            {getPurchaseStatusText(status)}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="h-10">
+                          <SelectValue placeholder="全部状态" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">全部状态</SelectItem>
+                          {PURCHASE_STATUSES.map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {getPurchaseStatusText(status)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">渠道</label>
-                      <select
+                      <Select
                         value={filters.purchaseChannel}
-                        onChange={(event) => handleFilterChange({ purchaseChannel: event.target.value as PurchaseFilters['purchaseChannel'] })}
-                        className="h-10 w-full rounded-md border border-border px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
+                        onValueChange={(value) => handleFilterChange({ purchaseChannel: value as PurchaseFilters['purchaseChannel'] })}
                       >
-                        <option value="all">全部渠道</option>
-                        {PURCHASE_CHANNELS.map((channel) => (
-                          <option key={channel} value={channel}>
-                            {CHANNEL_LABELS[channel]}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="h-10">
+                          <SelectValue placeholder="全部渠道" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">全部渠道</SelectItem>
+                          {PURCHASE_CHANNELS.map((channel) => (
+                            <SelectItem key={channel} value={channel}>
+                              {CHANNEL_LABELS[channel]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">组织</label>
+                      <Select
+                        value={filters.organizationType}
+                        onValueChange={(value) => handleFilterChange({ organizationType: value as PurchaseFilters['organizationType'] })}
+                      >
+                        <SelectTrigger className="h-10">
+                          <SelectValue placeholder="全部组织" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">全部组织</SelectItem>
+                          {PURCHASE_ORGANIZATIONS.map((org) => (
+                            <SelectItem key={org} value={org}>
+                              {ORGANIZATION_LABELS[org]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">付款方式</label>
-                      <select
+                      <Select
                         value={filters.paymentMethod}
-                        onChange={(event) => handleFilterChange({ paymentMethod: event.target.value as PurchaseFilters['paymentMethod'] })}
-                        className="h-10 w-full rounded-md border border-border px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
+                        onValueChange={(value) => handleFilterChange({ paymentMethod: value as PurchaseFilters['paymentMethod'] })}
                       >
-                        <option value="all">全部付款方式</option>
-                        {PAYMENT_METHODS.map((method) => (
-                          <option key={method} value={method}>
-                            {PAYMENT_LABELS[method]}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="h-10">
+                          <SelectValue placeholder="全部付款方式" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">全部付款方式</SelectItem>
+                          {PAYMENT_METHODS.map((method) => (
+                            <SelectItem key={method} value={method}>
+                              {PAYMENT_LABELS[method]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-1">
                       <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">排序字段</label>
-                      <select
-                        value={sortBy}
-                        onChange={(event) => setSortBy(event.target.value as SortField)}
-                        className="h-10 w-full rounded-md border border-border px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
-                      >
-                        {SORT_FIELDS.map((field) => (
-                          <option key={field.value} value={field.value}>
-                            {field.label}
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortField)}>
+                        <SelectTrigger className="h-10">
+                          <SelectValue placeholder="排序字段" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SORT_FIELDS.map((field) => (
+                            <SelectItem key={field.value} value={field.value}>
+                              {field.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-1">
                       <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">排序方式</label>
-                      <select
-                        value={sortOrder}
-                        onChange={(event) => setSortOrder(event.target.value as SortOrder)}
-                        className="h-10 w-full rounded-md border border-border px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
-                      >
-                        {SORT_ORDERS.map((item) => (
-                          <option key={item.value} value={item.value}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrder)}>
+                        <SelectTrigger className="h-10">
+                          <SelectValue placeholder="排序方式" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SORT_ORDERS.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
@@ -887,14 +1081,14 @@ export default function PurchasesClient() {
                     <DatePicker
                       placeholder="开始日期"
                       value={filters.startDate ?? ''}
-                      onChange={(value) => handleFilterChange({ startDate: value || null })}
+                      onChange={(value: string) => handleFilterChange({ startDate: value || null })}
                       containerClassName="space-y-1"
                       className="h-10 justify-start px-3 text-sm"
                     />
                     <DatePicker
                       placeholder="结束日期"
                       value={filters.endDate ?? ''}
-                      onChange={(value) => handleFilterChange({ endDate: value || null })}
+                      onChange={(value: string) => handleFilterChange({ endDate: value || null })}
                       containerClassName="space-y-1"
                       className="h-10 justify-start px-3 text-sm"
                     />
@@ -918,22 +1112,22 @@ export default function PurchasesClient() {
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div>
                             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">最低金额 (¥)</label>
-                            <input
+                            <Input
                               type="number"
                               min={0}
                               value={filters.minAmount ?? ''}
                               onChange={(event) => handleAmountFilterChange('minAmount', event.target.value)}
-                              className="h-10 w-full rounded-md border border-border px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
+                              className="h-10"
                             />
                           </div>
                           <div>
                             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">最高金额 (¥)</label>
-                            <input
+                            <Input
                               type="number"
                               min={0}
                               value={filters.maxAmount ?? ''}
                               onChange={(event) => handleAmountFilterChange('maxAmount', event.target.value)}
-                              className="h-10 w-full rounded-md border border-border px-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
+                              className="h-10"
                             />
                           </div>
                         </div>
@@ -959,65 +1153,68 @@ export default function PurchasesClient() {
                       </div>
                     )}
                   </div>
-                </div>
-                <DrawerFooter className="gap-2 border-t px-6 py-4">
-                  <button
+                </DrawerBody>
+                <DrawerFooter className="gap-2">
+                  <Button
                     type="button"
+                    variant="outline"
                     onClick={() => {
                       handleResetFilters();
                       setShowAdvancedFilters(false);
                     }}
-                    className="h-10 rounded-md border border-border px-4 text-sm text-gray-700 hover:bg-gray-100 dark:border-border dark:text-gray-200"
                   >
                     重置
-                  </button>
+                  </Button>
                   <DrawerClose asChild>
-                    <button
-                      type="button"
-                      className="h-10 rounded-md bg-blue-600 px-6 text-sm font-medium text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
-                    >
+                    <Button type="button">
                       完成
-                    </button>
+                    </Button>
                   </DrawerClose>
                 </DrawerFooter>
               </DrawerContent>
             </Drawer>
-            <button
+            <Button variant="ghost" size="sm" onClick={handleResetFilters} className="h-10 px-3 text-muted-foreground">
+              清空
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleManualRefresh}
-              className="rounded-lg border border-border px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200"
+              className="h-10"
               disabled={loading}
             >
               刷新
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleExport}
               disabled={loading || exporting}
-              className="rounded-lg border border-border px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-60 dark:border-gray-600 dark:text-gray-200"
+              className="h-10"
             >
               {exporting ? '导出中...' : '导出 CSV'}
-            </button>
+            </Button>
             {permissions.canCreate && (
-              <Link
-                href="/purchases/new"
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 dark:bg-blue-500 dark:hover:bg-blue-600"
-              >
-                + 发起采购
-              </Link>
+              <Button asChild size="sm" className="h-10">
+                <Link href="/purchases/new">+ 发起采购</Link>
+              </Button>
             )}
           </div>
 
           {activeFilterChips.length > 0 && (
-            <div className="flex flex-wrap gap-2 text-xs">
+            <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1 text-xs sm:flex-wrap">
               {activeFilterChips.map((chip) => (
-                <button
+                <Button
                   key={chip.key}
                   type="button"
                   onClick={chip.onRemove}
-                  className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-gray-700 hover:bg-gray-50 dark:border-border dark:text-gray-300"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 shrink-0 rounded-full px-3 text-xs"
                 >
                   {chip.label}
                   <span aria-hidden="true">×</span>
-                </button>
+                </Button>
               ))}
             </div>
           )}
@@ -1028,7 +1225,7 @@ export default function PurchasesClient() {
 
       {/* Status summary grid removed to avoid duplicating the metrics shown in the real-time stats card above */}
 
-      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+      <div className="surface-table">
         <PurchaseTable
           purchases={records}
           loading={loading || isPending}
@@ -1036,12 +1233,15 @@ export default function PurchasesClient() {
           getRowPermissions={getRowPermissions}
           onView={handleView}
           onEdit={handleEdit}
+          onDuplicate={handleDuplicate}
           onDelete={handleDelete}
           onSubmit={handleSubmit}
           onApprove={handleApprove}
+          onTransfer={handleTransfer}
           onReject={handleReject}
           onWithdraw={handleWithdraw}
           onPay={handlePay}
+          onSubmitReimbursement={handleSubmitReimbursement}
         />
 
       </div>
@@ -1102,8 +1302,12 @@ export default function PurchasesClient() {
         onSubmit={handleSubmit}
         onWithdraw={handleWithdraw}
         onApprove={handleApprove}
+        onTransfer={handleTransfer}
         onReject={handleReject}
         onPay={handlePay}
+        onSubmitReimbursement={handleSubmitReimbursement}
+        onReceive={handleReceive}
+        canReceive={canReceive}
         detailLoading={detailLoading}
         detailError={detailError}
         onReloadDetail={selectedPurchase ? () => loadPurchaseDetail(selectedPurchase.id) : undefined}
@@ -1115,6 +1319,49 @@ export default function PurchasesClient() {
         onSubmit={(reason) => handleRejectSubmit(reason)}
         defaultReason={rejectDialog.purchase?.rejectionReason ?? '资料不完整'}
         submitting={rejecting}
+      />
+
+      <RejectionReasonDialog
+        open={withdrawDialog.open}
+        onClose={handleWithdrawDialogClose}
+        onSubmit={(reason) => handleWithdrawSubmit(reason)}
+        defaultReason="主动撤回，补充资料后重新提交"
+        submitting={Boolean(mutatingId && withdrawDialog.purchase && mutatingId === withdrawDialog.purchase.id)}
+        title="撤回采购申请"
+        description="请输入撤回原因，系统会记录撤回说明并通知相关审批人。"
+      />
+
+      <PurchasePayDialog
+        open={payDialog.open}
+        purchase={payDialog.purchase}
+        onOpenChange={(open) => {
+          if (!open) handlePayDialogClose();
+        }}
+        onSubmit={handlePaySubmit}
+        busy={Boolean(mutatingId && payDialog.purchase && mutatingId === payDialog.purchase.id)}
+      />
+
+      <ApprovalCommentDialog
+        open={approveDialog.open}
+        onClose={handleApproveDialogClose}
+        onSubmit={handleApproveSubmit}
+        submitting={Boolean(mutatingId && approveDialog.purchase)}
+      />
+
+      <TransferApprovalDialog
+        open={transferDialog.open}
+        onClose={handleTransferDialogClose}
+        onSubmit={handleTransferSubmit}
+        submitting={Boolean(mutatingId && transferDialog.purchase)}
+      />
+
+      <PurchaseInboundDrawer
+        open={inboundDrawer.open}
+        purchase={inboundDrawer.purchase}
+        onOpenChange={(open) => {
+          if (!open) setInboundDrawer({ open: false, purchase: null });
+        }}
+        onSuccess={() => setInboundDrawer({ open: false, purchase: null })}
       />
     </div>
   );

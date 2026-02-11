@@ -63,7 +63,7 @@ export default function AvatarUpload({
     };
 
     return (
-        <div className="flex items-center gap-4 rounded-2xl border border-border bg-muted/20 p-4">
+        <div className="surface-panel flex items-center gap-4 p-4">
             <input
                 type="file"
                 accept="image/*"

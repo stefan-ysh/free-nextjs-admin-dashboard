@@ -16,7 +16,7 @@ export function ProjectFormFields({ disableSubmit }: { disableSubmit: boolean })
 
     return (
         <div className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <FormField
                     control={form.control}
                     name="projectName"
@@ -75,7 +75,7 @@ export function ProjectFormFields({ disableSubmit }: { disableSubmit: boolean })
                     render={({ field }) => (
                         <FormItem>
                             <FormLabel>
-                                负责人用户 ID
+                                项目负责人
                                 <RequiredMark />
                             </FormLabel>
                             <FormControl>
@@ -95,7 +95,7 @@ export function ProjectFormFields({ disableSubmit }: { disableSubmit: boolean })
                 />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <FormField
                     control={form.control}
                     name="status"
@@ -205,7 +205,7 @@ export function ProjectFormFields({ disableSubmit }: { disableSubmit: boolean })
                 />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <FormField
                     control={form.control}
                     name="startDate"

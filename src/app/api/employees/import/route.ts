@@ -65,12 +65,16 @@ export async function POST(request: Request) {
       return badRequestResponse('一次最多导入 500 条记录');
     }
 
-    const optionsInput = (rawBody && typeof rawBody === 'object' ? (rawBody as { options?: BulkEmployeeImportOptions & { defaultStatus?: EmploymentStatus } }).options : undefined) || {};
+    const optionsInput = (rawBody && typeof rawBody === 'object'
+      ? (rawBody as { options?: BulkEmployeeImportOptions & { defaultStatus?: EmploymentStatus } }).options
+      : undefined) || {};
     const matchBy = Array.isArray(optionsInput.matchBy) ? optionsInput.matchBy : undefined;
     const options: BulkEmployeeImportOptions = {
       upsert: optionsInput.upsert !== false,
       matchBy,
       defaultStatus: normalizeStatus(optionsInput.defaultStatus) ?? undefined,
+      defaultInitialPassword: typeof optionsInput.defaultInitialPassword === 'string' ? optionsInput.defaultInitialPassword : undefined,
+      useEmployeeCodeAsPassword: optionsInput.useEmployeeCodeAsPassword === true,
       stopOnError: optionsInput.stopOnError ?? false,
     };
 

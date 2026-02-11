@@ -10,11 +10,20 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import {
+  Drawer,
+  DrawerBody,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/components/ui/drawer';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/sonner';
 import { useConfirm } from '@/hooks/useConfirm';
-import ModalShell from '@/components/common/ModalShell';
+import { FORM_DRAWER_WIDTH_COMPACT } from '@/components/common/form-drawer-width';
 
 const EMPTY_FORM = {
   name: '',
@@ -22,6 +31,7 @@ const EMPTY_FORM = {
   parentId: 'none',
   sortOrder: '0',
   description: '',
+  annualBudget: '',
 };
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
@@ -37,9 +47,18 @@ type Department = {
   updatedAt: string;
 };
 
+type BudgetSummary = {
+  departmentId: string;
+  year: number;
+  budgetAmount: number | null;
+  usedAmount: number;
+  remainingAmount: number | null;
+};
+
 export default function DepartmentManager() {
   const { hasPermission, loading: permissionLoading } = usePermissions();
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [budgetMap, setBudgetMap] = useState<Record<string, BudgetSummary>>({});
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formValues, setFormValues] = useState(() => ({ ...EMPTY_FORM }));
@@ -49,6 +68,7 @@ export default function DepartmentManager() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const confirm = useConfirm();
+  const departmentFormId = 'department-form';
 
   const canView = hasPermission('USER_VIEW_ALL');
   const canCreate = hasPermission('USER_CREATE');
@@ -101,6 +121,21 @@ export default function DepartmentManager() {
         throw new Error(payload.error || '加载失败');
       }
       setDepartments(payload.data || []);
+      try {
+        const year = new Date().getFullYear();
+        const budgetResponse = await fetch(`/api/hr/departments/budgets?year=${year}`);
+        const budgetPayload = await budgetResponse.json();
+        if (budgetResponse.ok && budgetPayload.success && Array.isArray(budgetPayload.data)) {
+          const map: Record<string, BudgetSummary> = {};
+          budgetPayload.data.forEach((entry: BudgetSummary) => {
+            map[entry.departmentId] = entry;
+          });
+          setBudgetMap(map);
+        }
+      } catch (budgetError) {
+        console.warn('加载部门预算失败', budgetError);
+        setBudgetMap({});
+      }
     } catch (err) {
       console.error('加载部门列表失败', err);
       setError(err instanceof Error ? err.message : '未知错误');
@@ -121,6 +156,7 @@ export default function DepartmentManager() {
   }, []);
 
   const handleEditClick = useCallback((dept: Department) => {
+    const budget = budgetMap[dept.id];
     setEditing(dept);
     setFormValues({
       name: dept.name,
@@ -128,9 +164,10 @@ export default function DepartmentManager() {
       parentId: dept.parentId ?? 'none',
       sortOrder: String(dept.sortOrder ?? 0),
       description: dept.description ?? '',
+      annualBudget: budget?.budgetAmount != null ? String(budget.budgetAmount) : '',
     });
     setDialogOpen(true);
-  }, []);
+  }, [budgetMap]);
 
   const handleDelete = useCallback(
     async (dept: Department) => {
@@ -207,6 +244,16 @@ export default function DepartmentManager() {
         if (!response.ok || !data.success) {
           throw new Error(data.error || '保存失败');
         }
+        const savedDepartmentId = data.data?.id ?? editing?.id;
+        const budgetValue = Number(formValues.annualBudget);
+        if (savedDepartmentId && formValues.annualBudget !== '' && Number.isFinite(budgetValue)) {
+          const year = new Date().getFullYear();
+          await fetch(`/api/hr/departments/${savedDepartmentId}/budget`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ year, amount: budgetValue }),
+          });
+        }
         toast.success(editing ? '更新成功' : '创建成功', {
           description: editing ? '部门信息已更新' : '已创建新部门',
         });
@@ -269,7 +316,7 @@ export default function DepartmentManager() {
     }
     return (
       <div className="space-y-4">
-        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+        <div className="surface-table">
           <Table
             stickyHeader
             scrollAreaClassName="max-h-[calc(100vh-350px)] custom-scrollbar"
@@ -280,6 +327,7 @@ export default function DepartmentManager() {
                 <TableHead className="px-4 py-3">名称</TableHead>
                 <TableHead className="px-4 py-3">编码</TableHead>
                 <TableHead className="px-4 py-3">父级</TableHead>
+                <TableHead className="px-4 py-3">年度预算</TableHead>
                 <TableHead className="px-4 py-3 text-right">排序</TableHead>
                 <TableHead className="px-4 py-3">更新时间</TableHead>
                 <TableHead className="px-4 py-3 text-right">操作</TableHead>
@@ -294,6 +342,21 @@ export default function DepartmentManager() {
                   </TableCell>
                   <TableCell className="px-4 py-4">{dept.code ?? '—'}</TableCell>
                   <TableCell className="px-4 py-4">{dept.parentId ? parentNameMap.get(dept.parentId) ?? '—' : '—'}</TableCell>
+                  <TableCell className="px-4 py-4 text-sm">
+                    {budgetMap[dept.id]?.budgetAmount != null ? (
+                      <div className="space-y-1">
+                        <div className="font-medium text-foreground">
+                          ¥{Number(budgetMap[dept.id].budgetAmount).toLocaleString('zh-CN')}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          已用 ¥{Number(budgetMap[dept.id].usedAmount).toLocaleString('zh-CN')} /
+                          余 ¥{Number(budgetMap[dept.id].remainingAmount ?? 0).toLocaleString('zh-CN')}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">未设置</span>
+                    )}
+                  </TableCell>
                   <TableCell className="px-4 py-4 text-right">{dept.sortOrder ?? 0}</TableCell>
                   <TableCell className="px-4 py-4 text-sm text-muted-foreground">
                     {formatDateTimeLocal(dept.updatedAt) ?? dept.updatedAt}
@@ -362,7 +425,7 @@ export default function DepartmentManager() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-border bg-card p-3 shadow-sm flex justify-end">
+      <div className="surface-card flex justify-end p-3">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={fetchDepartments} disabled={loading || !canView} className="h-9">
             <RefreshCcw className="mr-2 h-4 w-4" />刷新
@@ -377,85 +440,104 @@ export default function DepartmentManager() {
 
       {renderContent()}
 
-      <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="max-w-xl overflow-hidden p-0">
-          <form onSubmit={handleSubmit}>
-            <ModalShell
-              title={editing ? '编辑部门' : '新建部门'}
-              description="设置部门的基础信息与层级关系，供员工档案引用"
-              footer={
-                <DialogFooter className="gap-3">
-                  <Button type="button" variant="outline" onClick={closeDialog} disabled={submitting}>
-                    取消
-                  </Button>
-                  <Button type="submit" disabled={submitting || formValues.name.trim() === ''}>
-                    {submitting ? '提交中...' : editing ? '保存修改' : '创建部门'}
-                  </Button>
-                </DialogFooter>
-              }
-            >
-              <div className="space-y-4">
+      <Drawer open={dialogOpen} onOpenChange={handleDialogOpenChange} direction="right">
+        <DrawerContent side="right" className={FORM_DRAWER_WIDTH_COMPACT}>
+          <DrawerHeader className="flex items-start justify-between gap-4">
+            <div>
+              <DrawerTitle>{editing ? '编辑部门' : '新建部门'}</DrawerTitle>
+              <DrawerDescription>设置部门的基础信息与层级关系，供员工档案引用</DrawerDescription>
+            </div>
+            <DrawerClose asChild>
+              <Button variant="ghost" size="sm" onClick={closeDialog}>
+                关闭
+              </Button>
+            </DrawerClose>
+          </DrawerHeader>
+          <DrawerBody>
+            <form id={departmentFormId} onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="department-name">部门名称 *</Label>
+                <Input
+                  id="department-name"
+                  placeholder="例如：人力资源部"
+                  value={formValues.name}
+                  onChange={(event) => handleFieldChange('name', event.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="department-name">部门名称 *</Label>
+                  <Label htmlFor="department-code">编码</Label>
                   <Input
-                    id="department-name"
-                    placeholder="例如：人力资源部"
-                    value={formValues.name}
-                    onChange={(event) => handleFieldChange('name', event.target.value)}
-                    required
+                    id="department-code"
+                    placeholder="如 HR"
+                    value={formValues.code}
+                    onChange={(event) => handleFieldChange('code', event.target.value)}
                   />
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="department-code">编码</Label>
-                    <Input
-                      id="department-code"
-                      placeholder="如 HR"
-                      value={formValues.code}
-                      onChange={(event) => handleFieldChange('code', event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="department-sort">排序</Label>
-                    <Input
-                      id="department-sort"
-                      type="number"
-                      value={formValues.sortOrder}
-                      onChange={(event) => handleFieldChange('sortOrder', event.target.value)}
-                    />
-                  </div>
-                </div>
                 <div className="space-y-2">
-                  <Label>父级部门</Label>
-                  <Select value={formValues.parentId} onValueChange={(value) => handleFieldChange('parentId', value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="请选择父级部门" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">顶级（无父级）</SelectItem>
-                      {parentCandidates.map((dept) => (
-                        <SelectItem key={dept.id} value={dept.id}>
-                          {dept.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="department-description">备注</Label>
-                  <Textarea
-                    id="department-description"
-                    placeholder="可选：补充职责、说明"
-                    value={formValues.description}
-                    onChange={(event) => handleFieldChange('description', event.target.value)}
-                    rows={4}
+                  <Label htmlFor="department-sort">排序</Label>
+                  <Input
+                    id="department-sort"
+                    type="number"
+                    value={formValues.sortOrder}
+                    onChange={(event) => handleFieldChange('sortOrder', event.target.value)}
                   />
                 </div>
               </div>
-            </ModalShell>
-          </form>
-        </DialogContent>
-      </Dialog>
+              <div className="space-y-2">
+                <Label htmlFor="department-budget">年度预算 (¥)</Label>
+                <Input
+                  id="department-budget"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder="例如：500000"
+                  value={formValues.annualBudget}
+                  onChange={(event) => handleFieldChange('annualBudget', event.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">设置当前年度部门预算，用于采购实时校验。</p>
+              </div>
+              <div className="space-y-2">
+                <Label>父级部门</Label>
+                <Select value={formValues.parentId} onValueChange={(value) => handleFieldChange('parentId', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="请选择父级部门" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">顶级（无父级）</SelectItem>
+                    {parentCandidates.map((dept) => (
+                      <SelectItem key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="department-description">备注</Label>
+                <Textarea
+                  id="department-description"
+                  placeholder="可选：补充职责、说明"
+                  value={formValues.description}
+                  onChange={(event) => handleFieldChange('description', event.target.value)}
+                  rows={4}
+                />
+              </div>
+            </form>
+          </DrawerBody>
+          <DrawerFooter className="justify-end">
+            <DrawerClose asChild>
+              <Button type="button" variant="outline" onClick={closeDialog} disabled={submitting}>
+                取消
+              </Button>
+            </DrawerClose>
+            <Button type="submit" form={departmentFormId} disabled={submitting || formValues.name.trim() === ''}>
+              {submitting ? '提交中...' : editing ? '保存修改' : '创建部门'}
+            </Button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }

@@ -10,10 +10,13 @@ import {
   PaymentMethod,
   PaymentType,
   PURCHASE_CHANNELS,
+  PURCHASE_ORGANIZATIONS,
   PurchaseChannel,
+  PurchaseOrganization,
 } from '@/types/purchase';
 
 const purchaseChannelEnum = z.enum(PURCHASE_CHANNELS as [PurchaseChannel, ...PurchaseChannel[]]);
+const purchaseOrganizationEnum = z.enum(PURCHASE_ORGANIZATIONS as [PurchaseOrganization, ...PurchaseOrganization[]]);
 const paymentMethodEnum = z.enum(PAYMENT_METHODS as [PaymentMethod, ...PaymentMethod[]]);
 const paymentTypeEnum = z.enum(PAYMENT_TYPES as [PaymentType, ...PaymentType[]]);
 const invoiceTypeEnum = z.enum(INVOICE_TYPES as [InvoiceType, ...InvoiceType[]]);
@@ -22,6 +25,7 @@ const invoiceStatusEnum = z.enum(INVOICE_STATUSES as [InvoiceStatus, ...InvoiceS
 export const purchaseFormSchema = z
   .object({
     purchaseDate: z.string().min(1, '请选择采购日期'),
+    organizationType: purchaseOrganizationEnum,
     itemName: z.string().min(1, '请填写物品名称'),
     specification: z.string().optional().nullable(),
     quantity: z.coerce.number().min(0.01, '数量必须大于 0'),

@@ -1,87 +1,229 @@
 "use client";
-import Image from "next/image";
+
 import Link from "next/link";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-type NotificationItem = {
+type NotificationRecord = {
   id: string;
-  name: string;
-  avatar: string;
-  status: "success" | "error";
-  message: string;
-  project: string;
-  category: string;
-  time: string;
+  eventType: string;
+  title: string;
+  content: string;
+  linkUrl: string | null;
+  relatedType: string | null;
+  relatedId: string | null;
+  isRead: boolean;
+  createdAt: string;
+  readAt: string | null;
 };
 
-const notifications: NotificationItem[] = [
-  {
-    id: "terry",
-    name: "Terry Franci",
-    avatar: "/images/user/user-02.jpg",
-    status: "success",
-    message: "requests permission to change",
-    project: "Project - Nganter App",
-    category: "Project",
-    time: "5 min ago",
-  },
-  {
-    id: "alena",
-    name: "Alena Franci",
-    avatar: "/images/user/user-03.jpg",
-    status: "success",
-    message: "requests permission to change",
-    project: "Project - Nganter App",
-    category: "Project",
-    time: "8 min ago",
-  },
-  {
-    id: "jocelyn",
-    name: "Jocelyn Kenter",
-    avatar: "/images/user/user-04.jpg",
-    status: "success",
-    message: "requests permission to change",
-    project: "Project - Nganter App",
-    category: "Project",
-    time: "15 min ago",
-  },
-  {
-    id: "brandon",
-    name: "Brandon Philips",
-    avatar: "/images/user/user-05.jpg",
-    status: "error",
-    message: "requests permission to change",
-    project: "Project - Nganter App",
-    category: "Project",
-    time: "1 hr ago",
-  },
-];
+type NotificationListResponse = {
+  success: boolean;
+  data?: { items: NotificationRecord[]; total: number; page: number; pageSize: number };
+  error?: string;
+};
+
+type ApprovalFallback = {
+  id: string;
+  purchaseNumber: string;
+  itemName: string;
+  totalAmount: number;
+  updatedAt: string;
+};
+
+type ApprovalListResponse = {
+  success: boolean;
+  data?: { items: ApprovalFallback[]; total: number; page: number; pageSize: number };
+  error?: string;
+};
+
+type UiNotificationItem = {
+  id: string;
+  title: string;
+  subtitle: string;
+  time: string;
+  link: string;
+  unread: boolean;
+  type: "approval" | "applicant" | "finance" | "other";
+  source: "in_app" | "pending_approval";
+};
+
+function timeAgo(dateValue: string): string {
+  const ms = Date.now() - new Date(dateValue).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "刚刚";
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (ms < minute) return "刚刚";
+  if (ms < hour) return `${Math.floor(ms / minute)} 分钟前`;
+  if (ms < day) return `${Math.floor(ms / hour)} 小时前`;
+  return `${Math.floor(ms / day)} 天前`;
+}
+
+function mapType(eventType: string): UiNotificationItem["type"] {
+  if (eventType === "purchase_submitted") return "approval";
+  if (eventType === "purchase_approved" || eventType === "purchase_paid") return "applicant";
+  if (eventType === "reimbursement_submitted") return "finance";
+  if (eventType === "payment_issue_marked" || eventType === "payment_issue_resolved") return "finance";
+  return "other";
+}
+
+function toWorkbenchLink(eventType: string, linkUrl: string | null): string {
+  if (eventType === "purchase_submitted" || eventType === "reimbursement_submitted") return "/workflow/todo";
+  if (eventType === "payment_issue_marked" || eventType === "payment_issue_resolved") return "/workflow/notifications";
+  if (eventType === "purchase_paid" || eventType === "purchase_approved") return "/workflow/notifications";
+  if (!linkUrl) return "/workflow/notifications";
+  if (linkUrl.startsWith("/m/tasks")) return "/workflow/todo";
+  if (linkUrl.startsWith("/m/history")) return "/workflow/done";
+  if (linkUrl.startsWith("/m/notifications")) return "/workflow/notifications";
+  return linkUrl;
+}
 
 export default function NotificationDropdown() {
   const [open, setOpen] = useState(false);
-  const [notifying, setNotifying] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [items, setItems] = useState<UiNotificationItem[]>([]);
+  const [activeTab, setActiveTab] = useState<"all" | "todo" | "notice">("all");
 
-  const handleOpenChange = (nextOpen: boolean) => {
-    setOpen(nextOpen);
-    if (nextOpen) {
-      setNotifying(false);
+  const markAsRead = useCallback(async (options: { ids?: string[]; markAll?: boolean }) => {
+    const payload = {
+      ids: options.ids ?? [],
+      markAll: options.markAll === true,
+    };
+    await fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    });
+  }, []);
+
+  const loadNotifications = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [notificationsResponse, approvalsResponse] = await Promise.all([
+        fetch("/api/notifications?page=1&pageSize=20", {
+          headers: { Accept: "application/json" },
+        }),
+        fetch("/api/purchases/approvals?page=1&pageSize=10", {
+          headers: { Accept: "application/json" },
+        }),
+      ]);
+
+      const normalized: UiNotificationItem[] = [];
+      const approvalRelatedIds = new Set<string>();
+
+      if (notificationsResponse.ok) {
+        const payload = (await notificationsResponse.json()) as NotificationListResponse;
+        if (payload.success && payload.data) {
+          for (const item of payload.data.items) {
+            const mappedType = mapType(item.eventType);
+            if (mappedType === "approval" && item.relatedId) {
+              approvalRelatedIds.add(item.relatedId);
+            }
+            normalized.push({
+              id: item.id,
+              title: item.title,
+              subtitle: item.content.split("\n")[0] ?? item.content,
+              time: timeAgo(item.createdAt),
+              link: toWorkbenchLink(item.eventType, item.linkUrl),
+              unread: !item.isRead,
+              type: mappedType,
+              source: "in_app",
+            });
+          }
+        }
+      }
+
+      if (approvalsResponse.ok) {
+        const approvalPayload = (await approvalsResponse.json()) as ApprovalListResponse;
+        if (approvalPayload.success && approvalPayload.data?.items?.length) {
+          for (const item of approvalPayload.data.items) {
+            if (approvalRelatedIds.has(item.id)) {
+              continue;
+            }
+            normalized.push({
+              id: `fallback-${item.id}`,
+              title: `采购待审批：${item.itemName}`,
+              subtitle: `单号 ${item.purchaseNumber}`,
+              time: timeAgo(item.updatedAt),
+              link: "/workflow/todo",
+              unread: true,
+              type: "approval",
+              source: "pending_approval",
+            });
+          }
+        }
+      }
+
+      if (normalized.length === 0 && !notificationsResponse.ok && !approvalsResponse.ok) {
+        throw new Error("加载通知失败");
+      }
+
+      setItems(normalized);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "加载通知失败");
+      setItems([]);
+    } finally {
+      setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      void loadNotifications();
+    }
+  }, [open, loadNotifications]);
+
+  const unreadCount = useMemo(() => items.filter((item) => item.unread).length, [items]);
+  const showingNotifyDot = unreadCount > 0;
+  const tabCounters = useMemo(() => {
+    const todo = items.filter((item) => item.type === "approval").length;
+    const notice = items.filter((item) => item.type !== "approval").length;
+    return { all: items.length, todo, notice };
+  }, [items]);
+  const visibleItems = useMemo(() => {
+    if (activeTab === "todo") {
+      return items.filter((item) => item.type === "approval");
+    }
+    if (activeTab === "notice") {
+      return items.filter((item) => item.type !== "approval");
+    }
+    return items;
+  }, [activeTab, items]);
+
+  const typePillClass: Record<UiNotificationItem["type"], string> = {
+    approval: "bg-amber-500/15 text-amber-300",
+    applicant: "bg-sky-500/15 text-sky-300",
+    finance: "bg-emerald-500/15 text-emerald-300",
+    other: "bg-gray-500/15 text-gray-300",
   };
 
-  const closeDropdown = () => setOpen(false);
+  const handleMarkAllRead = useCallback(() => {
+    const unreadIds = items
+      .filter((item) => item.unread && item.source === "in_app")
+      .map((item) => item.id);
+    if (unreadIds.length === 0) return;
 
-  const statusDotClass: Record<NotificationItem["status"], string> = {
-    success: "bg-success-500",
-    error: "bg-error-500",
-  };
+    setItems((prev) => prev.map((item) => ({ ...item, unread: false })));
+    void markAsRead({ ids: unreadIds });
+  }, [items, markAsRead]);
+
+  const handleItemOpen = useCallback((item: UiNotificationItem) => {
+    setOpen(false);
+    if (!item.unread || item.source !== "in_app") return;
+    setItems((prev) => prev.map((entry) => (entry.id === item.id ? { ...entry, unread: false } : entry)));
+    void markAsRead({ ids: [item.id] });
+  }, [markAsRead]);
 
   return (
-    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
@@ -89,10 +231,10 @@ export default function NotificationDropdown() {
         >
           <span
             className={`absolute right-0 top-0.5 z-10 h-2 w-2 rounded-full bg-orange-400 ${
-              notifying ? "flex" : "hidden"
+              showingNotifyDot ? "flex" : "hidden"
             }`}
           >
-            <span className="absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75 animate-ping" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-orange-400 opacity-75" />
           </span>
           <svg
             className="fill-current"
@@ -114,84 +256,112 @@ export default function NotificationDropdown() {
       <DropdownMenuContent
         align="end"
         sideOffset={12}
-        className="z-[120] flex h-[480px] w-[350px] flex-col rounded-2xl border border-gray-200 bg-white p-3 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark sm:w-[361px]"
+        className="z-[120] flex h-[480px] w-[360px] flex-col rounded-2xl border border-gray-200 bg-white p-3 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark"
       >
         <div className="mb-3 flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-700">
           <h5 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-            Notification
+            通知
           </h5>
-          <button
-            type="button"
-            onClick={closeDropdown}
-            className="text-gray-500 transition hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            aria-label="Close notifications"
-          >
-            <svg
-              className="fill-current"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 dark:text-gray-400">未读 {unreadCount}</span>
+            <button
+              type="button"
+              onClick={handleMarkAllRead}
+              disabled={unreadCount === 0}
+              className="rounded-md border border-gray-300 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
             >
-              <path
-                fillRule="evenodd"
-                clipRule="evenodd"
-                d="M6.21967 7.28131C5.92678 6.98841 5.92678 6.51354 6.21967 6.22065C6.51256 5.92775 6.98744 5.92775 7.28033 6.22065L11.999 10.9393L16.7176 6.22078C17.0105 5.92789 17.4854 5.92788 17.7782 6.22078C18.0711 6.51367 18.0711 6.98855 17.7782 7.28144L13.0597 12L17.7782 16.7186C18.0711 17.0115 18.0711 17.4863 17.7782 17.7792C17.4854 18.0721 17.0105 18.0721 16.7176 17.7792L11.999 13.0607L7.28033 17.7794C6.98744 18.0722 6.51256 18.0722 6.21967 17.7794C5.92678 17.4865 5.92678 17.0116 6.21967 16.7187L10.9384 12L6.21967 7.28131Z"
-                fill="currentColor"
-              />
-            </svg>
-          </button>
+              全部已读
+            </button>
+            <button
+              type="button"
+              onClick={() => void loadNotifications()}
+              className="rounded-md border border-gray-300 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+            >
+              刷新
+            </button>
+          </div>
         </div>
 
-        <ul className="custom-scrollbar flex flex-col overflow-y-auto">
-          {notifications.map((item) => (
-            <li key={item.id}>
+        {!loading && !error ? (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {[
+              { key: "all", label: "全部", count: tabCounters.all },
+              { key: "todo", label: "待办", count: tabCounters.todo },
+              { key: "notice", label: "通知", count: tabCounters.notice },
+            ].map((tab) => (
               <button
+                key={tab.key}
                 type="button"
-                onClick={closeDropdown}
-                className="flex w-full gap-3 rounded-lg border-b border-gray-100 px-4.5 py-3 text-left hover:bg-gray-100 dark:border-gray-800 dark:hover:bg-white/5"
+                onClick={() => setActiveTab(tab.key as typeof activeTab)}
+                className={`rounded-full border px-3 py-1 text-xs transition ${
+                  activeTab === tab.key
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                }`}
               >
-                <span className="relative block h-10 w-10 overflow-hidden rounded-full">
-                  <Image
-                    width={40}
-                    height={40}
-                    src={item.avatar}
-                    alt={item.name}
-                    className="h-full w-full object-cover"
-                  />
-                  <span
-                    className={`absolute bottom-0 right-0 z-10 h-2.5 w-2.5 rounded-full border-[1.5px] border-white dark:border-gray-900 ${statusDotClass[item.status]}`}
-                  />
-                </span>
-
-                <span className="block">
-                  <span className="mb-1.5 block space-x-1 text-theme-sm text-gray-500 dark:text-gray-400">
-                    <span className="font-medium text-gray-800 dark:text-white/90">
-                      {item.name}
-                    </span>
-                    <span>{item.message}</span>
-                    <span className="font-medium text-gray-800 dark:text-white/90">
-                      {item.project}
-                    </span>
-                  </span>
-
-                  <span className="flex items-center gap-2 text-theme-xs text-gray-500 dark:text-gray-400">
-                    <span>{item.category}</span>
-                    <span className="h-1 w-1 rounded-full bg-gray-400" />
-                    <span>{item.time}</span>
-                  </span>
-                </span>
+                {tab.label} {tab.count}
               </button>
-            </li>
-          ))}
-        </ul>
+            ))}
+          </div>
+        ) : null}
+
+        {loading ? (
+          <div className="flex h-full items-center justify-center text-sm text-gray-500">加载中...</div>
+        ) : null}
+
+        {!loading && error ? (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
+            {error}
+          </div>
+        ) : null}
+
+        {!loading && !error ? (
+          <ul className="custom-scrollbar flex flex-1 flex-col overflow-y-auto">
+            {visibleItems.length === 0 ? (
+              <li className="flex h-full items-center justify-center text-sm text-gray-500">暂无通知</li>
+            ) : (
+              visibleItems.map((item) => (
+                <li key={item.id}>
+                  <Link
+                    href={item.link}
+                    onClick={() => handleItemOpen(item)}
+                    className="block rounded-lg border-b border-gray-100 px-4 py-3 hover:bg-gray-100 dark:border-gray-800 dark:hover:bg-white/5"
+                  >
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <p className="line-clamp-1 text-sm font-medium text-gray-800 dark:text-white/90">
+                        {item.unread ? <span className="mr-1 inline-block h-2 w-2 rounded-full bg-primary" /> : null}
+                        {item.title}
+                      </p>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] ${typePillClass[item.type]}`}>
+                        {item.type === "approval"
+                          ? "待审批"
+                          : item.type === "applicant"
+                            ? "通知"
+                            : item.type === "finance"
+                              ? "财务"
+                              : "其他"}
+                      </span>
+                    </div>
+                    <p className="line-clamp-1 text-xs text-gray-500 dark:text-gray-400">{item.subtitle}</p>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <p className="text-[11px] text-gray-400">{item.time}</p>
+                      {item.source === "pending_approval" ? (
+                        <span className="text-[11px] text-amber-300">实时待办</span>
+                      ) : null}
+                    </div>
+                  </Link>
+                </li>
+              ))
+            )}
+          </ul>
+        ) : null}
 
         <Link
-          href="/"
-          onClick={closeDropdown}
-          className="mt-3 block rounded-lg border border-gray-300 bg-white px-4 py-2 text-center text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
+          href="/workflow/notifications"
+          onClick={() => setOpen(false)}
+          className="mt-3 block rounded-lg border border-gray-300 bg-white px-4 py-2 text-center text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
         >
-          View All Notifications
+          查看全部通知
         </Link>
       </DropdownMenuContent>
     </DropdownMenu>

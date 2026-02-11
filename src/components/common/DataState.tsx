@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
 
-export type DataStateVariant = 'loading' | 'empty';
+export type DataStateVariant = 'loading' | 'empty' | 'error';
 
 interface DataStateProps {
   variant: DataStateVariant;
@@ -23,6 +23,10 @@ const defaultCopy: Record<DataStateVariant, { title: string; description: string
     title: '暂无数据',
     description: '当前筛选条件下没有内容',
   },
+  error: {
+    title: '加载失败',
+    description: '数据请求失败，请稍后重试',
+  },
 };
 
 export default function DataState({
@@ -38,7 +42,7 @@ export default function DataState({
   return (
     <div
       className={cn(
-        'flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white/60 p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400',
+        'surface-panel flex flex-col items-center justify-center border-dashed p-6 text-center text-sm text-gray-500 dark:text-gray-400',
         className
       )}
     >

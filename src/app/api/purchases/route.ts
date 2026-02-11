@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { toPermissionUser } from '@/lib/auth/permission-user';
 import { listPurchases, createPurchase } from '@/lib/db/purchases';
+import { ensureDepartmentBudgetWithinLimit } from '@/lib/purchases/budget-guard';
 import { checkPermission, Permissions } from '@/lib/permissions';
 import { CreatePurchaseInput } from '@/types/purchase';
 import { parsePurchaseListParams } from './query-utils';
@@ -25,13 +26,21 @@ export async function GET(request: Request) {
     const context = await requireCurrentUser();
     const permissionUser = await toPermissionUser(context.user);
 
-    // allow full listing for users with viewAll permission, otherwise restrict to own purchases
-    const viewAll = await checkPermission(permissionUser, Permissions.PURCHASE_VIEW_ALL);
+    // allow full listing for users with viewAll permission,
+    // otherwise restrict to department scope (if available) or own purchases
+    const [viewAll, viewDepartment] = await Promise.all([
+      checkPermission(permissionUser, Permissions.PURCHASE_VIEW_ALL),
+      checkPermission(permissionUser, Permissions.PURCHASE_VIEW_DEPARTMENT),
+    ]);
     const { searchParams } = new URL(request.url);
     const params = parsePurchaseListParams(searchParams);
 
     if (!viewAll.allowed) {
-      params.purchaserId = context.user.id;
+      if (viewDepartment.allowed && permissionUser.department) {
+        params.purchaserDepartment = permissionUser.department;
+      } else {
+        params.purchaserId = context.user.id;
+      }
     }
 
     const result = await listPurchases(params);
@@ -61,6 +70,7 @@ export async function POST(request: Request) {
     // minimal validation - DAO will assert more
     if (
       !body.purchaseDate ||
+      !body.organizationType ||
       !body.itemName ||
       typeof body.quantity !== 'number' ||
       typeof body.unitPrice !== 'number' ||
@@ -70,11 +80,21 @@ export async function POST(request: Request) {
       return badRequestResponse('缺少必填字段');
     }
 
+    const purchaserId = body.purchaserId ?? context.user.id;
+    const totalAmount = Number(body.quantity) * Number(body.unitPrice) + Number(body.feeAmount ?? 0);
+    await ensureDepartmentBudgetWithinLimit({
+      purchaserId,
+      purchaseDate: body.purchaseDate,
+      totalAmount,
+      actor: permissionUser,
+    });
+
     const created = await createPurchase(body, context.user.id);
     return NextResponse.json({ success: true, data: created }, { status: 201 });
   } catch (error) {
     if (error instanceof Error) {
       if (error.message === 'UNAUTHENTICATED') return unauthorizedResponse();
+      if (error.message === 'BUDGET_EXCEEDED') return badRequestResponse('超出部门预算，无法提交采购申请');
       const friendly = mapPurchaseValidationError(error);
       if (friendly) return badRequestResponse(friendly);
     }

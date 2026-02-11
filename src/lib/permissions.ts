@@ -141,11 +141,11 @@ export const Permissions = {
   } as PermissionConfig,
   
   PURCHASE_APPROVE: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.DEPARTMENT_MANAGER],
   } as PermissionConfig,
   
   PURCHASE_REJECT: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.DEPARTMENT_MANAGER],
   } as PermissionConfig,
   
   PURCHASE_PAY: {

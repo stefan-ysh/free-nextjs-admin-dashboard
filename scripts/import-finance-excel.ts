@@ -111,6 +111,36 @@ function parseAttachments(value: unknown): string[] | undefined {
   return parts.length ? parts : undefined;
 }
 
+async function recordExists(params: {
+  name: string;
+  date: string;
+  contractAmount: number;
+  fee: number;
+  type: TransactionType;
+  category: string;
+}) {
+  const pool = mysqlPool();
+  const [rows] = await pool.query<Array<{ id: string }>>(
+    `SELECT id FROM finance_records
+     WHERE name = ?
+       AND date_value = ?
+       AND contract_amount = ?
+       AND fee = ?
+       AND type = ?
+       AND category = ?
+     LIMIT 1`,
+    [
+      params.name,
+      params.date,
+      params.contractAmount,
+      params.fee,
+      params.type,
+      params.category,
+    ]
+  );
+  return Boolean(rows[0]?.id);
+}
+
 async function main() {
   const excelPath = path.resolve(process.cwd(), process.argv[2] ?? DEFAULT_FILE_NAME);
   const workbook = xlsx.readFile(excelPath);
@@ -133,7 +163,7 @@ async function main() {
     const category = cleanString(row['分类']);
     const date = parseDate(row['日期']);
     const contractAmount = parseNumber(row['合同金额']);
-    if (!name || !category || !date || !contractAmount) {
+    if (!name || !category || !date || contractAmount == null) {
       skipped += 1;
       skippedRecords.push({ rowNumber, name, date, contractAmount, reason: '缺少关键字段' });
       continue;
@@ -162,6 +192,20 @@ async function main() {
 
     const type = mapTransactionType(row['收支类型']);
     const normalizedCategory = matchCategoryLabel(type, category) ?? category;
+    if (
+      await recordExists({
+        name,
+        date,
+        contractAmount,
+        fee,
+        type,
+        category: normalizedCategory,
+      })
+    ) {
+      skipped += 1;
+      skippedRecords.push({ rowNumber, name, date, contractAmount, reason: '记录已存在' });
+      continue;
+    }
 
     const payload: FinanceRecordInput = {
       name,

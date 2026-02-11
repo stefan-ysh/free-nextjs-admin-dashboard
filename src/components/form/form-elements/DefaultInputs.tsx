@@ -68,7 +68,7 @@ export default function DefaultInputs() {
             label="Date Picker Input"
             placeholder="Select a date"
             value={demoDate}
-            onChange={(value) => {
+            onChange={(value: string) => {
               setDemoDate(value);
               console.log({ value });
             }}

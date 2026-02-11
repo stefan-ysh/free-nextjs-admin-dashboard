@@ -207,7 +207,7 @@ export function SearchableEntitySelect<T>({
             {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : <ChevronIcon />}
           </button>
         </PopoverTrigger>
-        <PopoverContent className={cn('w-[380px] p-0', panelClassName)} align="start">
+        <PopoverContent className={cn('surface-card w-[380px] p-0', panelClassName)} align="start">
           <div className="flex items-center gap-2 border-b border-border px-3 py-2">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -256,10 +256,10 @@ export function SearchableEntitySelect<T>({
         </PopoverContent>
       </Popover>
 
-      {selectedOption && renderSummary && <div className="rounded-2xl border border-blue-200 bg-blue-50/80 p-4 text-sm dark:border-blue-500/40 dark:bg-blue-500/10">{renderSummary(selectedOption.data)}</div>}
+      {selectedOption && renderSummary && <div className="surface-panel p-4 text-sm">{renderSummary(selectedOption.data)}</div>}
 
       {value && resolvingSelection && (
-        <div className="rounded-xl border border-border bg-gray-50 px-4 py-3 text-sm text-gray-500 dark:border-border dark:bg-gray-800/60 dark:text-gray-300">
+        <div className="surface-panel px-4 py-3 text-sm text-gray-500 dark:text-gray-300">
           正在同步已选项...
         </div>
       )}

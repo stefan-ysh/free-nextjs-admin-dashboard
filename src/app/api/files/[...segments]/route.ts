@@ -2,12 +2,19 @@ import fs from 'node:fs/promises';
 import { NextResponse } from 'next/server';
 import mime from 'mime';
 
+import { requireCurrentUser } from '@/lib/auth/current-user';
 import { buildAbsolutePathFromSegments } from '@/lib/storage/local';
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ segments: string[] }> }
 ) {
+  try {
+    await requireCurrentUser();
+  } catch {
+    return NextResponse.json({ error: '未登录' }, { status: 401 });
+  }
+
   const { segments } = await params;
   const absolutePath = buildAbsolutePathFromSegments(segments);
 

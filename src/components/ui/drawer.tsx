@@ -30,7 +30,7 @@ const DrawerOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DrawerPrimitive.Overlay
     ref={ref}
-    className={cn("fixed inset-0 z-50 bg-black/80", className)}
+    className={cn("fixed inset-0 z-50 bg-black/60 backdrop-blur-sm", className)}
     {...props}
   />
 ))
@@ -50,10 +50,10 @@ const DrawerContent = React.forwardRef<
       <DrawerPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed z-50 flex flex-col bg-background shadow-lg",
+          "fixed z-50 flex flex-col overflow-hidden border border-border/60 bg-background shadow-lg shadow-black/5",
           isRight
             ? "inset-y-0 right-0 h-full w-full sm:max-w-lg"
-            : "inset-x-0 bottom-0 mt-24 h-auto rounded-t-[10px]",
+            : "inset-x-0 bottom-0 mt-24 h-auto rounded-t-2xl",
           className
         )}
         {...props}
@@ -71,7 +71,10 @@ const DrawerHeader = ({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn("flex-shrink-0 space-y-1.5 border-none px-6 py-4 text-left", className)}
+    className={cn(
+      "flex shrink-0 flex-col space-y-1.5 border-b border-border/60 bg-background/95 px-6 py-4 text-left backdrop-blur supports-[backdrop-filter]:bg-background/80",
+      className
+    )}
     {...props}
   />
 )
@@ -82,11 +85,22 @@ const DrawerFooter = ({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn("flex-shrink-0 flex flex-col gap-2 border-none px-6 py-4 sm:flex-row sm:justify-end", className)}
+    className={cn(
+      "flex shrink-0 flex-col gap-2 border-t border-border/60 bg-background/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:flex-row sm:justify-end",
+      className
+    )}
     {...props}
   />
 )
 DrawerFooter.displayName = "DrawerFooter"
+
+const DrawerBody = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={cn("flex-1 overflow-y-auto px-6 py-4", className)} {...props} />
+)
+DrawerBody.displayName = "DrawerBody"
 
 const DrawerTitle = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Title>,
@@ -124,6 +138,7 @@ export {
   DrawerContent,
   DrawerHeader,
   DrawerFooter,
+  DrawerBody,
   DrawerTitle,
   DrawerDescription,
 }

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import Pagination from '@/components/tables/Pagination';
+import { formatDateOnly } from '@/lib/dates';
 import {
 	projectPriorityBadgeClasses,
 	projectPriorityLabels,
@@ -23,13 +24,9 @@ const currencyFormatter = (currency: CurrencyCode) =>
 		maximumFractionDigits: 0,
 	});
 
-const dateFormatter = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
-
 function formatDate(value: string | null) {
 	if (!value) return '—';
-	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) return value;
-	return dateFormatter.format(date);
+	return formatDateOnly(value) ?? value;
 }
 
 function formatCurrency(value: number | null | undefined, currency: CurrencyCode) {
@@ -87,8 +84,75 @@ export default function ProjectTable({ projects, loading, pagination, onPageChan
 	};
 
 	return (
-		<div className="rounded-2xl border border-border bg-card shadow-sm">
-			<div className="relative w-full overflow-x-auto">
+		<div className="surface-table">
+			<div className="md:hidden">
+				<div className="space-y-3 p-4">
+					{loading ? (
+						<div className="space-y-3">
+							{Array.from({ length: 3 }).map((_, index) => (
+								<div key={`project-mobile-skeleton-${index}`} className="rounded-2xl border border-border/60 bg-background/70 p-4">
+									<Skeleton className="h-4 w-2/3" />
+									<Skeleton className="mt-3 h-3 w-1/2" />
+									<Skeleton className="mt-3 h-3 w-full" />
+								</div>
+							))}
+						</div>
+					) : projects.length === 0 ? (
+						<div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-6 text-center text-sm text-muted-foreground">
+							{canManage ? '暂无数据，请尝试新建项目或调整筛选条件。' : '暂无可见项目，尝试调整筛选条件。'}
+						</div>
+					) : (
+						projects.map((project) => (
+							<div key={project.id} className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm">
+								<div className="flex items-start justify-between gap-3">
+									<div>
+										<div className="text-sm font-semibold text-foreground">{project.projectName}</div>
+										<div className="mt-1 text-xs text-muted-foreground">编号：{project.projectCode}</div>
+									</div>
+									<span className={`h-fit rounded-full px-2 py-0.5 text-xs font-medium ${projectStatusBadgeClasses[project.status]}`}>
+										{projectStatusLabels[project.status]}
+									</span>
+								</div>
+								<div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+									<span className={`rounded-full px-2 py-0.5 text-xs font-medium ${projectPriorityBadgeClasses[project.priority]}`}>
+										{projectPriorityLabels[project.priority]}
+									</span>
+									{project.riskLevel && (
+										<Badge variant="outline" className="text-xs font-normal">
+											{riskLevelLabels[project.riskLevel]}
+										</Badge>
+									)}
+								</div>
+								<div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+									<div className="flex items-center justify-between gap-3">
+										<span>时间</span>
+										<span className="text-foreground">
+											{formatDate(project.startDate)} → {formatDate(project.expectedEndDate ?? project.endDate)}
+										</span>
+									</div>
+									<div className="flex items-center justify-between gap-3">
+										<span>预算 / 成本</span>
+										<span className="text-foreground">
+											{formatCurrency(project.budget ?? project.contractAmount, project.currency)} / {formatCurrency(project.actualCost, project.currency)}
+										</span>
+									</div>
+									<div className="flex items-center justify-between gap-3">
+										<span>客户</span>
+										<span className="text-foreground">{project.clientName ?? '—'}</span>
+									</div>
+								</div>
+								<div className="mt-4 flex justify-end">
+									<Button variant="outline" size="sm" onClick={() => onSelectProject(project.id)} className="gap-1">
+										查看详情
+										<ArrowRight className="h-4 w-4" />
+									</Button>
+								</div>
+							</div>
+						))
+					)}
+				</div>
+			</div>
+			<div className="relative hidden w-full overflow-x-auto md:block">
 				<Table className="min-w-[1024px] text-sm">
 					<TableHeader className="bg-muted/40">
 						<TableRow>

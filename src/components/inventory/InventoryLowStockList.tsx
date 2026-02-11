@@ -7,7 +7,7 @@ interface InventoryLowStockListProps {
 
 export default function InventoryLowStockList({ items, loading }: InventoryLowStockListProps) {
   return (
-    <div className="h-full rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
+    <div className="surface-card h-full p-5">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold text-amber-600 dark:text-amber-500">安全库存提醒</p>

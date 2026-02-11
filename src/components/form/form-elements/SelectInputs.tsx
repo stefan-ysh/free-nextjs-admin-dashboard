@@ -49,7 +49,7 @@ export default function SelectInputs() {
             label="Multiple Select Options"
             options={multiOptions}
             defaultSelected={["1", "3"]}
-            onChange={(values) => setSelectedValues(values)}
+            onChange={(values: string[]) => setSelectedValues(values)}
           />
           <p className="sr-only">
             Selected Values: {selectedValues.join(", ")}

@@ -9,6 +9,8 @@ import EmployeeForm from './EmployeeForm';
 import EmployeeStatusHistory from './EmployeeStatusHistory';
 import EmployeeTable from './EmployeeTable';
 import RoleAssignmentDialog, { type RoleAssignmentPayload } from './RoleAssignmentDialog';
+import ResetPasswordDialog from './ResetPasswordDialog';
+import CredentialsDialog from './CredentialsDialog';
 import {
   DepartmentOption,
   Employee,
@@ -25,7 +27,9 @@ import {
 } from './types';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -35,12 +39,14 @@ import {
 } from '@/components/ui/select';
 import {
   Drawer,
+  DrawerBody,
   DrawerClose,
   DrawerContent,
   DrawerDescription,
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
+  DrawerTrigger,
 } from '@/components/ui/drawer';
 import { useConfirm } from '@/hooks/useConfirm';
 import { Textarea } from '@/components/ui/textarea';
@@ -53,6 +59,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { formatDateOnly } from '@/lib/dates';
+import {
+  FORM_DRAWER_WIDTH_STANDARD,
+  FORM_DRAWER_WIDTH_WIDE,
+} from '@/components/common/form-drawer-width';
 
 const DEFAULT_FILTERS: EmployeeFilters = {
   search: '',
@@ -71,6 +82,7 @@ const IMPORT_TEMPLATE = `[
     "lastName": "王",
     "displayName": "王晓华",
     "email": "xiaohua@example.com",
+    "initialPassword": "Welcome123",
     "departmentCode": "ENG",
     "jobTitle": "前端工程师",
     "jobGradeCode": "L3",
@@ -104,6 +116,10 @@ const CSV_HEADER_ALIASES: Record<string, keyof EmployeeImportRow> = {
   'mobile': 'phone',
   '手机号': 'phone',
   '电话': 'phone',
+  'initial_password': 'initialPassword',
+  'initial password': 'initialPassword',
+  '初始密码': 'initialPassword',
+  '默认密码': 'initialPassword',
   'department': 'department',
   'department_name': 'department',
   '部门': 'department',
@@ -321,6 +337,7 @@ export default function EmployeeClient({
 }: EmployeeClientProps) {
   const [filters, setFilters] = useState<EmployeeFilters>(DEFAULT_FILTERS);
   const [searchInput, setSearchInput] = useState(DEFAULT_FILTERS.search);
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [page, setPage] = useState(initialPage);
   const [pageSize, setPageSize] = useState(initialPageSize);
   const [employees, setEmployees] = useState<Employee[]>(initialData);
@@ -340,12 +357,20 @@ export default function EmployeeClient({
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<EmployeeBulkImportResult | null>(null);
+  const [importDefaultPassword, setImportDefaultPassword] = useState('');
+  const [importUseCodePassword, setImportUseCodePassword] = useState(false);
   const [csvSummary, setCsvSummary] = useState<CsvSummary | null>(null);
   const [csvError, setCsvError] = useState<string | null>(null);
   const [csvParsing, setCsvParsing] = useState(false);
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [roleTarget, setRoleTarget] = useState<Employee | null>(null);
   const [roleSaving, setRoleSaving] = useState(false);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetTarget, setResetTarget] = useState<Employee | null>(null);
+  const [resetSaving, setResetSaving] = useState(false);
+  const [credentialsOpen, setCredentialsOpen] = useState(false);
+  const [credentialsAccounts, setCredentialsAccounts] = useState<Array<{ label: string; value: string }>>([]);
+  const [credentialsPassword, setCredentialsPassword] = useState('');
   const [autoBindingEmployeeId, setAutoBindingEmployeeId] = useState<string | null>(null);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
   const { hasPermission, loading: permissionLoading } = usePermissions();
@@ -357,6 +382,13 @@ export default function EmployeeClient({
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSearchTermRef = useRef(DEFAULT_FILTERS.search);
 
+  useEffect(() => {
+    if (credentialsOpen) return;
+    if (credentialsPassword || credentialsAccounts.length) {
+      setCredentialsPassword('');
+      setCredentialsAccounts([]);
+    }
+  }, [credentialsOpen, credentialsPassword, credentialsAccounts]);
 
 
   const permissionFlags = useMemo(() => {
@@ -490,7 +522,8 @@ export default function EmployeeClient({
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = `employees-${new Date().toISOString().slice(0, 10)}.csv`;
+      const today = formatDateOnly(new Date()) ?? new Date().toISOString().slice(0, 10);
+      anchor.download = `employees-${today}.csv`;
       document.body.appendChild(anchor);
       anchor.click();
       document.body.removeChild(anchor);
@@ -532,6 +565,8 @@ export default function EmployeeClient({
       setCsvSummary(null);
       setCsvError(null);
       setCsvParsing(false);
+      setImportDefaultPassword('');
+      setImportUseCodePassword(false);
       if (csvInputRef.current) {
         csvInputRef.current.value = '';
       }
@@ -603,7 +638,13 @@ export default function EmployeeClient({
       const response = await fetch('/api/employees/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: parsed }),
+        body: JSON.stringify({
+          items: parsed,
+          options: {
+            defaultInitialPassword: importDefaultPassword.trim() || undefined,
+            useEmployeeCodeAsPassword: importUseCodePassword || undefined,
+          },
+        }),
       });
       const payload: EmployeeBulkImportResponse = await response.json();
       if (!response.ok || !payload.success) {
@@ -630,6 +671,15 @@ export default function EmployeeClient({
     },
     [filters, pageSize, refreshList, canViewEmployees]
   );
+
+  const handleResetFilters = useCallback(() => {
+    if (!canViewEmployees) return;
+    setSearchInput('');
+    lastSearchTermRef.current = '';
+    setFilters(DEFAULT_FILTERS);
+    setPage(1);
+    refreshList(1, pageSize, DEFAULT_FILTERS);
+  }, [canViewEmployees, pageSize, refreshList]);
 
   const runSearchQuery = useCallback(
     (rawValue: string) => {
@@ -715,6 +765,22 @@ export default function EmployeeClient({
         throw new Error(data.error || '创建失败');
       }
       toast.success('员工创建成功');
+      const created = data.data;
+      const accounts: Array<{ label: string; value: string }> = [];
+      if (created?.email) {
+        accounts.push({ label: '邮箱', value: created.email });
+      }
+      if (created?.phone) {
+        accounts.push({ label: '手机号', value: created.phone });
+      }
+      if (created?.employeeCode) {
+        accounts.push({ label: '员工编号', value: created.employeeCode });
+      }
+      if (payload.initialPassword) {
+        setCredentialsAccounts(accounts);
+        setCredentialsPassword(payload.initialPassword);
+        setCredentialsOpen(true);
+      }
       setIsFormOpen(false);
       refreshList();
     } catch (err) {
@@ -897,6 +963,66 @@ export default function EmployeeClient({
     }
   }, []);
 
+  const handleResetPasswordClick = useCallback(
+    (employee: Employee) => {
+      if (!canUpdateEmployee) {
+        toast.error('当前账户无权重置密码');
+        return;
+      }
+      setResetTarget(employee);
+      setResetDialogOpen(true);
+    },
+    [canUpdateEmployee]
+  );
+
+  const handleResetDialogChange = useCallback((open: boolean) => {
+    setResetDialogOpen(open);
+    if (!open) {
+      setResetTarget(null);
+    }
+  }, []);
+
+  const handleResetSubmit = useCallback(
+    async ({ newPassword, confirmPassword }: { newPassword: string; confirmPassword: string }) => {
+      if (!resetTarget) return;
+      const trimmedPassword = newPassword.trim();
+      if (!trimmedPassword) {
+        toast.error('请输入新密码');
+        return;
+      }
+      if (trimmedPassword.length < 8) {
+        toast.error('新密码至少需要 8 个字符');
+        return;
+      }
+      if (confirmPassword && confirmPassword !== trimmedPassword) {
+        toast.error('两次输入的新密码不一致');
+        return;
+      }
+
+      setResetSaving(true);
+      try {
+        const response = await fetch(`/api/employees/${resetTarget.id}/password`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newPassword: trimmedPassword, confirmPassword }),
+        });
+        const payload: EmployeeMutationResponse = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || '重置失败');
+        }
+        toast.success('密码已重置');
+        setResetDialogOpen(false);
+        setResetTarget(null);
+      } catch (error) {
+        console.error('重置密码失败', error);
+        toast.error(error instanceof Error ? error.message : '重置失败');
+      } finally {
+        setResetSaving(false);
+      }
+    },
+    [resetTarget]
+  );
+
   const handleRoleSubmit = useCallback(
     async ({ roles, primaryRole }: RoleAssignmentPayload) => {
       if (!roleTarget) return;
@@ -974,6 +1100,62 @@ export default function EmployeeClient({
   const onLeaveCount = useMemo(() => employees.filter((emp) => emp.employmentStatus === 'on_leave').length, [employees]);
   const terminatedCount = useMemo(() => employees.filter((emp) => emp.employmentStatus === 'terminated').length, [employees]);
 
+  const activeFilterChips = useMemo(() => {
+    const chips: Array<{ key: string; label: string; onRemove: () => void }> = [];
+    const trimmedSearch = filters.search.trim();
+    if (trimmedSearch) {
+      chips.push({
+        key: 'search',
+        label: `关键词：${trimmedSearch}`,
+        onRemove: () => {
+          setSearchInput('');
+          lastSearchTermRef.current = '';
+          handleSearch({ search: '' });
+        },
+      });
+    }
+    if (filters.departmentId) {
+      const label = departmentOptions.find((dept) => dept.id === filters.departmentId)?.name ?? filters.departmentId;
+      chips.push({
+        key: 'department',
+        label: `部门：${label}`,
+        onRemove: () => handleSearch({ departmentId: null, department: null }),
+      });
+    }
+    if (filters.jobGradeId) {
+      const label = jobGradeOptions.find((grade) => grade.id === filters.jobGradeId)?.name ?? filters.jobGradeId;
+      chips.push({
+        key: 'jobGrade',
+        label: `职级：${label}`,
+        onRemove: () => handleSearch({ jobGradeId: null }),
+      });
+    }
+    if (filters.status !== 'all') {
+      chips.push({
+        key: 'status',
+        label: `状态：${EMPLOYMENT_STATUS_LABELS[filters.status] ?? filters.status}`,
+        onRemove: () => handleSearch({ status: 'all' }),
+      });
+    }
+    if (filters.sortBy !== DEFAULT_FILTERS.sortBy) {
+      const sortLabelMap: Record<EmployeeFilters['sortBy'], string> = {
+        updatedAt: '按更新时间',
+        createdAt: '按创建时间',
+        lastName: '按姓名',
+        department: '按部门',
+        status: '按状态',
+      };
+      chips.push({
+        key: 'sortBy',
+        label: `排序：${sortLabelMap[filters.sortBy] ?? filters.sortBy}`,
+        onRemove: () => handleSearch({ sortBy: DEFAULT_FILTERS.sortBy, sortOrder: DEFAULT_FILTERS.sortOrder }),
+      });
+    }
+    return chips;
+  }, [departmentOptions, filters, handleSearch, jobGradeOptions]);
+
+  const activeFilterCount = activeFilterChips.length;
+
   const renderSummaryChip = (status: EmploymentStatus, count: number) => {
     const meta = STATUS_CARD_META[status];
     return (
@@ -1014,131 +1196,161 @@ export default function EmployeeClient({
       </div>
 
       {/* Filters & Actions Bar */}
-      <div className="rounded-lg border border-border bg-card p-3 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-          {/* Filters Grid */}
-          <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 lg:gap-4">
-            <div className="space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">搜索</span>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="employee-search"
-                  value={searchInput}
-                  onChange={(event) => handleSearchInputChange(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      triggerImmediateSearch();
-                    }
-                  }}
-                  placeholder="搜索姓名/邮箱/电话"
-                  className="h-9 pl-10 text-xs"
-                />
-              </div>
+      <div className="surface-toolbar p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="employee-search"
+                value={searchInput}
+                onChange={(event) => handleSearchInputChange(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    triggerImmediateSearch();
+                  }
+                }}
+                placeholder="搜索姓名/邮箱/电话"
+                className="h-10 w-full pl-10 text-sm"
+              />
             </div>
-
-            <div className="space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">部门</span>
-              <Select
-                value={filters.departmentId ?? 'all'}
-                onValueChange={(value) =>
-                  handleSearch({
-                    departmentId: value === 'all' ? null : value,
-                    department: null,
-                  })
-                }
-              >
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="全部部门" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部部门</SelectItem>
-                  {departmentOptions.map((dept) => (
-                    <SelectItem key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">职级</span>
-              <Select
-                value={filters.jobGradeId ?? 'all'}
-                onValueChange={(value) =>
-                  handleSearch({
-                    jobGradeId: value === 'all' ? null : value,
-                  })
-                }
-              >
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="全部职级" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部职级</SelectItem>
-                  {jobGradeOptions.map((grade) => (
-                    <SelectItem key={grade.id} value={grade.id}>
-                      {grade.name}
-                      {grade.level != null ? ` (L${grade.level})` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">状态</span>
-              <Select value={filters.status} onValueChange={(value) => handleSearch({ status: value as EmployeeFilters['status'] })}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="全部状态" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部状态</SelectItem>
-                  <SelectItem value="active">在职</SelectItem>
-                  <SelectItem value="on_leave">休假</SelectItem>
-                  <SelectItem value="terminated">已离职</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">排序</span>
-              <Select
-                value={filters.sortBy}
-                onValueChange={(value) => handleSearch({ sortBy: value as EmployeeFilters['sortBy'] })}
-              >
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="排序字段" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="updatedAt">按更新时间</SelectItem>
-                  <SelectItem value="createdAt">按创建时间</SelectItem>
-                  <SelectItem value="lastName">按姓名</SelectItem>
-                  <SelectItem value="department">按部门</SelectItem>
-                  <SelectItem value="status">按状态</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Button variant="secondary" size="sm" onClick={triggerImmediateSearch} className="h-10 px-4">
+              查询
+            </Button>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-2 pt-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Drawer open={filterDrawerOpen} onOpenChange={setFilterDrawerOpen} direction="right">
+              <DrawerTrigger asChild>
+                <Button variant="outline" size="sm" className="h-10 px-4">
+                  筛选
+                  {activeFilterCount > 0 && (
+                    <Badge className="ml-1 rounded-full px-2 py-0 text-[10px]" variant="secondary">
+                      {activeFilterCount}
+                    </Badge>
+                  )}
+                </Button>
+              </DrawerTrigger>
+              <DrawerContent side="right" className="sm:max-w-xl">
+                <DrawerHeader>
+                  <DrawerTitle>筛选条件</DrawerTitle>
+                  <DrawerDescription>组合多个条件以快速定位员工。</DrawerDescription>
+                </DrawerHeader>
+                <DrawerBody className="space-y-4">
+                  <div className="space-y-2">
+                    <span className="text-xs font-medium text-muted-foreground">部门</span>
+                    <Select
+                      value={filters.departmentId ?? 'all'}
+                      onValueChange={(value) =>
+                        handleSearch({
+                          departmentId: value === 'all' ? null : value,
+                          department: null,
+                        })
+                      }
+                    >
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="全部部门" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">全部部门</SelectItem>
+                        {departmentOptions.map((dept) => (
+                          <SelectItem key={dept.id} value={dept.id}>
+                            {dept.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <span className="text-xs font-medium text-muted-foreground">职级</span>
+                    <Select
+                      value={filters.jobGradeId ?? 'all'}
+                      onValueChange={(value) =>
+                        handleSearch({
+                          jobGradeId: value === 'all' ? null : value,
+                        })
+                      }
+                    >
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="全部职级" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">全部职级</SelectItem>
+                        {jobGradeOptions.map((grade) => (
+                          <SelectItem key={grade.id} value={grade.id}>
+                            {grade.name}
+                            {grade.level != null ? ` (L${grade.level})` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <span className="text-xs font-medium text-muted-foreground">状态</span>
+                    <Select value={filters.status} onValueChange={(value) => handleSearch({ status: value as EmployeeFilters['status'] })}>
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="全部状态" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">全部状态</SelectItem>
+                        <SelectItem value="active">在职</SelectItem>
+                        <SelectItem value="on_leave">休假</SelectItem>
+                        <SelectItem value="terminated">已离职</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <span className="text-xs font-medium text-muted-foreground">排序</span>
+                    <Select
+                      value={filters.sortBy}
+                      onValueChange={(value) => handleSearch({ sortBy: value as EmployeeFilters['sortBy'] })}
+                    >
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="排序字段" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="updatedAt">按更新时间</SelectItem>
+                        <SelectItem value="createdAt">按创建时间</SelectItem>
+                        <SelectItem value="lastName">按姓名</SelectItem>
+                        <SelectItem value="department">按部门</SelectItem>
+                        <SelectItem value="status">按状态</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </DrawerBody>
+                <DrawerFooter>
+                  <Button type="button" variant="outline" onClick={handleResetFilters}>
+                    重置
+                  </Button>
+                  <Button type="button" onClick={() => setFilterDrawerOpen(false)}>
+                    完成
+                  </Button>
+                </DrawerFooter>
+              </DrawerContent>
+            </Drawer>
+
+            <Button variant="ghost" size="sm" onClick={handleResetFilters} className="h-10 px-3 text-muted-foreground">
+              清空
+            </Button>
+
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => refreshList()}
               disabled={loading || isPending}
-              className="h-9 gap-1"
+              className="h-10 gap-1"
             >
               <RefreshCcw className="h-4 w-4" /> 刷新
             </Button>
             {canViewEmployees && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="outline" size="sm" className="h-9 gap-1" disabled={exporting}>
+                  <Button type="button" variant="outline" size="sm" className="h-10 gap-1" disabled={exporting}>
                     <Download className="h-4 w-4" /> 批量操作
                   </Button>
                 </DropdownMenuTrigger>
@@ -1178,12 +1390,29 @@ export default function EmployeeClient({
               </DropdownMenu>
             )}
             {canCreateEmployee && (
-              <Button type="button" size="sm" onClick={handleCreateClick} className="h-9 gap-1">
+              <Button type="button" size="sm" onClick={handleCreateClick} className="h-10 gap-1">
                 <Plus className="h-4 w-4" /> 新增
               </Button>
             )}
           </div>
         </div>
+
+        {activeFilterChips.length > 0 && (
+          <div className="mt-3 flex flex-nowrap gap-2 overflow-x-auto pb-1 text-xs sm:flex-wrap">
+            {activeFilterChips.map((chip) => (
+              <Button
+                key={chip.key}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 shrink-0 rounded-full px-3 text-xs"
+                onClick={chip.onRemove}
+              >
+                {chip.label} ×
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
 
       <EmployeeTable
@@ -1191,15 +1420,17 @@ export default function EmployeeClient({
         loading={loading || isPending}
         onEdit={handleEdit}
         onDelete={handleDelete}
+        onResetPassword={handleResetPasswordClick}
         canEdit={canUpdateEmployee}
         canDelete={canDeleteEmployee}
         onAssignRoles={canAssignRoles ? handleRoleAssignClick : undefined}
         canAssignRoles={canAssignRoles}
+        canResetPassword={canUpdateEmployee}
       />
 
       {/* Pagination */}
-      <div className="flex flex-col gap-3 border-t border-transparent px-2 py-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
-        <div>共 {total} 人 • 第 {page} / {totalPages} 页</div>
+      <div className="surface-card flex flex-col gap-3 px-4 py-3 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+        <div>共 {total} 人 · 第 {page} / {totalPages} 页</div>
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
           <Select value={String(pageSize)} onValueChange={(value) => handlePageSizeChange(Number(value))}>
             <SelectTrigger className="h-9 w-[140px]">
@@ -1220,7 +1451,7 @@ export default function EmployeeClient({
               size="sm"
               onClick={() => handlePageChange('prev')}
               disabled={page <= 1}
-              className="gap-1"
+              className="h-9 gap-1 px-3"
             >
               <ChevronLeft className="h-4 w-4" /> 上一页
             </Button>
@@ -1230,7 +1461,7 @@ export default function EmployeeClient({
               size="sm"
               onClick={() => handlePageChange('next')}
               disabled={page >= totalPages}
-              className="gap-1"
+              className="h-9 gap-1 px-3"
             >
               下一页 <ChevronRight className="h-4 w-4" />
             </Button>
@@ -1246,181 +1477,210 @@ export default function EmployeeClient({
         onSubmit={handleRoleSubmit}
       />
 
+      <ResetPasswordDialog
+        open={resetDialogOpen}
+        employee={resetTarget}
+        saving={resetSaving}
+        onOpenChange={handleResetDialogChange}
+        onSubmit={handleResetSubmit}
+      />
+
+      <CredentialsDialog
+        open={credentialsOpen}
+        accounts={credentialsAccounts}
+        password={credentialsPassword}
+        onOpenChange={setCredentialsOpen}
+      />
+
       <Drawer open={isFormOpen} onOpenChange={handleDialogOpenChange} direction="right">
-        <DrawerContent side="right" className="w-full sm:max-w-4xl">
-          <div className="flex h-full flex-col">
-            <DrawerHeader className="border-b px-6 py-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <DrawerTitle>
-                    {isEditMode
-                      ? `编辑员工: ${selectedEmployee?.displayName ?? selectedEmployee?.firstName ?? ''}`
-                      : selectedEmployee
-                        ? '员工详情'
-                        : '新增员工'}
-                  </DrawerTitle>
-                  <DrawerDescription>
-                    {isEditMode
-                      ? '更新员工档案信息，保存后立即生效'
-                      : selectedEmployee
-                        ? '查看员工基础信息，如需调整请切换到编辑模式'
-                        : '填写入职信息后提交创建新的员工记录'}
-                  </DrawerDescription>
-                </div>
-                <div className="flex gap-2">
-                  {selectedEmployee && !isEditMode && (
-                    <Button variant="outline" size="sm" onClick={() => setIsEditMode(true)}>
-                      编辑
-                    </Button>
-                  )}
-                  <DrawerClose asChild>
-                    <Button variant="ghost" size="sm" onClick={handleDialogClose}>
-                      关闭
-                    </Button>
-                  </DrawerClose>
-                </div>
+        <DrawerContent side="right" className={FORM_DRAWER_WIDTH_WIDE}>
+          <DrawerHeader>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <DrawerTitle>
+                  {isEditMode
+                    ? `编辑员工: ${selectedEmployee?.displayName ?? selectedEmployee?.firstName ?? ''}`
+                    : selectedEmployee
+                      ? '员工详情'
+                      : '新增员工'}
+                </DrawerTitle>
+                <DrawerDescription>
+                  {isEditMode
+                    ? '更新员工档案信息，保存后立即生效'
+                    : selectedEmployee
+                      ? '查看员工基础信息，如需调整请切换到编辑模式'
+                      : '填写入职信息后提交创建新的员工记录'}
+                </DrawerDescription>
               </div>
-            </DrawerHeader>
-            <div className="flex-1 overflow-y-auto px-6 py-4">
-              {isFormOpen && (
-                <div className="space-y-6">
-                  <EmployeeForm
-                    initialData={selectedEmployee}
-                    onSubmit={selectedEmployee ? handleUpdate : handleCreate}
-                    onCancel={handleDialogClose}
-                    departmentOptions={departmentOptions}
-                    jobGradeOptions={jobGradeOptions}
-                    formId="employee-details-form"
-                    hideActions
-                  />
-                  {selectedEmployee && (
-                    <EmployeeStatusHistory
-                      employeeId={selectedEmployee.id}
-                      refreshSignal={statusHistoryRefreshSignal}
-                    />
-                  )}
-                </div>
-              )}
+              <div className="flex gap-2">
+                {selectedEmployee && !isEditMode && (
+                  <Button variant="outline" size="sm" onClick={() => setIsEditMode(true)}>
+                    编辑
+                  </Button>
+                )}
+                <DrawerClose asChild>
+                  <Button variant="ghost" size="sm" onClick={handleDialogClose}>
+                    关闭
+                  </Button>
+                </DrawerClose>
+              </div>
             </div>
-            <DrawerFooter className="border-t px-6 py-4">
-              <DrawerClose asChild>
-                <Button type="button" variant="outline" onClick={handleDialogClose}>
-                  取消
-                </Button>
-              </DrawerClose>
-              {(!selectedEmployee || isEditMode) && (
-                <Button type="submit" form="employee-details-form">
-                  {selectedEmployee ? '保存修改' : '创建员工'}
-                </Button>
-              )}
-            </DrawerFooter>
-          </div>
+          </DrawerHeader>
+          <DrawerBody>
+            {isFormOpen && (
+              <div className="space-y-6">
+                <EmployeeForm
+                  initialData={selectedEmployee}
+                  onSubmit={selectedEmployee ? handleUpdate : handleCreate}
+                  onCancel={handleDialogClose}
+                  departmentOptions={departmentOptions}
+                  jobGradeOptions={jobGradeOptions}
+                  formId="employee-details-form"
+                  hideActions
+                />
+                {selectedEmployee && (
+                  <EmployeeStatusHistory
+                    employeeId={selectedEmployee.id}
+                    refreshSignal={statusHistoryRefreshSignal}
+                  />
+                )}
+              </div>
+            )}
+          </DrawerBody>
+          <DrawerFooter>
+            <DrawerClose asChild>
+              <Button type="button" variant="outline" onClick={handleDialogClose}>
+                取消
+              </Button>
+            </DrawerClose>
+            {(!selectedEmployee || isEditMode) && (
+              <Button type="submit" form="employee-details-form">
+                {selectedEmployee ? '保存修改' : '创建员工'}
+              </Button>
+            )}
+          </DrawerFooter>
         </DrawerContent>
       </Drawer>
 
       <Drawer open={importDialogOpen} onOpenChange={handleImportDialogChange} direction="right">
-        <DrawerContent side="right" className="max-w-3xl">
-          <div className="flex h-full flex-col">
-            <DrawerHeader className="border-b px-6 py-4">
-              <DrawerTitle>批量导入员工</DrawerTitle>
-              <DrawerDescription>
-                支持粘贴 JSON 数组或上传 CSV 文件，字段与单条新增员工一致，支持通过 departmentId 或 departmentCode、jobGradeId 或
-                jobGradeCode 进行关联。
-              </DrawerDescription>
-            </DrawerHeader>
-            <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
-              <div className="space-y-3 rounded-lg border border-dashed border-border/70 bg-muted/10 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  <p className="text-sm font-medium text-foreground">上传 CSV 文件</p>
-                  <p>首行必须包含字段名，系统会匹配常见列名并自动转换状态、日期、部门等字段。</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={csvInputRef}
-                    type="file"
-                    accept=".csv,text/csv"
-                    className="hidden"
-                    onChange={handleCsvFileChange}
-                  />
-                  <Button type="button" variant="outline" size="sm" onClick={() => csvInputRef.current?.click()} disabled={csvParsing}>
-                    {csvParsing ? <RefreshCcw className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />} {csvParsing ? '解析中...' : '选择 CSV'}
-                  </Button>
-                </div>
+        <DrawerContent side="right" className={FORM_DRAWER_WIDTH_STANDARD}>
+          <DrawerHeader>
+            <DrawerTitle>批量导入员工</DrawerTitle>
+            <DrawerDescription>
+              支持粘贴 JSON 数组或上传 CSV 文件，字段与单条新增员工一致，支持通过 departmentId 或 departmentCode、jobGradeId 或
+              jobGradeCode 进行关联。
+            </DrawerDescription>
+          </DrawerHeader>
+          <DrawerBody className="space-y-4">
+            <div className="space-y-3 rounded-lg border border-dashed border-border/70 bg-muted/10 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p className="text-sm font-medium text-foreground">上传 CSV 文件</p>
+                <p>首行必须包含字段名，系统会匹配常见列名并自动转换状态、日期、部门等字段。</p>
               </div>
-              {csvError && (
-                <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
-                  {csvError}
-                </div>
-              )}
-              {csvSummary && (
-                <div className="rounded-md border border-border/50 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
-                  <p>
-                    已解析 <span className="font-medium text-foreground">{csvSummary.rows}</span> 条记录，识别列：
-                    {summarizeHeaders(csvSummary.recognizedHeaders)}。
-                  </p>
-                  {csvSummary.ignoredHeaders.length > 0 && (
-                    <p>未识别列：{summarizeHeaders(csvSummary.ignoredHeaders)}</p>
-                  )}
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <input
+                  ref={csvInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={handleCsvFileChange}
+                />
+                <Button type="button" variant="outline" size="sm" onClick={() => csvInputRef.current?.click()} disabled={csvParsing}>
+                  {csvParsing ? <RefreshCcw className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />} {csvParsing ? '解析中...' : '选择 CSV'}
+                </Button>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span>最多一次导入 500 条，可在下方调整解析后的 JSON，系统会根据员工编号 / 邮箱匹配已有记录。</span>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="h-7 px-2 text-xs"
-                onClick={handleLoadExample}
-              >
-                载入示例
-              </Button>
-            </div>
-            <Textarea
-              value={importText}
-              onChange={(event) => setImportText(event.target.value)}
-              placeholder={IMPORT_TEMPLATE}
-              rows={12}
-              className="font-mono text-xs"
-            />
-            {importError && (
+            {csvError && (
               <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
-                {importError}
+                {csvError}
               </div>
             )}
-              {importResult && (
-                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-200">
-                  <p>
-                    新增 {importResult.created} 条，更新 {importResult.updated} 条，跳过 {importResult.skipped} 条。
-                  </p>
-                  {importResult.errors?.length ? (
-                    <div className="mt-2 space-y-1 text-[11px] text-emerald-900/80 dark:text-emerald-100">
-                      {importResult.errors?.slice(0, 3).map((err: NonNullable<EmployeeBulkImportResponse['data']>['errors'][number]) => (
-                        <p key={`${err.index}-${err.message}`}>
-                          第 {err.index + 1} 行：{err.identifier ? `${err.identifier} - ` : ''}{err.message}
-                        </p>
-                      ))}
-                      {importResult.errors && importResult.errors.length > 3 && (
-                        <p>其余 {importResult.errors.length - 3} 条请查看接口响应。</p>
-                      )}
-                    </div>
-                  ) : null}
-                </div>
-              )}
-            </div>
-            <DrawerFooter className="border-t px-6 py-4">
-              <DrawerClose asChild>
-                <Button type="button" variant="ghost" onClick={() => handleImportDialogChange(false)}>
-                  取消
-                </Button>
-              </DrawerClose>
-              <Button type="button" onClick={handleImportSubmit} disabled={importing} className="gap-1">
-                {importing ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                {importing ? '导入中...' : '开始导入'}
-              </Button>
-            </DrawerFooter>
+            {csvSummary && (
+              <div className="rounded-md border border-border/50 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+                <p>
+                  已解析 <span className="font-medium text-foreground">{csvSummary.rows}</span> 条记录，识别列：
+                  {summarizeHeaders(csvSummary.recognizedHeaders)}。
+                </p>
+                {csvSummary.ignoredHeaders.length > 0 && (
+                  <p>未识别列：{summarizeHeaders(csvSummary.ignoredHeaders)}</p>
+                )}
+              </div>
+            )}
           </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span>最多一次导入 500 条，可在下方调整解析后的 JSON，系统会根据员工编号 / 邮箱匹配已有记录。</span>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs"
+              onClick={handleLoadExample}
+            >
+              载入示例
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 gap-3 rounded-lg border border-border/60 bg-background/60 p-4 text-sm md:grid-cols-2">
+            <div className="space-y-2">
+              <span className="text-xs font-medium text-muted-foreground">导入默认初始密码（可选）</span>
+              <Input
+                type="text"
+                placeholder="为空则使用每行 initialPassword"
+                value={importDefaultPassword}
+                onChange={(event) => setImportDefaultPassword(event.target.value)}
+              />
+            </div>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Checkbox
+                checked={importUseCodePassword}
+                onCheckedChange={(value) => setImportUseCodePassword(value === true)}
+              />
+              使用员工编号作为初始密码（优先于默认密码）
+            </label>
+          </div>
+          <Textarea
+            value={importText}
+            onChange={(event) => setImportText(event.target.value)}
+            placeholder={IMPORT_TEMPLATE}
+            rows={12}
+            className="font-mono text-xs"
+          />
+          {importError && (
+            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
+              {importError}
+            </div>
+          )}
+            {importResult && (
+              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-200">
+                <p>
+                  新增 {importResult.created} 条，更新 {importResult.updated} 条，跳过 {importResult.skipped} 条。
+                </p>
+                {importResult.errors?.length ? (
+                  <div className="mt-2 space-y-1 text-[11px] text-emerald-900/80 dark:text-emerald-100">
+                    {importResult.errors?.slice(0, 3).map((err: NonNullable<EmployeeBulkImportResponse['data']>['errors'][number]) => (
+                      <p key={`${err.index}-${err.message}`}>
+                        第 {err.index + 1} 行：{err.identifier ? `${err.identifier} - ` : ''}{err.message}
+                      </p>
+                    ))}
+                    {importResult.errors && importResult.errors.length > 3 && (
+                      <p>其余 {importResult.errors.length - 3} 条请查看接口响应。</p>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </DrawerBody>
+          <DrawerFooter>
+            <DrawerClose asChild>
+              <Button type="button" variant="ghost" onClick={() => handleImportDialogChange(false)}>
+                取消
+              </Button>
+            </DrawerClose>
+            <Button type="button" onClick={handleImportSubmit} disabled={importing} className="gap-1">
+              {importing ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              {importing ? '导入中...' : '开始导入'}
+            </Button>
+          </DrawerFooter>
         </DrawerContent>
       </Drawer>
 

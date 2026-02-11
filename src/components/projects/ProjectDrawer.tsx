@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
 	Drawer,
+	DrawerBody,
 	DrawerClose,
 	DrawerContent,
 	DrawerDescription,
@@ -149,8 +150,8 @@ export default function ProjectDrawer({ projectId, onClose, onUpdated }: Props) 
 
 	return (
 		<Drawer open={open} onOpenChange={(next) => { if (!next) onClose(); }} direction="right">
-			<DrawerContent side="right" className="flex h-full w-full flex-col sm:max-w-2xl">
-				<DrawerHeader className="border-b px-6 py-4">
+			<DrawerContent side="right" className="w-full sm:max-w-2xl">
+				<DrawerHeader>
 					<div className="flex items-start justify-between gap-4">
 						<div>
 							<DrawerTitle>{project?.projectName ?? '项目详情'}</DrawerTitle>
@@ -167,7 +168,7 @@ export default function ProjectDrawer({ projectId, onClose, onUpdated }: Props) 
 					</div>
 				</DrawerHeader>
 
-				<div className="flex-1 overflow-y-auto px-6 py-5">
+				<DrawerBody className="py-5">
 					{!projectId && !loading && !error && (
 						<div className="flex h-full items-center justify-center text-sm text-muted-foreground">
 							请选择左侧列表中的项目以查看详情。
@@ -193,7 +194,7 @@ export default function ProjectDrawer({ projectId, onClose, onUpdated }: Props) 
 
 					{project && !loading && !error && (
 						<div className="space-y-6">
-							<section className="rounded-2xl border border-border bg-card p-4">
+							<section className="surface-panel p-4">
 								<div className="flex flex-wrap items-center gap-2">
 									<span className={`rounded-full px-2 py-0.5 text-xs font-medium ${projectStatusBadgeClasses[project.status]}`}>
 										{projectStatusLabels[project.status]}
@@ -226,7 +227,7 @@ export default function ProjectDrawer({ projectId, onClose, onUpdated }: Props) 
 								{project.description && <p className="mt-4 text-sm text-muted-foreground">{project.description}</p>}
 							</section>
 
-							<section className="rounded-2xl border border-border bg-card p-4">
+							<section className="surface-panel p-4">
 								<div className="flex items-center gap-2 text-sm font-semibold text-foreground">
 									<CalendarDays className="h-4 w-4 text-muted-foreground" />
 									<span>时间线</span>
@@ -251,7 +252,7 @@ export default function ProjectDrawer({ projectId, onClose, onUpdated }: Props) 
 								</div>
 							</section>
 
-							<section className="rounded-2xl border border-border bg-card p-4">
+							<section className="surface-panel p-4">
 								<div className="flex items-center gap-2 text-sm font-semibold text-foreground">
 									<FileText className="h-4 w-4 text-muted-foreground" />
 									<span>财务情况</span>
@@ -279,7 +280,7 @@ export default function ProjectDrawer({ projectId, onClose, onUpdated }: Props) 
 								)}
 							</section>
 
-							<section className="rounded-2xl border border-border bg-card p-4">
+							<section className="surface-panel p-4">
 								<div className="flex items-center gap-2 text-sm font-semibold text-foreground">
 									<Users className="h-4 w-4 text-muted-foreground" />
 									<span>团队成员</span>
@@ -294,7 +295,7 @@ export default function ProjectDrawer({ projectId, onClose, onUpdated }: Props) 
 								</div>
 							</section>
 
-							<section className="rounded-2xl border border-border bg-card p-4">
+							<section className="surface-panel p-4">
 								<div className="flex items-center gap-2 text-sm font-semibold text-foreground">
 									<Link2 className="h-4 w-4 text-muted-foreground" />
 									<span>附件</span>
@@ -315,7 +316,7 @@ export default function ProjectDrawer({ projectId, onClose, onUpdated }: Props) 
 							</section>
 
 							{project.milestones.length > 0 && (
-								<section className="rounded-2xl border border-border bg-card p-4">
+								<section className="surface-panel p-4">
 									<div className="flex items-center gap-2 text-sm font-semibold text-foreground">
 										<CalendarCheck className="h-4 w-4 text-muted-foreground" />
 										<span>里程碑</span>
@@ -329,9 +330,9 @@ export default function ProjectDrawer({ projectId, onClose, onUpdated }: Props) 
 							)}
 						</div>
 					)}
-				</div>
+				</DrawerBody>
 
-				<DrawerFooter className="border-t px-6 py-4">
+				<DrawerFooter>
 					<DrawerClose asChild>
 						<Button variant="outline" onClick={onClose} className="w-full sm:w-auto">
 							关闭

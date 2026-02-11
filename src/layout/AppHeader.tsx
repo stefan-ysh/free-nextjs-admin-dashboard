@@ -67,7 +67,7 @@ const AppHeader: React.FC = () => {
           <Button
             variant="outline"
             size="icon"
-            className="z-40 h-11 w-11 border-gray-200 text-gray-500 dark:border-gray-800 dark:text-gray-300"
+            className="z-40 h-10 w-10 border-gray-200 text-gray-500 dark:border-gray-800 dark:text-gray-300 sm:h-11 sm:w-11"
             onClick={handleToggle}
             aria-label="Toggle Sidebar"
           >
@@ -78,14 +78,14 @@ const AppHeader: React.FC = () => {
             <Image
               width={154}
               height={32}
-              className="dark:hidden"
+              className="h-7 w-auto dark:hidden sm:h-8"
               src="/images/logo/logo.svg"
               alt="Logo"
             />
             <Image
               width={154}
               height={32}
-              className="hidden dark:block"
+              className="hidden h-7 w-auto dark:block sm:h-8"
               src="/images/logo/logo.svg"
               alt="Logo"
             />
@@ -107,7 +107,7 @@ const AppHeader: React.FC = () => {
             isApplicationMenuOpen ? "flex shadow-theme-md" : "hidden lg:flex"
           )}
         >
-          <div className="flex items-center gap-2 2xsm:gap-3">
+          <div className="flex flex-wrap items-center gap-2 2xsm:gap-3">
             {/* <!-- Quick Create Menu --> */}
             {hasQuickActions && (
               <DropdownMenu>

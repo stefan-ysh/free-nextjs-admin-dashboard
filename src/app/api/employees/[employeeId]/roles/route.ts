@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { toPermissionUser } from '@/lib/auth/permission-user';
+import { logAuthAudit } from '@/lib/auth/audit';
 import { getEmployeeById } from '@/lib/hr/employees';
 import { updateUserRoles } from '@/lib/users';
 import { checkPermission, Permissions } from '@/lib/permissions';
@@ -88,6 +89,12 @@ export async function PUT(
 
     await updateUserRoles(employee.userId, roles, resolvedPrimary);
     const updated = await getEmployeeById(employeeId);
+    await logAuthAudit({
+      actorId: context.user.id,
+      targetId: employeeId,
+      action: 'roles.update',
+      metadata: { roles, primaryRole: resolvedPrimary },
+    });
 
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {

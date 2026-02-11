@@ -84,7 +84,7 @@ export default function UserDropdown() {
           </svg>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-[260px] rounded-2xl border border-border bg-card p-4 shadow-lg">
+      <DropdownMenuContent align="end" className="surface-card w-[260px] p-4 shadow-lg">
         <div>
           <DropdownMenuLabel className="px-0 pb-0 text-theme-sm font-medium text-foreground">
             {displayName || "访客"}

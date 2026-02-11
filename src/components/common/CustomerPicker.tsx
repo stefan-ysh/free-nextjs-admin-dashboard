@@ -165,7 +165,7 @@ export default function CustomerPicker({ value, onChange, disabled, helperText, 
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[420px] space-y-3" align="start">
+        <PopoverContent className="surface-card w-[420px] space-y-3 p-3" align="start">
           <div className="flex gap-2">
             <Input
               type="search"
@@ -181,7 +181,7 @@ export default function CustomerPicker({ value, onChange, disabled, helperText, 
               <XCircle className="h-4 w-4" />
             </Button>
           </div>
-          <div className="rounded-xl border">
+          <div className="surface-panel">
             {loading && (
               <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" /> 正在加载客户...
@@ -231,7 +231,7 @@ export default function CustomerPicker({ value, onChange, disabled, helperText, 
         </PopoverContent>
       </Popover>
       {selected && (
-        <div className="rounded-xl border border-dashed px-4 py-3 text-xs text-muted-foreground">
+        <div className="surface-panel border-dashed px-4 py-3 text-xs text-muted-foreground">
           <div className="flex items-center justify-between">
             <span>{selected.invoiceTitle || selected.displayName}</span>
             <span>{selected.paymentTerm?.toUpperCase()}</span>

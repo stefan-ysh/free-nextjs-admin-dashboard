@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
+import { Info } from 'lucide-react';
 
 import DatePicker from '@/components/ui/DatePicker';
 import { Button } from '@/components/ui/button';
@@ -12,21 +13,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import FileUpload from '@/components/common/FileUpload';
 import UserSelect from '@/components/common/UserSelect';
+import EmployeeSelector from '@/components/common/EmployeeSelector';
 import ProjectSelector from '@/components/common/ProjectSelector';
 import SupplierSelector from '@/components/common/SupplierSelector';
+import { formatDateOnly } from '@/lib/dates';
 import {
 	INVOICE_TYPES,
 	INVOICE_STATUSES,
 	PAYMENT_METHODS,
 	PAYMENT_TYPES,
 	PURCHASE_CHANNELS,
+	PURCHASE_ORGANIZATIONS,
 	InvoiceStatus,
 	InvoiceType,
 	PaymentMethod,
 	PaymentType,
 	PurchaseChannel,
+	PurchaseOrganization,
 	type PurchaseRecord,
 } from '@/types/purchase';
 import { purchaseFormSchema, type PurchaseFormValues } from '@/lib/validations/purchase';
@@ -65,16 +72,25 @@ const invoiceLabels: Record<InvoiceType, string> = {
 };
 
 const paymentChannelSuggestions = ['公对公', '公对私', '银行转账', '支付宝', '微信', '现金', '其他'];
-const SECTION_CARD_CLASS = 'rounded-2xl bg-white/90 p-6 shadow-sm dark:bg-gray-900/40';
+const SECTION_CARD_CLASS = 'surface-panel p-6';
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const FIELD_FULL = 'w-full lg:col-span-1';
+const organizationLabels: Record<PurchaseOrganization, string> = {
+	school: '学校',
+	company: '单位',
+};
+const currencyFormatter = new Intl.NumberFormat('zh-CN', {
+	style: 'currency',
+	currency: 'CNY',
+});
 
 const toDateInputValue = (value?: string | null, fallbackToday = false): string => {
 	if (!value) {
-		return fallbackToday ? new Date().toISOString().slice(0, 10) : '';
+		return fallbackToday ? formatDateOnly(new Date()) ?? '' : '';
 	}
 	const trimmed = value.trim();
 	if (!trimmed) {
-		return fallbackToday ? new Date().toISOString().slice(0, 10) : '';
+		return fallbackToday ? formatDateOnly(new Date()) ?? '' : '';
 	}
 	if (ISO_DATE_PATTERN.test(trimmed)) {
 		return trimmed;
@@ -85,13 +101,14 @@ const toDateInputValue = (value?: string | null, fallbackToday = false): string 
 	}
 	const parsed = new Date(trimmed);
 	if (Number.isNaN(parsed.getTime())) {
-		return fallbackToday ? new Date().toISOString().slice(0, 10) : '';
+		return fallbackToday ? formatDateOnly(new Date()) ?? '' : '';
 	}
-	return parsed.toISOString().slice(0, 10);
+	return formatDateOnly(parsed) ?? '';
 };
 
 export type PurchaseFormSubmitPayload = {
 	purchaseDate: string;
+	organizationType: PurchaseOrganization;
 	itemName: string;
 	specification: string | null;
 	quantity: number;
@@ -130,12 +147,14 @@ type PurchaseFormProps = {
 };
 
 export default function PurchaseForm({ mode, initialData, currentUserId, onSubmit, onCancel, disabled = false }: PurchaseFormProps) {
+	const [proxyPayerUserId, setProxyPayerUserId] = useState('');
 	const defaultValues = useMemo<PurchaseFormValues>(() => {
 		const invoiceType = initialData?.invoiceType ?? InvoiceType.NONE;
 		const invoiceStatus =
 			initialData?.invoiceStatus ?? (invoiceType === InvoiceType.NONE ? InvoiceStatus.NOT_REQUIRED : InvoiceStatus.PENDING);
 		return {
 			purchaseDate: toDateInputValue(initialData?.purchaseDate, true),
+			organizationType: initialData?.organizationType ?? 'company',
 			itemName: initialData?.itemName ?? '',
 			specification: initialData?.specification ?? '',
 			quantity: initialData?.quantity ?? 1,
@@ -151,7 +170,7 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 			isProxyPayment: Boolean(initialData?.payerName),
 			payerName: initialData?.payerName ?? '',
 			transactionNo: initialData?.transactionNo ?? '',
-			purchaserId: initialData?.purchaserId ?? currentUserId,
+			purchaserId: currentUserId,
 			supplierId: initialData?.supplierId ?? '',
 			invoiceType,
 			invoiceStatus,
@@ -173,12 +192,55 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 
 	useEffect(() => {
 		form.reset(defaultValues);
+		setProxyPayerUserId('');
 	}, [defaultValues, form]);
+
+	useEffect(() => {
+		form.setValue('purchaserId', currentUserId, { shouldDirty: false, shouldValidate: true });
+	}, [currentUserId, form]);
 
 	const values = form.watch();
 	const isSubmitting = form.formState.isSubmitting || disabled;
 	const contractAmount = Number(values.quantity || 0) * Number(values.unitPrice || 0);
 	const totalAmount = contractAmount + Number(values.feeAmount || 0);
+	const [budgetInfo, setBudgetInfo] = useState<{
+		departmentName: string | null;
+		budgetAmount: number | null;
+		usedAmount: number;
+		remainingAmount: number | null;
+		year: number;
+	} | null>(null);
+	const [budgetLoading, setBudgetLoading] = useState(false);
+
+	useEffect(() => {
+		const purchaserId = values.purchaserId;
+		if (!purchaserId) {
+			setBudgetInfo(null);
+			return;
+		}
+		let active = true;
+		(async () => {
+			setBudgetLoading(true);
+			try {
+				const year = new Date().getFullYear();
+				const response = await fetch(`/api/hr/departments/budget?employeeId=${purchaserId}&year=${year}`);
+				const payload = await response.json();
+				if (!response.ok || !payload.success) {
+					throw new Error(payload.error || '预算加载失败');
+				}
+				if (!active) return;
+				setBudgetInfo(payload.data ?? null);
+			} catch (error) {
+				if (!active) return;
+				setBudgetInfo(null);
+			} finally {
+				if (active) setBudgetLoading(false);
+			}
+		})();
+		return () => {
+			active = false;
+		};
+	}, [values.purchaserId]);
 
 	const handleSubmit = form.handleSubmit(async (data) => {
 		try {
@@ -199,7 +261,8 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 					: null;
 
 			const payload: PurchaseFormSubmitPayload = {
-				purchaseDate: data.purchaseDate?.trim() || new Date().toISOString().slice(0, 10),
+				purchaseDate: data.purchaseDate?.trim() || formatDateOnly(new Date()) || '',
+				organizationType: data.organizationType,
 				itemName: data.itemName.trim(),
 				specification: data.specification?.trim() || null,
 				quantity: Number(data.quantity),
@@ -214,7 +277,7 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 				paymentChannel: trimmedPaymentChannel,
 				payerName: data.isProxyPayment ? data.payerName?.trim() || null : null,
 				transactionNo: trimmedTransactionNo,
-				purchaserId: data.purchaserId,
+				purchaserId: currentUserId,
 				supplierId: trimmedSupplierId,
 				invoiceType: data.invoiceType,
 				invoiceStatus: effectiveInvoiceStatus,
@@ -246,6 +309,7 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 	const handleProxyPaymentToggle = (checked: boolean) => {
 		form.setValue('isProxyPayment', checked, { shouldDirty: true, shouldValidate: true });
 		if (!checked) {
+			setProxyPayerUserId('');
 			form.setValue('payerName', '', { shouldDirty: true, shouldValidate: true });
 		}
 	};
@@ -283,16 +347,20 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 
 	return (
 		<Form {...form}>
-			<form onSubmit={handleSubmit} className="space-y-6">
+			<form onSubmit={handleSubmit} className="flex min-h-[560px] max-h-[calc(100vh-170px)] flex-col gap-4">
+				<div className="flex-1 space-y-6 overflow-y-auto pr-1">
 				<div className={SECTION_CARD_CLASS}>
-					<h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">基本信息</h3>
-					<div className="mt-4 grid gap-6 lg:grid-cols-12">
+					<div className="flex items-center justify-between gap-3">
+						<h3 className="text-base font-semibold text-foreground">基本信息</h3>
+						<p className="text-xs text-muted-foreground">填写采购基础信息与预算情况</p>
+					</div>
+					<div className="mt-4 grid gap-5 grid-cols-1 md:grid-cols-3 lg:grid-cols-6">
 						<FormField
 							control={form.control}
 							name="itemName"
 							render={({ field }) => (
-								<FormItem className="lg:col-span-6">
-									<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">
+								<FormItem className={FIELD_FULL}>
+									<FormLabel className="text-sm font-medium text-foreground">
 										物品名称 <span className="text-rose-500">*</span>
 									</FormLabel>
 									<FormControl>
@@ -305,14 +373,20 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 						<FormField
 							control={form.control}
 							name="purchaserId"
-							render={({ field }) => (
-								<FormItem className="lg:col-span-6">
-									<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">
+							render={() => (
+								<FormItem className={FIELD_FULL}>
+									<FormLabel className="text-sm font-medium text-foreground">
 										申请人 <span className="text-rose-500">*</span>
 									</FormLabel>
 									<FormControl>
-										<UserSelect value={field.value} onChange={field.onChange} placeholder="选择申请人" disabled={isSubmitting} />
+										<UserSelect
+											value={currentUserId}
+											onChange={() => {}}
+											placeholder="申请人固定为当前登录用户"
+											disabled
+										/>
 									</FormControl>
+									<p className="text-xs text-muted-foreground">申请人固定为当前登录用户，不可修改。</p>
 									<FormMessage />
 								</FormItem>
 							)}
@@ -321,11 +395,11 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 							control={form.control}
 							name="supplierId"
 							render={({ field }) => (
-								<FormItem className="lg:col-span-12">
-									<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">关联供应商</FormLabel>
+								<FormItem className={FIELD_FULL}>
+									<FormLabel className="text-sm font-medium text-foreground">关联供应商</FormLabel>
 									<FormControl>
 										<SupplierSelector
-											value={field.value}
+											value={field.value ?? ''}
 											onChange={field.onChange}
 											disabled={isSubmitting}
 											helperText="用于财务自动化和统计分析，默认展示状态正常的供应商"
@@ -339,8 +413,8 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 							control={form.control}
 							name="purchaseDate"
 							render={({ field }) => (
-								<FormItem className="lg:col-span-6">
-									<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">采购日期</FormLabel>
+								<FormItem className={FIELD_FULL}>
+									<FormLabel className="text-sm font-medium text-foreground">采购日期</FormLabel>
 									<FormControl>
 										<DatePicker
 											required
@@ -358,90 +432,200 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 						/>
 						<FormField
 							control={form.control}
-							name="specification"
+							name="organizationType"
 							render={({ field }) => (
-								<FormItem className="lg:col-span-6">
-									<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">规格 / 型号</FormLabel>
+								<FormItem className={FIELD_FULL}>
+									<FormLabel className="text-sm font-medium text-foreground">采购组织</FormLabel>
 									<FormControl>
-										<Input placeholder="可选，例如: M3 Pro / 36GB" disabled={isSubmitting} {...field} />
+										<Select value={field.value} onValueChange={field.onChange} disabled={isSubmitting}>
+											<SelectTrigger className="h-11">
+												<SelectValue placeholder="选择采购组织" />
+											</SelectTrigger>
+											<SelectContent>
+												{PURCHASE_ORGANIZATIONS.map((org) => (
+													<SelectItem key={org} value={org}>
+														{organizationLabels[org]}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
 									</FormControl>
 									<FormMessage />
 								</FormItem>
 							)}
 						/>
-						<div className="lg:col-span-12">
-							<div className="grid gap-4 md:grid-cols-3">
-								<FormField
-									control={form.control}
-									name="quantity"
-									render={({ field }) => (
-										<FormItem>
-											<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">
-												数量 <span className="text-rose-500">*</span>
-											</FormLabel>
-											<FormControl>
-												<Input type="number" min={1} step={1} disabled={isSubmitting} {...field} />
-											</FormControl>
-											<FormMessage />
-										</FormItem>
-									)}
-								/>
-								<FormField
-									control={form.control}
-									name="unitPrice"
-									render={({ field }) => (
-										<FormItem>
-											<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">
-												单价 (元) <span className="text-rose-500">*</span>
-											</FormLabel>
-											<FormControl>
-												<Input type="number" min={0} step="0.01" disabled={isSubmitting} {...field} />
-											</FormControl>
-											<FormMessage />
-										</FormItem>
-									)}
-								/>
-								<FormField
-									control={form.control}
-									name="feeAmount"
-									render={({ field }) => (
-										<FormItem>
-											<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">手续费 (元)</FormLabel>
-											<FormControl>
-												<Input type="number" min={0} step="0.01" disabled={isSubmitting} {...field} />
-											</FormControl>
-											<FormMessage />
-										</FormItem>
-									)}
-								/>
+						<FormField
+							control={form.control}
+							name="specification"
+							render={({ field }) => (
+								<FormItem className={FIELD_FULL}>
+									<FormLabel className="text-sm font-medium text-foreground">规格 / 型号</FormLabel>
+									<FormControl>
+										<Input placeholder="可选，例如: M3 Pro / 36GB" disabled={isSubmitting} value={field.value ?? ''} onChange={field.onChange} onBlur={field.onBlur} name={field.name} ref={field.ref} />
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="quantity"
+							render={({ field }) => (
+								<FormItem className={FIELD_FULL}>
+									<FormLabel className="text-sm font-medium text-foreground">
+										数量 <span className="text-rose-500">*</span>
+									</FormLabel>
+									<FormControl>
+										<Input type="number" min={1} step={1} disabled={isSubmitting} {...field} />
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="unitPrice"
+							render={({ field }) => (
+								<FormItem className={FIELD_FULL}>
+									<FormLabel className="text-sm font-medium text-foreground">
+										单价 (元) <span className="text-rose-500">*</span>
+									</FormLabel>
+									<FormControl>
+										<Input type="number" min={0} step="0.01" disabled={isSubmitting} {...field} />
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="feeAmount"
+							render={({ field }) => (
+								<FormItem className={FIELD_FULL}>
+									<FormLabel className="text-sm font-medium text-foreground">手续费 (元)</FormLabel>
+									<FormControl>
+										<Input type="number" min={0} step="0.01" disabled={isSubmitting} {...field} />
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<div className="w-full lg:col-span-1">
+							<p className="mb-2 text-sm font-medium text-muted-foreground">合同金额 (元)</p>
+							<div className="flex h-11 items-center rounded-xl bg-muted/50 px-4 text-sm font-semibold text-foreground">
+								¥{contractAmount.toFixed(2)}
 							</div>
 						</div>
-						<div className="lg:col-span-12 grid gap-4 md:grid-cols-2">
-							<div>
-								<p className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">合同金额 (元)</p>
-								<div className="flex h-11 items-center rounded-xl bg-gray-50 px-4 text-sm font-semibold text-gray-900 shadow-inner dark:bg-gray-800/70 dark:text-gray-100">
-									¥{contractAmount.toFixed(2)}
-								</div>
-							</div>
-							<div>
-								<p className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">总金额 (含手续费)</p>
-								<div className="flex h-11 items-center rounded-xl bg-gray-50 px-4 text-sm font-semibold text-gray-900 shadow-inner dark:bg-gray-800/70 dark:text-gray-100">
-									¥{totalAmount.toFixed(2)}
-								</div>
+						<div className="w-full lg:col-span-1">
+							<p className="mb-2 text-sm font-medium text-muted-foreground">总金额 (含手续费)</p>
+							<div className="flex h-11 items-center rounded-xl bg-muted/50 px-4 text-sm font-semibold text-foreground">
+								¥{totalAmount.toFixed(2)}
 							</div>
 						</div>
+						<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground lg:col-span-3">
+							<span className="font-medium text-foreground">部门预算</span>
+							{budgetLoading ? (
+								<span>正在加载预算...</span>
+							) : budgetInfo?.budgetAmount != null ? (
+								<span>
+									{budgetInfo.departmentName ?? '未命名部门'} · {budgetInfo.year} 年度
+								</span>
+							) : (
+								<span>未配置部门预算</span>
+							)}
+							{budgetInfo?.budgetAmount != null ? (
+								<Popover>
+									<PopoverTrigger asChild>
+										<button
+											type="button"
+											className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border/60 bg-background text-muted-foreground hover:text-foreground"
+										>
+											<Info className="h-4 w-4" />
+										</button>
+									</PopoverTrigger>
+									<PopoverContent align="start" className="w-72">
+										<div className="space-y-3 text-xs">
+											<div className="flex items-center justify-between text-sm font-semibold text-foreground">
+												<span>预算概览</span>
+												<span>{budgetInfo.year} 年</span>
+											</div>
+											<div className="grid gap-2">
+												<div className="flex items-center justify-between">
+													<span className="text-muted-foreground">年度预算</span>
+													<span className="font-semibold text-foreground">
+														{currencyFormatter.format(budgetInfo.budgetAmount)}
+													</span>
+												</div>
+												<div className="flex items-center justify-between">
+													<span className="text-muted-foreground">已用预算</span>
+													<span className="font-semibold text-foreground">
+														{currencyFormatter.format(budgetInfo.usedAmount)}
+													</span>
+												</div>
+												<div className="flex items-center justify-between">
+													<span className="text-muted-foreground">剩余额度</span>
+													<span
+														className={`font-semibold ${
+															totalAmount > (budgetInfo.remainingAmount ?? 0)
+																? 'text-rose-600 dark:text-rose-300'
+																: 'text-foreground'
+														}`}
+													>
+														{currencyFormatter.format(budgetInfo.remainingAmount ?? 0)}
+													</span>
+												</div>
+												<div className="flex items-center justify-between">
+													<span className="text-muted-foreground">本次采购</span>
+													<span className="font-semibold text-foreground">
+														{currencyFormatter.format(totalAmount)}
+													</span>
+												</div>
+											</div>
+											{totalAmount > (budgetInfo.remainingAmount ?? 0) ? (
+												<p className="rounded-lg bg-rose-50 px-2 py-1 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300">
+													本次金额已超出剩余额度
+												</p>
+											) : null}
+										</div>
+									</PopoverContent>
+								</Popover>
+							) : null}
+						{budgetInfo?.budgetAmount == null ? (
+							<span className="text-muted-foreground">
+								当前采购金额：{currencyFormatter.format(totalAmount)}
+							</span>
+						) : null}
 					</div>
+				</div>
 				</div>
 
 				<div className={SECTION_CARD_CLASS}>
-					<h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">采购与付款信息</h3>
-					<div className="mt-4 grid gap-6 lg:grid-cols-12">
+					<div className="flex items-center justify-between gap-3">
+						<div className="flex items-center gap-2">
+							<h3 className="text-base font-semibold text-foreground">采购与付款</h3>
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<button
+										type="button"
+										className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border/60 bg-background text-muted-foreground hover:text-foreground"
+									>
+										<Info className="h-4 w-4" />
+									</button>
+								</TooltipTrigger>
+								<TooltipContent side="top" sideOffset={8} className="max-w-xs text-xs leading-relaxed">
+									标记“已打款”后系统会自动通知申请人，并将采购视为完成，可用于后续对账与归档。
+								</TooltipContent>
+							</Tooltip>
+						</div>
+						<p className="text-xs text-muted-foreground">渠道、付款与用途信息</p>
+					</div>
+					<div className="mt-4 grid gap-5 grid-cols-1 md:grid-cols-3 lg:grid-cols-6">
 						<FormField
 							control={form.control}
 							name="purchaseChannel"
 							render={({ field }) => (
-								<FormItem className="lg:col-span-4">
-									<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">
+								<FormItem className={FIELD_FULL}>
+									<FormLabel className="text-sm font-medium text-foreground">
 										采购渠道 <span className="text-rose-500">*</span>
 									</FormLabel>
 									<Select
@@ -473,8 +657,8 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 							control={form.control}
 							name="paymentType"
 							render={({ field }) => (
-								<FormItem className="lg:col-span-4">
-									<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">
+								<FormItem className={FIELD_FULL}>
+									<FormLabel className="text-sm font-medium text-foreground">
 										款项类型 <span className="text-rose-500">*</span>
 									</FormLabel>
 									<Select value={field.value} onValueChange={field.onChange} disabled={isSubmitting}>
@@ -499,8 +683,8 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 							control={form.control}
 							name="paymentMethod"
 							render={({ field }) => (
-								<FormItem className="lg:col-span-4">
-									<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">
+								<FormItem className={FIELD_FULL}>
+									<FormLabel className="text-sm font-medium text-foreground">
 										付款方式 <span className="text-rose-500">*</span>
 									</FormLabel>
 									<Select value={field.value} onValueChange={field.onChange} disabled={isSubmitting}>
@@ -525,10 +709,10 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 							control={form.control}
 							name="paymentChannel"
 							render={({ field }) => (
-								<FormItem className="lg:col-span-6">
-									<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">支付方式 / 通道</FormLabel>
+								<FormItem className={FIELD_FULL}>
+									<FormLabel className="text-sm font-medium text-foreground">支付方式 / 通道</FormLabel>
 									<FormControl>
-										<Input placeholder="如：公对公 / 公对私" disabled={isSubmitting} list="payment-channel-options" {...field} />
+										<Input placeholder="如：公对公 / 公对私" disabled={isSubmitting} list="payment-channel-options" value={field.value ?? ''} onChange={field.onChange} onBlur={field.onBlur} name={field.name} ref={field.ref} />
 									</FormControl>
 									<FormMessage />
 									<datalist id="payment-channel-options">
@@ -543,19 +727,19 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 							control={form.control}
 							name="transactionNo"
 							render={({ field }) => (
-								<FormItem className="lg:col-span-6">
-									<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">流水号</FormLabel>
+								<FormItem className={FIELD_FULL}>
+									<FormLabel className="text-sm font-medium text-foreground">流水号</FormLabel>
 									<FormControl>
-										<Input placeholder="银行 / 支付平台流水号" disabled={isSubmitting} {...field} />
+										<Input placeholder="银行 / 支付平台流水号" disabled={isSubmitting} value={field.value ?? ''} onChange={field.onChange} onBlur={field.onBlur} name={field.name} ref={field.ref} />
 									</FormControl>
 									<FormMessage />
 								</FormItem>
 							)}
 						/>
-						<div className="lg:col-span-6 space-y-2">
+						<div className="space-y-2 lg:col-span-1">
 							<div className="flex flex-wrap items-center justify-between gap-2">
-								<span className="text-sm font-medium text-gray-700 dark:text-gray-300">代付人</span>
-								<label className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400" htmlFor="proxy-switch">
+								<span className="text-sm font-medium text-foreground">代付人</span>
+								<label className="flex items-center gap-2 text-xs text-muted-foreground" htmlFor="proxy-switch">
 									<span>由同事代付</span>
 									<Switch id="proxy-switch" checked={isProxyPayment} onCheckedChange={handleProxyPaymentToggle} disabled={isSubmitting} />
 								</label>
@@ -565,37 +749,47 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 									control={form.control}
 									name="payerName"
 									render={({ field }) => (
-										<FormItem>
+										<FormItem className={FIELD_FULL}>
 											<FormControl>
-												<Input placeholder="如有代付同事，可填写姓名" disabled={isSubmitting} {...field} />
+												<EmployeeSelector
+													value={proxyPayerUserId}
+													onChange={(userId, employee) => {
+														setProxyPayerUserId(userId);
+														const displayName =
+															employee?.displayName?.trim() ||
+															`${employee?.lastName ?? ''}${employee?.firstName ?? ''}`.trim() ||
+															employee?.email ||
+															'';
+														field.onChange(displayName);
+													}}
+													disabled={isSubmitting}
+													helperText="请选择代付同事，系统将记录为代付人。"
+												/>
 											</FormControl>
+											{field.value && !proxyPayerUserId ? (
+												<p className="text-xs text-muted-foreground">当前记录：{field.value}</p>
+											) : null}
 											<FormMessage />
 										</FormItem>
 									)}
 								/>
 							) : (
-								<div className="rounded-lg bg-gray-50 px-4 py-3 text-xs text-gray-500 shadow-inner dark:bg-gray-800/50 dark:text-gray-400">
+								<div className="rounded-lg bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
 									当前费用由本人支付，如有代付再打开开关填写姓名。
 								</div>
 							)}
-						</div>
-						<div className="lg:col-span-6">
-							<div className="rounded-xl bg-blue-50 px-4 py-4 text-xs text-blue-700 shadow-sm dark:bg-blue-500/10 dark:text-blue-200">
-								<p className="text-sm font-semibold">提示</p>
-								<p className="mt-1 leading-relaxed">标记“已打款”后系统会自动通知申请人，并把该采购视为完成，可用于后续对账与归档。</p>
-							</div>
 						</div>
 						{isOnlinePurchase ? (
 							<FormField
 								control={form.control}
 								name="purchaseLink"
 								render={({ field }) => (
-									<FormItem className="lg:col-span-6">
-										<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">
+									<FormItem className={FIELD_FULL}>
+										<FormLabel className="text-sm font-medium text-foreground">
 											商品链接 <span className="text-rose-500">*</span>
 										</FormLabel>
 										<FormControl>
-											<Input placeholder="例如：https://item.jd.com/..." disabled={isSubmitting} {...field} />
+											<Input placeholder="例如：https://item.jd.com/..." disabled={isSubmitting} value={field.value ?? ''} onChange={field.onChange} onBlur={field.onBlur} name={field.name} ref={field.ref} />
 										</FormControl>
 										<FormMessage />
 									</FormItem>
@@ -606,45 +800,50 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 								control={form.control}
 								name="purchaseLocation"
 								render={({ field }) => (
-									<FormItem className="lg:col-span-6">
-										<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">
+									<FormItem className={FIELD_FULL}>
+										<FormLabel className="text-sm font-medium text-foreground">
 											采购地点 <span className="text-rose-500">*</span>
 										</FormLabel>
 										<FormControl>
-											<Input placeholder="例如：上海·徐家汇 Apple 授权店" disabled={isSubmitting} {...field} />
+											<Input placeholder="例如：上海·徐家汇 Apple 授权店" disabled={isSubmitting} value={field.value ?? ''} onChange={field.onChange} onBlur={field.onBlur} name={field.name} ref={field.ref} />
 										</FormControl>
 										<FormMessage />
 									</FormItem>
 								)}
 							/>
 						)}
-						<FormField
-							control={form.control}
-							name="purpose"
-							render={({ field }) => (
-								<FormItem className="lg:col-span-6">
-									<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">
-										采购用途 <span className="text-rose-500">*</span>
-									</FormLabel>
-									<FormControl>
-										<Textarea rows={4} placeholder="说明采购背景、预算归属或审批依据" disabled={isSubmitting} {...field} />
-									</FormControl>
-									<FormMessage />
-								</FormItem>
-							)}
-						/>
+							<FormField
+								control={form.control}
+								name="purpose"
+								render={({ field }) => (
+									<FormItem className={`${FIELD_FULL} lg:col-span-4`}>
+										<FormLabel className="text-sm font-medium text-foreground">
+											采购用途 <span className="text-rose-500">*</span>
+										</FormLabel>
+										<FormControl>
+											<Textarea rows={2} placeholder="说明采购背景、预算归属或审批依据" disabled={isSubmitting} {...field} />
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
 					</div>
 				</div>
 
 				<div className={SECTION_CARD_CLASS}>
-					<h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">发票 / 凭证</h3>
-					<div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+					<div className="flex items-center justify-between gap-3">
+						<h3 className="text-base font-semibold text-foreground">
+							发票 / 凭证
+							<span className="ml-2 text-xs font-normal text-muted-foreground">（如无需发票可直接跳过）</span>
+						</h3>
+					</div>
+					<div className="mt-4 grid gap-4 grid-cols-1 md:grid-cols-3 lg:grid-cols-6">
 						<FormField
 							control={form.control}
 							name="invoiceType"
 							render={({ field }) => (
-								<FormItem>
-									<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">发票类型</FormLabel>
+								<FormItem className={FIELD_FULL}>
+									<FormLabel className="text-sm font-medium text-foreground">发票类型</FormLabel>
 									<Select
 										value={field.value}
 										onValueChange={(value: InvoiceType) => {
@@ -674,8 +873,8 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 							control={form.control}
 							name="receiptImages"
 							render={({ field }) => (
-								<FormItem>
-									<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">收据 / 打款凭证</FormLabel>
+								<FormItem className={`${FIELD_FULL} lg:col-span-3`}>
+									<FormLabel className="text-sm font-medium text-foreground">收据 / 打款凭证</FormLabel>
 									<FormControl>
 										<FileUpload
 											files={field.value || []}
@@ -696,80 +895,83 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 					</div>
 
 					{requiresInvoiceDetails && (
-						<div className="space-y-4">
-							<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-								<FormField
-									control={form.control}
-									name="invoiceStatus"
-									render={({ field }) => (
-										<FormItem>
-											<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">开票状态</FormLabel>
-											<Select
-												value={field.value}
-												onValueChange={(value: InvoiceStatus) => {
-													field.onChange(value);
-													handleInvoiceStatusChange(value);
-												}}
-												disabled={isSubmitting}
-											>
-												<FormControl>
-													<SelectTrigger>
-														<SelectValue placeholder="选择开票状态" />
-													</SelectTrigger>
-												</FormControl>
-												<SelectContent>
-													{INVOICE_STATUSES.map((status) => (
-														<SelectItem
-															key={status}
-															value={status}
-															disabled={status === InvoiceStatus.NOT_REQUIRED && values.invoiceType !== InvoiceType.NONE}
-														>
-															{invoiceStatusLabels[status]}
-														</SelectItem>
-													))}
-												</SelectContent>
-											</Select>
-											<FormMessage />
-										</FormItem>
-									)}
-								/>
-								{showInvoiceIssuedFields && (
-									<>
-										<FormField
-											control={form.control}
-											name="invoiceNumber"
-											render={({ field }) => (
-												<FormItem>
-													<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">发票号码</FormLabel>
-													<FormControl>
-														<Input placeholder="请输入发票号码" disabled={isSubmitting} {...field} />
-													</FormControl>
-													<FormMessage />
-												</FormItem>
-											)}
-											/>
-											<FormField
-												control={form.control}
-												name="invoiceIssueDate"
-												render={({ field }) => (
-													<FormItem>
-														<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">开票日期</FormLabel>
-														<FormControl>
-															<DatePicker value={field.value} onChange={field.onChange} disabled={isSubmitting} />
-														</FormControl>
-														<FormMessage />
-													</FormItem>
-												)}
-											/>
-										</>
+						<div className="mt-4 grid gap-4 grid-cols-1 md:grid-cols-3 lg:grid-cols-6">
+							<FormField
+								control={form.control}
+								name="invoiceStatus"
+								render={({ field }) => (
+									<FormItem className={FIELD_FULL}>
+										<FormLabel className="text-sm font-medium text-foreground">开票状态</FormLabel>
+										<Select
+											value={field.value}
+											onValueChange={(value: InvoiceStatus) => {
+												field.onChange(value);
+												handleInvoiceStatusChange(value);
+											}}
+											disabled={isSubmitting}
+										>
+											<FormControl>
+												<SelectTrigger>
+													<SelectValue placeholder="选择开票状态" />
+												</SelectTrigger>
+											</FormControl>
+											<SelectContent>
+												{INVOICE_STATUSES.map((status) => (
+													<SelectItem
+														key={status}
+														value={status}
+														disabled={status === InvoiceStatus.NOT_REQUIRED && values.invoiceType !== InvoiceType.NONE}
+													>
+														{invoiceStatusLabels[status]}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
+										<FormMessage />
+									</FormItem>
 								)}
-							</div>
+							/>
+							{showInvoiceIssuedFields && (
+								<>
+									<FormField
+										control={form.control}
+										name="invoiceNumber"
+										render={({ field }) => (
+											<FormItem className={FIELD_FULL}>
+												<FormLabel className="text-sm font-medium text-foreground">发票号码</FormLabel>
+												<FormControl>
+														<Input placeholder="请输入发票号码" disabled={isSubmitting} value={field.value ?? ''} onChange={field.onChange} onBlur={field.onBlur} name={field.name} ref={field.ref} />
+												</FormControl>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+									<FormField
+										control={form.control}
+										name="invoiceIssueDate"
+										render={({ field }) => (
+											<FormItem className={FIELD_FULL}>
+												<FormLabel className="text-sm font-medium text-foreground">开票日期</FormLabel>
+												<FormControl>
+													<DatePicker
+														value={field.value}
+														onChange={field.onChange}
+														disabled={isSubmitting}
+														containerClassName="w-full"
+													/>
+												</FormControl>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+								</>
+							)}
 							<FormField
 								control={form.control}
 								name="invoiceImages"
 								render={({ field }) => (
-									<FormItem>
-										<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">发票附件</FormLabel>
+									<FormItem className={`${FIELD_FULL} lg:col-span-3`}>
+										<FormLabel className="text-sm font-medium text-foreground">发票附件</FormLabel>
 										<FormControl>
 											<FileUpload
 												files={field.value || []}
@@ -791,11 +993,14 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 				</div>
 
 				<div className={SECTION_CARD_CLASS}>
-					<h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">项目与附件</h3>
-					<div className="mt-4 space-y-4">
-						<div className="flex items-center gap-3">
+					<div className="flex items-center justify-between gap-3">
+						<h3 className="text-base font-semibold text-foreground">项目与附件</h3>
+						<p className="text-xs text-muted-foreground">可选项，用于后续归档</p>
+					</div>
+					<div className="mt-4 grid gap-5 grid-cols-1 md:grid-cols-3 lg:grid-cols-6">
+						<div className="flex items-center gap-3 lg:col-span-2">
 							<Switch id="hasProject" checked={hasProject} onCheckedChange={handleProjectToggle} disabled={isSubmitting} />
-							<label htmlFor="hasProject" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+							<label htmlFor="hasProject" className="text-sm font-medium text-foreground">
 								关联项目预算
 							</label>
 						</div>
@@ -804,11 +1009,11 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 								control={form.control}
 								name="projectId"
 								render={({ field }) => (
-									<FormItem>
-										<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">关联项目</FormLabel>
+									<FormItem className={`${FIELD_FULL} lg:col-span-2`}>
+										<FormLabel className="text-sm font-medium text-foreground">关联项目</FormLabel>
 										<FormControl>
 											<ProjectSelector
-												value={field.value}
+												value={field.value ?? ''}
 												onChange={field.onChange}
 												disabled={isSubmitting}
 												helperText="仅可选择自己参与或最近更新的项目，如需其他项目请联系管理员"
@@ -824,8 +1029,8 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 							control={form.control}
 							name="attachments"
 							render={({ field }) => (
-								<FormItem>
-									<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">附件</FormLabel>
+								<FormItem className={`${FIELD_FULL} lg:col-span-3`}>
+									<FormLabel className="text-sm font-medium text-foreground">附件</FormLabel>
 									<FormControl>
 										<FileUpload
 											files={field.value || []}
@@ -846,22 +1051,25 @@ export default function PurchaseForm({ mode, initialData, currentUserId, onSubmi
 				</div>
 
 				<div className={SECTION_CARD_CLASS}>
-					<FormField
-						control={form.control}
-						name="notes"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">备注</FormLabel>
-								<FormControl>
-									<Textarea rows={3} placeholder="审批人需要知晓的补充说明" disabled={isSubmitting} {...field} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
+					<div className="grid gap-5 grid-cols-1 md:grid-cols-3 lg:grid-cols-6">
+						<FormField
+							control={form.control}
+							name="notes"
+							render={({ field }) => (
+								<FormItem className={`${FIELD_FULL} lg:col-span-3`}>
+									<FormLabel className="text-sm font-medium text-foreground">备注</FormLabel>
+									<FormControl>
+									<Textarea rows={3} placeholder="审批人需要知晓的补充说明" disabled={isSubmitting} value={field.value ?? ''} onChange={field.onChange} onBlur={field.onBlur} name={field.name} ref={field.ref} />
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+					</div>
+				</div>
 				</div>
 
-				<div className="flex justify-end gap-3">
+				<div className="sticky bottom-0 z-10 flex justify-end gap-3 border-t border-border/60 bg-background/95 px-2 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85">
 					{onCancel && (
 						<Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting} className="min-w-[100px]">
 							取消

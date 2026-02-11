@@ -88,7 +88,11 @@ export function normalizeDateInput(
     if (Number.isNaN(value.getTime())) {
       throw new Error(options.errorCode ?? 'INVALID_DATE');
     }
-    return value.toISOString().slice(0, 10);
+    const formatted = formatDateOnly(value);
+    if (!formatted) {
+      throw new Error(options.errorCode ?? 'INVALID_DATE');
+    }
+    return formatted;
   }
 
   const trimmed = value.trim();
@@ -96,15 +100,29 @@ export function normalizeDateInput(
     return null;
   }
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+  if (DATE_ONLY_PATTERN.test(trimmed)) {
     return trimmed;
   }
 
-  const parsed = new Date(trimmed);
-  if (Number.isNaN(parsed.getTime())) {
+  const formatted = formatDateOnly(trimmed);
+  if (!formatted) {
     throw new Error(options.errorCode ?? 'INVALID_DATE');
   }
-  return parsed.toISOString().slice(0, 10);
+  return formatted;
+}
+
+export function toChinaDateTimeIso(date: string, time: string): string {
+  const safeDate = date.trim();
+  if (!DATE_ONLY_PATTERN.test(safeDate)) {
+    throw new Error('INVALID_DATE');
+  }
+  const safeTime = (time || '00:00').trim();
+  const normalizedTime = /^\d{2}:\d{2}$/.test(safeTime) ? `${safeTime}:00` : safeTime;
+  const parsed = new Date(`${safeDate}T${normalizedTime}+08:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error('INVALID_DATE');
+  }
+  return parsed.toISOString();
 }
 
 export function formatDateOnly(value: string | Date | null | undefined): string | null {

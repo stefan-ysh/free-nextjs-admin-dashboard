@@ -4,13 +4,14 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Loader2 } from 'lucide-react';
 
-import { Drawer, DrawerClose, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
+import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/sonner';
 import type { Warehouse } from '@/types/inventory';
+import { FORM_DRAWER_WIDTH_COMPACT } from '@/components/common/form-drawer-width';
 
 const warehouseTypes: Warehouse['type'][] = ['main', 'store', 'virtual'];
 const warehouseTypeLabels: Record<Warehouse['type'], string> = {
@@ -105,14 +106,13 @@ export default function WarehouseFormDialog({ open, onOpenChange, warehouse, onS
 
   return (
     <Drawer open={open} onOpenChange={(next) => (!submitting ? onOpenChange(next) : undefined)} direction="right">
-      <DrawerContent side="right" className="sm:max-w-xl">
-        <div className="flex h-full flex-col">
-          <DrawerHeader className="border-b px-6 py-4">
-            <DrawerTitle>{isEditMode ? '编辑仓库' : '新建仓库'}</DrawerTitle>
-          </DrawerHeader>
-          <div className="flex-1 overflow-y-auto px-6 py-4">
-            <Form {...form}>
-              <form id={formId} onSubmit={handleSubmit} className="space-y-5">
+      <DrawerContent side="right" className={FORM_DRAWER_WIDTH_COMPACT}>
+        <DrawerHeader>
+          <DrawerTitle>{isEditMode ? '编辑仓库' : '新建仓库'}</DrawerTitle>
+        </DrawerHeader>
+        <DrawerBody>
+          <Form {...form}>
+            <form id={formId} onSubmit={handleSubmit} className="space-y-5">
               <div className="grid gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
@@ -209,22 +209,21 @@ export default function WarehouseFormDialog({ open, onOpenChange, warehouse, onS
                     </FormItem>
                   )}
                 />
-              </form>
-            </Form>
-          </div>
+            </form>
+          </Form>
+        </DrawerBody>
 
-          <DrawerFooter className="border-t px-6 py-4">
-            <DrawerClose asChild>
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
-                取消
-              </Button>
-            </DrawerClose>
-            <Button type="submit" form={formId} disabled={submitting}>
-              {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isEditMode ? '保存修改' : '创建仓库'}
+        <DrawerFooter>
+          <DrawerClose asChild>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
+              取消
             </Button>
-          </DrawerFooter>
-        </div>
+          </DrawerClose>
+          <Button type="submit" form={formId} disabled={submitting}>
+            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isEditMode ? '保存修改' : '创建仓库'}
+          </Button>
+        </DrawerFooter>
       </DrawerContent>
     </Drawer>
   );

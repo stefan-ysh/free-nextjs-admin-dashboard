@@ -10,13 +10,20 @@ export async function GET(request: Request) {
   try {
     const context = await requireCurrentUser();
     const permissionUser = await toPermissionUser(context.user);
-    const viewAll = await checkPermission(permissionUser, Permissions.PURCHASE_VIEW_ALL);
+    const [viewAll, viewDepartment] = await Promise.all([
+      checkPermission(permissionUser, Permissions.PURCHASE_VIEW_ALL),
+      checkPermission(permissionUser, Permissions.PURCHASE_VIEW_DEPARTMENT),
+    ]);
 
     const { searchParams } = new URL(request.url);
     const params = parsePurchaseListParams(searchParams);
 
     if (!viewAll.allowed) {
-      params.purchaserId = context.user.id;
+      if (viewDepartment.allowed && permissionUser.department) {
+        params.purchaserDepartment = permissionUser.department;
+      } else {
+        params.purchaserId = context.user.id;
+      }
     }
 
     const stats = await getPurchaseStats(params);

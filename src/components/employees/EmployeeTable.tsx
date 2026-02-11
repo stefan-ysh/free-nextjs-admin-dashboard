@@ -13,18 +13,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import EmployeeStatusBadge from './EmployeeStatusBadge';
 import type { Employee } from './types';
 import { formatDateTimeLocal } from '@/lib/dates';
-import { Inbox, Loader2, MoreHorizontal, Pencil, Trash2, ShieldCheck } from 'lucide-react';
+import { Inbox, KeyRound, MoreHorizontal, Pencil, Trash2, ShieldCheck } from 'lucide-react';
 import { USER_ROLE_LABELS } from '@/constants/user-roles';
+import DataState from '@/components/common/DataState';
 
 type EmployeeTableProps = {
 	employees: Employee[];
 	loading?: boolean;
 	onEdit: (employee: Employee) => void;
 	onDelete: (employee: Employee) => void;
+	onResetPassword?: (employee: Employee) => void;
 	canEdit?: boolean;
 	canDelete?: boolean;
 	onAssignRoles?: (employee: Employee) => void;
 	canAssignRoles?: boolean;
+	canResetPassword?: boolean;
 };
 
 function formatDate(value: string | null) {
@@ -63,149 +66,277 @@ export default function EmployeeTable({
 	onEdit,
 	onDelete,
 	onAssignRoles,
+	onResetPassword,
 	canEdit = false,
 	canDelete = false,
 	canAssignRoles = false,
+	canResetPassword = false,
 }: EmployeeTableProps) {
 	if (loading) {
 		return (
-			<div className="flex min-h-[480px] flex-col items-center justify-center text-sm text-muted-foreground">
-				<Loader2 className="mb-3 h-8 w-8 animate-spin text-primary" />
-				正在加载员工数据...
+			<div className="surface-table p-6">
+				<DataState
+					variant="loading"
+					title="正在加载员工数据"
+					description="请稍候片刻，系统正在同步员工信息"
+				/>
 			</div>
 		);
 	}
 
 	if (employees.length === 0) {
 		return (
-			<div className="flex min-h-[480px] flex-col items-center justify-center rounded-lg border border-dashed border-muted-foreground/40 bg-muted/30 p-8 text-center text-sm text-muted-foreground">
-				<Inbox className="mb-4 h-12 w-12 text-muted-foreground/60" />
-				<div className="font-medium text-foreground">暂无员工记录</div>
-				<p className="mt-1 max-w-sm text-xs text-muted-foreground">
-					请调整筛选条件或使用「新增员工」按钮录入第一条数据。
-				</p>
+			<div className="surface-table p-6">
+				<DataState
+					variant="empty"
+					title="暂无员工记录"
+					description="请调整筛选条件或使用「新增员工」按钮录入第一条数据。"
+					icon={<Inbox className="h-5 w-5" />}
+				/>
 			</div>
 		);
 	}
 
 	return (
-		<div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
-			<Table
-				stickyHeader
-				scrollAreaClassName="max-h-[calc(100vh-350px)] custom-scrollbar"
-				className="w-full text-muted-foreground"
-			>
-				<TableHeader>
-					<TableRow className="bg-muted/60">
-						<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">员工编号</TableHead>
-						<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">姓名</TableHead>
-						<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">部门</TableHead>
-						<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">职位</TableHead>
-						<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">状态</TableHead>
-						<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">入职日期</TableHead>
-						{(canEdit || canDelete || canAssignRoles) && (
-							<TableHead className="px-4 py-3 text-right uppercase tracking-wide text-muted-foreground">操作</TableHead>
-						)}
-					</TableRow>
-				</TableHeader>
-				<TableBody>
-					{employees.map((employee) => (
-						<TableRow key={employee.id} className="text-sm text-foreground hover:bg-muted/40">
-							<TableCell className="px-4 py-4 font-mono text-xs text-muted-foreground">
-								{employee.employeeCode ?? '—'}
-							</TableCell>
-							<TableCell className="px-4 py-4">
-								<div className="flex items-center gap-3">
-									<Avatar className="border border-border bg-background">
-										{employee.avatarUrl ? (
-											<AvatarImage src={employee.avatarUrl} alt={`${resolveDisplayName(employee)} avatar`} />
-										) : (
-											<AvatarFallback className="bg-primary/10 text-sm font-medium text-primary">
-												{getAvatarInitials(employee)}
-											</AvatarFallback>
-										)}
-									</Avatar>
-									<div className="flex items-center gap-2 truncate">
-										<span className="font-medium text-foreground truncate" title={resolveDisplayName(employee)}>
-											{resolveDisplayName(employee)}
-										</span>
-										{employee.userPrimaryRole ? (
-											<Badge variant="secondary" className="whitespace-nowrap text-xs">
-												{USER_ROLE_LABELS[employee.userPrimaryRole] ?? employee.userPrimaryRole}
-											</Badge>
-										) : null}
+		<div className="surface-table">
+			<div className="md:hidden">
+				<div className="space-y-3 p-4">
+					{employees.map((employee) => {
+						const displayName = resolveDisplayName(employee);
+						return (
+							<div key={employee.id} className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm">
+								<div className="flex items-start justify-between gap-3">
+									<div className="flex items-center gap-3">
+										<Avatar className="border border-border bg-background">
+											{employee.avatarUrl ? (
+												<AvatarImage src={employee.avatarUrl} alt={`${displayName} avatar`} />
+											) : (
+												<AvatarFallback className="bg-primary/10 text-sm font-medium text-primary">
+													{getAvatarInitials(employee)}
+												</AvatarFallback>
+											)}
+										</Avatar>
+										<div className="space-y-1">
+											<div className="flex flex-wrap items-center gap-2">
+												<span className="text-sm font-semibold text-foreground">{displayName}</span>
+												{employee.userPrimaryRole ? (
+													<Badge variant="secondary" className="text-xs">
+														{USER_ROLE_LABELS[employee.userPrimaryRole] ?? employee.userPrimaryRole}
+													</Badge>
+												) : null}
+											</div>
+											<div className="text-xs text-muted-foreground">
+												编号：{employee.employeeCode ?? '—'}
+											</div>
+										</div>
+									</div>
+									<EmployeeStatusBadge status={employee.employmentStatus} />
+								</div>
+								<div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+									<div className="flex items-center justify-between gap-3">
+										<span>部门</span>
+										<span className="text-foreground">{employee.department ?? '—'}</span>
+									</div>
+									<div className="flex items-center justify-between gap-3">
+										<span>职位</span>
+										<span className="text-foreground">{employee.jobTitle ?? '—'}</span>
+									</div>
+									<div className="flex items-center justify-between gap-3">
+										<span>入职日期</span>
+										<span className="text-foreground">{formatDate(employee.hireDate)}</span>
 									</div>
 								</div>
-							</TableCell>
-							<TableCell className="px-4 py-4 text-sm text-muted-foreground">
-								<span className="block max-w-[180px] truncate" title={`${employee.department ?? '—'}${employee.departmentCode ? `（${employee.departmentCode}）` : ''}`}>
-									{employee.department ?? '—'}
-									{employee.department && employee.departmentCode ? `（${employee.departmentCode}）` : ''}
-								</span>
-							</TableCell>
-							<TableCell className="px-4 py-4 text-sm text-muted-foreground">
-								<span className="block max-w-[160px] truncate" title={employee.jobTitle ?? '—'}>
-									{employee.jobTitle ?? '—'}
-									{employee.jobGrade ? ` · ${employee.jobGrade}${employee.jobGradeLevel != null ? `L${employee.jobGradeLevel}` : ''}` : ''}
-								</span>
-							</TableCell>
-							<TableCell className="px-4 py-4">
-								<EmployeeStatusBadge status={employee.employmentStatus} />
-							</TableCell>
-							<TableCell className="px-4 py-4 text-muted-foreground">
-								{formatDate(employee.hireDate)}
-							</TableCell>
-							{(canEdit || canDelete || canAssignRoles) && (
-								<TableCell className="px-4 py-4 text-right">
-									<DropdownMenu>
-										<DropdownMenuTrigger asChild>
-											<Button variant="ghost" size="icon" className="h-8 w-8">
-												<MoreHorizontal className="h-4 w-4" />
-												<span className="sr-only">打开操作菜单</span>
-											</Button>
-										</DropdownMenuTrigger>
-										<DropdownMenuContent align="end" className="w-44">
-											{canAssignRoles && onAssignRoles && (
-												<DropdownMenuItem
-													onSelect={(event) => {
-														event.preventDefault();
-														onAssignRoles(employee);
-													}}
-													className="cursor-pointer"
-												>
-													<ShieldCheck className="mr-2 h-4 w-4" /> 设置角色
-												</DropdownMenuItem>
-											)}
-											{canEdit && (
-												<DropdownMenuItem
-													onSelect={(event) => {
-														event.preventDefault();
-														onEdit(employee);
-													}}
-													className="cursor-pointer"
-												>
-													<Pencil className="mr-2 h-4 w-4" /> 编辑
-												</DropdownMenuItem>
-											)}
-											{canDelete && (
-												<DropdownMenuItem
-													onSelect={(event) => {
-														event.preventDefault();
-														onDelete(employee);
-													}}
-													className="cursor-pointer text-destructive focus:text-destructive"
-												>
-													<Trash2 className="mr-2 h-4 w-4" /> 删除
-												</DropdownMenuItem>
-											)}
-										</DropdownMenuContent>
-									</DropdownMenu>
-								</TableCell>
+								{(canEdit || canDelete || canAssignRoles || canResetPassword) && (
+									<div className="mt-4 flex justify-end">
+										<DropdownMenu>
+											<DropdownMenuTrigger asChild>
+												<Button variant="outline" size="sm" className="h-8 px-3">
+													<MoreHorizontal className="mr-2 h-4 w-4" /> 操作
+												</Button>
+											</DropdownMenuTrigger>
+											<DropdownMenuContent align="end" className="w-44">
+												{canAssignRoles && onAssignRoles && (
+													<DropdownMenuItem
+														onSelect={(event) => {
+															event.preventDefault();
+															onAssignRoles(employee);
+														}}
+														className="cursor-pointer"
+													>
+														<ShieldCheck className="mr-2 h-4 w-4" /> 设置角色
+													</DropdownMenuItem>
+												)}
+												{canEdit && (
+													<DropdownMenuItem
+														onSelect={(event) => {
+															event.preventDefault();
+															onEdit(employee);
+														}}
+														className="cursor-pointer"
+													>
+														<Pencil className="mr-2 h-4 w-4" /> 编辑
+													</DropdownMenuItem>
+												)}
+												{canResetPassword && onResetPassword && (
+													<DropdownMenuItem
+														onSelect={(event) => {
+															event.preventDefault();
+															onResetPassword(employee);
+														}}
+														className="cursor-pointer"
+													>
+														<KeyRound className="mr-2 h-4 w-4" /> 重置密码
+													</DropdownMenuItem>
+												)}
+												{canDelete && (
+													<DropdownMenuItem
+														onSelect={(event) => {
+															event.preventDefault();
+															onDelete(employee);
+														}}
+														className="cursor-pointer text-destructive focus:text-destructive"
+													>
+														<Trash2 className="mr-2 h-4 w-4" /> 删除
+													</DropdownMenuItem>
+												)}
+											</DropdownMenuContent>
+										</DropdownMenu>
+									</div>
+								)}
+							</div>
+						);
+					})}
+				</div>
+			</div>
+			<div className="hidden md:block">
+				<Table
+					stickyHeader
+					scrollAreaClassName="max-h-[calc(100vh-350px)] custom-scrollbar"
+					className="w-full text-muted-foreground"
+				>
+					<TableHeader>
+						<TableRow className="bg-muted/60">
+							<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">员工编号</TableHead>
+							<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">姓名</TableHead>
+							<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">部门</TableHead>
+							<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">职位</TableHead>
+							<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">状态</TableHead>
+							<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">入职日期</TableHead>
+							{(canEdit || canDelete || canAssignRoles || canResetPassword) && (
+								<TableHead className="px-4 py-3 text-right uppercase tracking-wide text-muted-foreground">操作</TableHead>
 							)}
 						</TableRow>
-					))}
-				</TableBody>
-			</Table>
+					</TableHeader>
+					<TableBody>
+						{employees.map((employee) => (
+							<TableRow key={employee.id} className="text-sm text-foreground hover:bg-muted/40">
+								<TableCell className="px-4 py-4 font-mono text-xs text-muted-foreground">
+									{employee.employeeCode ?? '—'}
+								</TableCell>
+								<TableCell className="px-4 py-4">
+									<div className="flex items-center gap-3">
+										<Avatar className="border border-border bg-background">
+											{employee.avatarUrl ? (
+												<AvatarImage src={employee.avatarUrl} alt={`${resolveDisplayName(employee)} avatar`} />
+											) : (
+												<AvatarFallback className="bg-primary/10 text-sm font-medium text-primary">
+													{getAvatarInitials(employee)}
+												</AvatarFallback>
+											)}
+										</Avatar>
+										<div className="flex items-center gap-2 truncate">
+											<span className="font-medium text-foreground truncate" title={resolveDisplayName(employee)}>
+												{resolveDisplayName(employee)}
+											</span>
+											{employee.userPrimaryRole ? (
+												<Badge variant="secondary" className="whitespace-nowrap text-xs">
+													{USER_ROLE_LABELS[employee.userPrimaryRole] ?? employee.userPrimaryRole}
+												</Badge>
+											) : null}
+										</div>
+									</div>
+								</TableCell>
+								<TableCell className="px-4 py-4 text-sm text-muted-foreground">
+									<span className="block max-w-[180px] truncate" title={`${employee.department ?? '—'}${employee.departmentCode ? `（${employee.departmentCode}）` : ''}`}>
+										{employee.department ?? '—'}
+										{employee.department && employee.departmentCode ? `（${employee.departmentCode}）` : ''}
+									</span>
+								</TableCell>
+								<TableCell className="px-4 py-4 text-sm text-muted-foreground">
+									<span className="block max-w-[160px] truncate" title={employee.jobTitle ?? '—'}>
+										{employee.jobTitle ?? '—'}
+										{employee.jobGrade ? ` · ${employee.jobGrade}${employee.jobGradeLevel != null ? `L${employee.jobGradeLevel}` : ''}` : ''}
+									</span>
+								</TableCell>
+								<TableCell className="px-4 py-4">
+									<EmployeeStatusBadge status={employee.employmentStatus} />
+								</TableCell>
+								<TableCell className="px-4 py-4 text-muted-foreground">
+									{formatDate(employee.hireDate)}
+								</TableCell>
+								{(canEdit || canDelete || canAssignRoles || canResetPassword) && (
+									<TableCell className="px-4 py-4 text-right">
+										<DropdownMenu>
+											<DropdownMenuTrigger asChild>
+												<Button variant="ghost" size="icon" className="h-8 w-8">
+													<MoreHorizontal className="h-4 w-4" />
+													<span className="sr-only">打开操作菜单</span>
+												</Button>
+											</DropdownMenuTrigger>
+											<DropdownMenuContent align="end" className="w-44">
+												{canAssignRoles && onAssignRoles && (
+													<DropdownMenuItem
+														onSelect={(event) => {
+															event.preventDefault();
+															onAssignRoles(employee);
+														}}
+														className="cursor-pointer"
+													>
+														<ShieldCheck className="mr-2 h-4 w-4" /> 设置角色
+													</DropdownMenuItem>
+												)}
+												{canEdit && (
+													<DropdownMenuItem
+														onSelect={(event) => {
+															event.preventDefault();
+															onEdit(employee);
+														}}
+														className="cursor-pointer"
+													>
+														<Pencil className="mr-2 h-4 w-4" /> 编辑
+													</DropdownMenuItem>
+												)}
+												{canResetPassword && onResetPassword && (
+													<DropdownMenuItem
+														onSelect={(event) => {
+															event.preventDefault();
+															onResetPassword(employee);
+														}}
+														className="cursor-pointer"
+													>
+														<KeyRound className="mr-2 h-4 w-4" /> 重置密码
+													</DropdownMenuItem>
+												)}
+												{canDelete && (
+													<DropdownMenuItem
+														onSelect={(event) => {
+															event.preventDefault();
+															onDelete(employee);
+														}}
+														className="cursor-pointer text-destructive focus:text-destructive"
+													>
+														<Trash2 className="mr-2 h-4 w-4" /> 删除
+													</DropdownMenuItem>
+												)}
+											</DropdownMenuContent>
+										</DropdownMenu>
+									</TableCell>
+								)}
+							</TableRow>
+						))}
+					</TableBody>
+				</Table>
+			</div>
 		</div>
 	);
 }

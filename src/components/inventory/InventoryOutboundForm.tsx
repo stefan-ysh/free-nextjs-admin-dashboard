@@ -24,7 +24,10 @@ const defaultPayload: InventoryOutboundPayload = {
     quantity: 1,
     type: 'sale',
     clientId: undefined,
+    targetWarehouseId: undefined,
 };
+const FORM_GRID_CLASS = 'grid gap-5 grid-cols-1 md:grid-cols-3 lg:grid-cols-6';
+const FIELD_CLASS = 'w-full lg:col-span-1';
 
 interface InventoryOutboundFormProps {
     onSuccess?: () => void;
@@ -70,6 +73,20 @@ export default function InventoryOutboundForm({ onSuccess, onCancel, formId, hid
         setPayload((prev) => ({ ...prev, [field]: value }));
     };
 
+    useEffect(() => {
+        if (payload.type !== 'transfer') return;
+        setSelectedClient(null);
+        setPayload((prev) => ({
+            ...prev,
+            clientId: undefined,
+            clientType: undefined,
+            clientName: undefined,
+            clientContact: undefined,
+            clientPhone: undefined,
+            clientAddress: undefined,
+        }));
+    }, [payload.type]);
+
     const handleSpecChange = (key: string, value: string) => {
         setPayload((prev) => ({
             ...prev,
@@ -107,6 +124,16 @@ export default function InventoryOutboundForm({ onSuccess, onCancel, formId, hid
         if (!canOperate || !payload.itemId || !payload.warehouseId) {
             toast.info("请选择商品与仓库");
             return;
+        }
+        if (payload.type === 'transfer') {
+            if (!payload.targetWarehouseId) {
+                toast.info('请选择调拨到的目标仓库');
+                return;
+            }
+            if (payload.targetWarehouseId === payload.warehouseId) {
+                toast.info('目标仓库不能与来源仓库相同');
+                return;
+            }
         }
         if (selectedClient && selectedClient.status === 'blacklisted') {
             toast.info('当前客户已被列入黑名单，无法发起出库');
@@ -154,8 +181,9 @@ export default function InventoryOutboundForm({ onSuccess, onCancel, formId, hid
     }
 
     return (
-        <form id={formId} onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
+        <form id={formId} onSubmit={handleSubmit} className="space-y-5">
+            <div className={FORM_GRID_CLASS}>
+            <div className="space-y-2 lg:col-span-3">
                 <Label htmlFor="outbound-item" className="text-sm font-medium">
                     商品
                 </Label>
@@ -177,8 +205,8 @@ export default function InventoryOutboundForm({ onSuccess, onCancel, formId, hid
                 </Select>
             </div>
 
-            {selectedItem && (
-                <div className="space-y-1 rounded-lg border border-dashed border-rose-200 bg-rose-50/40 p-3 text-sm text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100">
+            {selectedItem && payload.type !== 'transfer' && (
+                <div className="space-y-1 rounded-lg border border-dashed border-rose-200 bg-rose-50/40 p-3 text-sm text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100 lg:col-span-3">
                     <div>
                         建议售价：¥{selectedItem.salePrice.toLocaleString()} / {selectedItem.unit}
                     </div>
@@ -192,11 +220,11 @@ export default function InventoryOutboundForm({ onSuccess, onCancel, formId, hid
             )}
 
             {selectedItem?.specFields?.length ? (
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className={`${FORM_GRID_CLASS} lg:col-span-6`}>
                     {selectedItem.specFields.map((field) => {
                         const specValue = payload.attributes?.[field.key] ?? '';
                         return (
-                            <div key={field.key} className="space-y-2">
+                            <div key={field.key} className={`space-y-2 ${FIELD_CLASS}`}>
                                 <Label className="text-sm font-medium">{field.label}</Label>
                                 {field.options ? (
                                     <Select
@@ -229,8 +257,7 @@ export default function InventoryOutboundForm({ onSuccess, onCancel, formId, hid
                 </div>
             ) : null}
 
-            <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-2">
+                <div className={`space-y-2 ${FIELD_CLASS}`}>
                     <Label htmlFor="outbound-warehouse" className="text-sm font-medium">
                         仓库
                     </Label>
@@ -251,7 +278,7 @@ export default function InventoryOutboundForm({ onSuccess, onCancel, formId, hid
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="space-y-2">
+                <div className={`space-y-2 ${FIELD_CLASS}`}>
                     <Label htmlFor="outbound-type" className="text-sm font-medium">
                         出库类型
                     </Label>
@@ -271,51 +298,76 @@ export default function InventoryOutboundForm({ onSuccess, onCancel, formId, hid
                         </SelectContent>
                     </Select>
                 </div>
-            </div>
 
-            <div className="space-y-2">
-                <Label className="text-sm font-medium">出库客户</Label>
-                <CustomerPicker
-                    value={payload.clientId}
-                    onChange={handleClientChange}
-                    disabled={submitting}
-                    helperText="选定客户后将同步联系方式与开票信息"
-                />
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-2">
-                    <Label className="text-sm font-medium">收件人 / 联系人</Label>
-                    <Input
-                        value={payload.clientContact ?? ''}
-                        onChange={(event) => handleChange('clientContact', event.target.value)}
-                        placeholder="若客户方有具体联系人可填写"
+            {payload.type === 'transfer' && (
+                <div className={`space-y-2 ${FIELD_CLASS}`}>
+                    <Label htmlFor="outbound-target-warehouse" className="text-sm font-medium">
+                        目标仓库
+                    </Label>
+                    <Select
+                        value={payload.targetWarehouseId || undefined}
+                        onValueChange={(value) => handleChange('targetWarehouseId', value)}
                         disabled={submitting}
-                    />
+                    >
+                        <SelectTrigger id="outbound-target-warehouse" className="w-full">
+                            <SelectValue placeholder="选择目标仓库" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {warehouses
+                                .filter((warehouse) => warehouse.id !== payload.warehouseId)
+                                .map((warehouse) => (
+                                    <SelectItem key={warehouse.id} value={warehouse.id}>
+                                        {warehouse.name}
+                                    </SelectItem>
+                                ))}
+                        </SelectContent>
+                    </Select>
                 </div>
-                <div className="space-y-2">
-                    <Label className="text-sm font-medium">联系电话</Label>
-                    <Input
-                        value={payload.clientPhone ?? ''}
-                        onChange={(event) => handleChange('clientPhone', event.target.value)}
-                        disabled={submitting}
-                    />
-                </div>
-            </div>
+            )}
 
-            <div className="space-y-2">
-                <Label className="text-sm font-medium">收货地址</Label>
-                <Textarea
-                    value={payload.clientAddress ?? ''}
-                    onChange={(event) => handleChange('clientAddress', event.target.value)}
-                    rows={2}
-                    placeholder="填写客户的送货地址，方便仓库打单"
-                    disabled={submitting}
-                />
-            </div>
+            {(payload.type === 'sale' || payload.type === 'return') && (
+                <>
+                        <div className="space-y-2 lg:col-span-3">
+                            <Label className="text-sm font-medium">出库客户</Label>
+                            <CustomerPicker
+                                value={payload.clientId}
+                                onChange={handleClientChange}
+                                disabled={submitting}
+                                helperText="选定客户后将同步联系方式与开票信息"
+                            />
+                        </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-2">
+                        <div className="space-y-2 lg:col-span-3">
+                            <Label className="text-sm font-medium">收件人 / 联系人</Label>
+                            <Input
+                                value={payload.clientContact ?? ''}
+                                onChange={(event) => handleChange('clientContact', event.target.value)}
+                                placeholder="若客户方有具体联系人可填写"
+                                disabled={submitting}
+                            />
+                        </div>
+                        <div className="space-y-2 lg:col-span-3">
+                            <Label className="text-sm font-medium">联系电话</Label>
+                            <Input
+                                value={payload.clientPhone ?? ''}
+                                onChange={(event) => handleChange('clientPhone', event.target.value)}
+                                disabled={submitting}
+                            />
+                        </div>
+                        <div className="space-y-2 lg:col-span-3">
+                            <Label className="text-sm font-medium">收货地址</Label>
+                            <Textarea
+                                value={payload.clientAddress ?? ''}
+                                onChange={(event) => handleChange('clientAddress', event.target.value)}
+                                rows={2}
+                                placeholder="填写客户的送货地址，方便仓库打单"
+                                disabled={submitting}
+                            />
+                        </div>
+                </>
+            )}
+
+                <div className={`space-y-2 ${FIELD_CLASS}`}>
                     <Label htmlFor="outbound-quantity" className="text-sm font-medium">
                         数量
                     </Label>
@@ -329,7 +381,7 @@ export default function InventoryOutboundForm({ onSuccess, onCancel, formId, hid
                         disabled={submitting}
                     />
                 </div>
-                <div className="space-y-2">
+                <div className={`space-y-2 ${FIELD_CLASS}`}>
                     <Label htmlFor="outbound-related" className="text-sm font-medium">
                         关联单据号
                     </Label>
@@ -342,9 +394,8 @@ export default function InventoryOutboundForm({ onSuccess, onCancel, formId, hid
                         disabled={submitting}
                     />
                 </div>
-            </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 lg:col-span-3">
                 <Label htmlFor="outbound-notes" className="text-sm font-medium">
                     备注
                 </Label>
@@ -352,10 +403,11 @@ export default function InventoryOutboundForm({ onSuccess, onCancel, formId, hid
                     id="outbound-notes"
                     value={payload.notes ?? ''}
                     onChange={(event) => handleChange('notes', event.target.value)}
-                    rows={3}
+                    rows={2}
                     placeholder="可填写客户、项目等信息"
                     disabled={submitting}
                 />
+            </div>
             </div>
 
             {!hideActions && (

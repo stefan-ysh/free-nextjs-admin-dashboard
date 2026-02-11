@@ -40,23 +40,6 @@ export default function SignInPage() {
             </p>
           </div>
           <SignInForm />
-          <p className="px-8 text-center text-sm text-muted-foreground">
-            点击登录即表示您同意我们的{" "}
-            <Link
-              href="/terms"
-              className="underline underline-offset-4 hover:text-primary"
-            >
-              服务条款
-            </Link>{" "}
-            和{" "}
-            <Link
-              href="/privacy"
-              className="underline underline-offset-4 hover:text-primary"
-            >
-              隐私政策
-            </Link>
-            .
-          </p>
         </div>
       </div>
     </div>

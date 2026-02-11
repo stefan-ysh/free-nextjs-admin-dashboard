@@ -40,6 +40,9 @@ type RawUserRow = RowDataPacket & {
   custom_fields: unknown;
   is_active: number;
   email_verified: number;
+  employment_status: string | null;
+  failed_login_attempts: number | null;
+  locked_until: string | null;
   password_updated_at: string | null;
   created_at: string;
   updated_at: string;
@@ -64,6 +67,11 @@ export type UserRecord = {
   tax_id: string | null;
   avatar_url: string | null;
   social_links: SocialLinks;
+  employment_status: string | null;
+  is_active: boolean;
+  email_verified: boolean;
+  failed_login_attempts: number;
+  locked_until: string | null;
   password_updated_at: string | null;
   created_at: string;
   updated_at: string;
@@ -163,6 +171,11 @@ function mapUser(row: RawUserRow | undefined): UserRecord | null {
     tax_id: row.tax_id,
     avatar_url: row.avatar_url,
     social_links: normalizeSocialLinks(parseJsonObject(row.social_links)),
+    employment_status: row.employment_status ?? null,
+    is_active: row.is_active === 1,
+    email_verified: row.email_verified === 1,
+    failed_login_attempts: Number(row.failed_login_attempts ?? 0),
+    locked_until: row.locked_until ?? null,
     password_updated_at: row.password_updated_at,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -191,6 +204,70 @@ export async function findUserByEmail(email: string): Promise<UserRecord | null>
     [email.toLowerCase()]
   );
   return mapUser(rows[0]);
+}
+
+export async function findUserByEmployeeCode(employeeCode: string): Promise<UserRecord | null> {
+  await ensureAuthAndHrSchemas();
+  const [rows] = await pool.query<RawUserRow[]>(
+    'SELECT * FROM hr_employees WHERE employee_code = ? LIMIT 1',
+    [employeeCode]
+  );
+  return mapUser(rows[0]);
+}
+
+export async function findUserByPhone(phone: string): Promise<UserRecord | null> {
+  await ensureAuthAndHrSchemas();
+  const [rows] = await pool.query<RawUserRow[]>(
+    'SELECT * FROM hr_employees WHERE phone = ? LIMIT 2',
+    [phone]
+  );
+  if (rows.length > 1) {
+    throw new Error('PHONE_NOT_UNIQUE');
+  }
+  return mapUser(rows[0]);
+}
+
+export async function findUserByLoginIdentifier(identifier: string): Promise<UserRecord | null> {
+  const normalized = identifier.trim();
+  if (!normalized) return null;
+
+  if (normalized.includes('@')) {
+    return findUserByEmail(normalized);
+  }
+
+  const byEmployeeCode = await findUserByEmployeeCode(normalized);
+  if (byEmployeeCode) return byEmployeeCode;
+
+  const byPhone = await findUserByPhone(normalized);
+  if (byPhone) return byPhone;
+
+  return findUserByEmail(normalized.toLowerCase());
+}
+
+export async function recordFailedLoginAttempt(userId: string): Promise<void> {
+  await ensureAuthAndHrSchemas();
+  await pool.query(
+    `UPDATE hr_employees
+      SET
+        failed_login_attempts = IF(failed_login_attempts >= 4, 0, failed_login_attempts + 1),
+        locked_until = IF(failed_login_attempts >= 4, DATE_ADD(NOW(), INTERVAL 15 MINUTE), locked_until),
+        updated_at = NOW()
+      WHERE id = ?`,
+    [userId]
+  );
+}
+
+export async function clearLoginFailures(userId: string): Promise<void> {
+  await ensureAuthAndHrSchemas();
+  await pool.query(
+    `UPDATE hr_employees
+      SET
+        failed_login_attempts = 0,
+        locked_until = NULL,
+        updated_at = NOW()
+      WHERE id = ?`,
+    [userId]
+  );
 }
 
 export async function findUserById(id: string): Promise<UserRecord | null> {
@@ -236,7 +313,14 @@ export async function updateUserPassword(userId: string, password: string): Prom
   await ensureAuthAndHrSchemas();
   const passwordHash = await hashPassword(password);
   await pool.query(
-    'UPDATE hr_employees SET password_hash = ?, password_updated_at = NOW(), updated_at = NOW() WHERE id = ?',
+    `UPDATE hr_employees
+      SET
+        password_hash = ?,
+        password_updated_at = NOW(),
+        failed_login_attempts = 0,
+        locked_until = NULL,
+        updated_at = NOW()
+      WHERE id = ?`,
     [passwordHash, userId]
   );
 }

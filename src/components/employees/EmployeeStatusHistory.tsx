@@ -88,7 +88,7 @@ export default function EmployeeStatusHistory({ employeeId, refreshSignal = 0 }:
   }, [logs]);
 
   return (
-    <div className="rounded-2xl border border-border/70 bg-card/70 p-4 shadow-sm">
+    <div className="surface-card p-4">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-medium text-foreground">
           <History className="h-4 w-4 text-muted-foreground" />

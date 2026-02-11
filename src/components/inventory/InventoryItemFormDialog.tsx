@@ -4,13 +4,15 @@ import { useEffect, useMemo } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { Loader2 } from 'lucide-react';
 
-import { Drawer, DrawerClose, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
+import ImageUpload from '@/components/common/ImageUpload';
+import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/sonner';
 import type { InventoryItem } from '@/types/inventory';
+import { FORM_DRAWER_WIDTH_STANDARD } from '@/components/common/form-drawer-width';
 
 const Required = () => <span className="ml-1 text-destructive">*</span>;
 
@@ -27,6 +29,7 @@ type FormValues = {
   category: string;
   safetyStock: string;
   barcode: string;
+  imageUrl: string;
   specFields: SpecFieldRow[];
 };
 
@@ -38,6 +41,7 @@ const buildDefaultValues = (item?: InventoryItem | null): FormValues => ({
   category: item?.category ?? BASE_CATEGORY_OPTIONS[0],
   safetyStock: item?.safetyStock != null ? String(item.safetyStock) : '',
   barcode: item?.barcode ?? '',
+  imageUrl: item?.imageUrl ?? '',
   specFields:
     item?.specFields?.map((field) => ({
       key: field.key,
@@ -110,18 +114,30 @@ export default function InventoryItemFormDialog({ open, onOpenChange, item, onSu
       if (values.barcode.trim()) {
         payload.barcode = values.barcode.trim();
       }
+      if (values.imageUrl) {
+        payload.imageUrl = values.imageUrl;
+      }
 
       const parsedSpecFields = values.specFields
-        .map((field) => ({
-          key: field.key.trim(),
-          label: field.label.trim(),
-          options: field.options
-            .split(',')
-            .map((option) => option.trim())
-            .filter(Boolean),
-          defaultValue: field.defaultValue.trim() || undefined,
-        }))
-        .filter((field) => field.key && field.label);
+        .map((field) => {
+          const label = field.label.trim();
+          if (!label) return null;
+
+          // Auto-generate key if missing
+          let key = field.key.trim();
+          if (!key) {
+            key = `attr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+          }
+
+          return {
+            key,
+            label,
+            options: [], // Hidden in UI, default to empty
+            defaultValue: field.defaultValue.trim() || undefined,
+          };
+        })
+        .filter((field) => field !== null);
+
       if (parsedSpecFields.length) {
         payload.specFields = parsedSpecFields;
       }
@@ -153,200 +169,198 @@ export default function InventoryItemFormDialog({ open, onOpenChange, item, onSu
 
   return (
     <Drawer open={open} onOpenChange={(next) => (!submitting ? onOpenChange(next) : undefined)} direction="right">
-      <DrawerContent side="right" className="sm:max-w-3xl">
-        <div className="flex h-full flex-col">
-          <DrawerHeader className="border-b px-6 py-4">
-            <DrawerTitle>{isEditMode ? '编辑商品' : '新建商品'}</DrawerTitle>
-          </DrawerHeader>
-          <div className="flex-1 overflow-y-auto px-6 py-4">
-            <Form {...form}>
-              <form id={formId} onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded border border-dashed border-muted p-3 text-sm text-muted-foreground">
-                <p className="text-xs uppercase tracking-wide">SKU</p>
-                <p className="font-mono text-base text-foreground">
-                  {item?.sku ?? '保存后系统自动生成'}
-                </p>
-              </div>
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      商品名称<Required />
-                    </FormLabel>
-                    <FormControl>
-                      <Input placeholder="请输入商品名称" disabled={submitting} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="category"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>类别</FormLabel>
-                    <Select disabled={submitting} value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="请选择类别" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {categoryOptions.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="unit"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      计量单位<Required />
-                    </FormLabel>
-                    <Select disabled={submitting} value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="请选择计量单位" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {unitOptions.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="unitPrice"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      单价 (¥)<Required />
-                    </FormLabel>
-                    <FormControl>
-                      <Input type="number" min="0" step="0.01" disabled={submitting} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="salePrice"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      建议售价 (¥)<Required />
-                    </FormLabel>
-                    <FormControl>
-                      <Input type="number" min="0" step="0.01" disabled={submitting} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="safetyStock"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      安全库存<Required />
-                    </FormLabel>
-                    <FormControl>
-                      <Input type="number" min="0" step="1" disabled={submitting} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="barcode"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>条码</FormLabel>
-                    <FormControl>
-                      <Input placeholder="可选" disabled={submitting} {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            </div>
+      <DrawerContent side="right" className={FORM_DRAWER_WIDTH_STANDARD}>
+        <DrawerHeader>
+          <DrawerTitle>{isEditMode ? '编辑商品' : '新建商品'}</DrawerTitle>
+        </DrawerHeader>
+        <DrawerBody>
+          <Form {...form}>
+            <form id={formId} onSubmit={handleSubmit} className="space-y-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="flex flex-col gap-4">
+                  <FormField
+                    control={form.control}
+                    name="imageUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>商品图片</FormLabel>
+                        <FormControl>
+                          <ImageUpload
+                            value={field.value}
+                            onChange={field.onChange}
+                            folder="inventory"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="rounded border border-dashed border-muted p-3 text-sm text-muted-foreground">
+                    <p className="text-xs uppercase tracking-wide">SKU</p>
+                    <p className="font-mono text-base text-foreground">
+                      {item?.sku ?? '保存后系统自动生成'}
+                    </p>
+                  </div>
+                </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-medium">规格字段</div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={submitting}
-                  onClick={() => specFieldArray.append({ key: '', label: '', options: '', defaultValue: '' })}
-                >
-                  添加
-                </Button>
+                <div className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          商品名称<Required />
+                        </FormLabel>
+                        <FormControl>
+                          <Input placeholder="请输入商品名称" disabled={submitting} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>类别</FormLabel>
+                        <Select disabled={submitting} value={field.value} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="请选择类别" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {categoryOptions.map((option) => (
+                              <SelectItem key={option} value={option}>
+                                {option}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="unit"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          计量单位<Required />
+                        </FormLabel>
+                        <Select disabled={submitting} value={field.value} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="请选择计量单位" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {unitOptions.map((option) => (
+                              <SelectItem key={option} value={option}>
+                                {option}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </div>
-              {specFieldArray.fields.length === 0 ? (
-                <p className="rounded border border-dashed border-muted p-4 text-sm text-muted-foreground">
-                  尚未添加规格字段。
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {specFieldArray.fields.map((field, index) => (
-                    <div key={field.id} className="rounded-xl border border-muted/60 p-4 shadow-sm">
-                      <div className="flex flex-col gap-3 md:flex-row">
-                        <FormField
-                          control={form.control}
-                          name={`specFields.${index}.key`}
-                          render={({ field: innerField }) => (
-                            <FormItem className="flex-1">
-                              <FormLabel>字段 Key</FormLabel>
-                              <FormControl>
-                                <Input placeholder="例如：glowColor" disabled={submitting} {...innerField} />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
+
+              <div className="grid gap-4 md:grid-cols-3">
+
+                <FormField
+                  control={form.control}
+                  name="unitPrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        单价 (¥)<Required />
+                      </FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" step="0.01" disabled={submitting} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="salePrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        建议售价 (¥)<Required />
+                      </FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" step="0.01" disabled={submitting} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="safetyStock"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        安全库存<Required />
+                      </FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" step="1" disabled={submitting} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="barcode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>条码</FormLabel>
+                      <FormControl>
+                        <Input placeholder="可选" disabled={submitting} {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium">商品参数 (自定义字段)</div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={submitting}
+                    onClick={() => specFieldArray.append({ key: '', label: '', options: '', defaultValue: '' })}
+                  >
+                    添加参数
+                  </Button>
+                </div>
+                {specFieldArray.fields.length === 0 ? (
+                  <p className="rounded border border-dashed border-muted p-4 text-sm text-muted-foreground">
+                    尚未添加参数。
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {specFieldArray.fields.map((field, index) => (
+                      <div key={field.id} className="relative flex items-end gap-3 rounded-xl border border-muted/60 p-3 shadow-sm">
                         <FormField
                           control={form.control}
                           name={`specFields.${index}.label`}
                           render={({ field: innerField }) => (
                             <FormItem className="flex-1">
-                              <FormLabel>显示名称</FormLabel>
+                              <FormLabel className="text-xs text-muted-foreground">参数名</FormLabel>
                               <FormControl>
-                                <Input placeholder="发光颜色" disabled={submitting} {...innerField} />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-end">
-                        <FormField
-                          control={form.control}
-                          name={`specFields.${index}.options`}
-                          render={({ field: innerField }) => (
-                            <FormItem className="flex-1">
-                              <FormLabel>可选值（逗号分隔）</FormLabel>
-                              <FormControl>
-                                <Input placeholder="蓝, 绿, 红" disabled={submitting} {...innerField} />
+                                <Input placeholder="例如：颜色、尺寸" disabled={submitting} {...innerField} />
                               </FormControl>
                             </FormItem>
                           )}
@@ -356,44 +370,61 @@ export default function InventoryItemFormDialog({ open, onOpenChange, item, onSu
                           name={`specFields.${index}.defaultValue`}
                           render={({ field: innerField }) => (
                             <FormItem className="flex-1">
-                              <FormLabel>默认值</FormLabel>
+                              <FormLabel className="text-xs text-muted-foreground">参数值</FormLabel>
                               <FormControl>
-                                <Input placeholder="自动填充值" disabled={submitting} {...innerField} />
+                                <Input placeholder="例如：红色、XL" disabled={submitting} {...innerField} />
                               </FormControl>
                             </FormItem>
                           )}
                         />
+                        {/* Hidden key field to persist existing keys */}
+                        <input type="hidden" {...form.register(`specFields.${index}.key`)} />
+
                         <Button
                           type="button"
-                          variant="destructive"
-                          className="md:w-28"
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-destructive"
                           onClick={() => specFieldArray.remove(index)}
                           disabled={submitting}
                         >
-                          删除
+                          <span className="sr-only">删除</span>
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M3 6h18" />
+                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                          </svg>
                         </Button>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-              </form>
-            </Form>
-          </div>
-          <DrawerFooter className="border-t px-6 py-4">
-            <DrawerClose asChild>
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
-                取消
-              </Button>
-            </DrawerClose>
-            <Button type="submit" form={formId} disabled={submitting}>
-              {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isEditMode ? '保存修改' : '创建商品'}
+            </form>
+          </Form>
+        </DrawerBody>
+        <DrawerFooter>
+          <DrawerClose asChild>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
+              取消
             </Button>
-          </DrawerFooter>
-        </div>
+          </DrawerClose>
+          <Button type="submit" form={formId} disabled={submitting}>
+            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isEditMode ? '保存修改' : '创建商品'}
+          </Button>
+        </DrawerFooter>
       </DrawerContent>
     </Drawer>
   );

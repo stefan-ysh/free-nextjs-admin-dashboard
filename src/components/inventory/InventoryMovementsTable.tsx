@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 
 import DataState from '@/components/common/DataState';
 import type { InventoryMovement } from '@/types/inventory';
-import { formatDateTimeLocal } from '@/lib/dates';
+import { formatDateOnly, formatDateTimeLocal } from '@/lib/dates';
 import { exportDeliveryNote, type DeliveryNoteData } from '@/lib/excel-export';
 
 export type InventoryMovementRow = InventoryMovement & {
@@ -81,7 +81,7 @@ export default function InventoryMovementsTable({ movements, loading, emptyHint 
       contactPerson: selectedMovements[0].clientContact,
       phone: selectedMovements[0].clientPhone,
       address: selectedMovements[0].clientAddress,
-      date: new Date().toISOString().slice(0, 10),
+      date: formatDateOnly(new Date()) ?? '',
       items: selectedMovements.map(m => ({
         name: m.itemName || '未命名商品',
         spec: m.specSummary || renderAttributes(m.attributes),
@@ -117,7 +117,7 @@ export default function InventoryMovementsTable({ movements, loading, emptyHint 
         </div>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+      <div className="surface-table">
         <div className="max-h-[calc(100vh-350px)] overflow-auto custom-scrollbar">
           <table className="min-w-full divide-y divide-gray-200 text-sm whitespace-nowrap dark:divide-gray-700">
             <thead className="sticky top-0 z-10 bg-gray-50 text-xs uppercase text-gray-500 dark:bg-gray-800 dark:text-gray-400">

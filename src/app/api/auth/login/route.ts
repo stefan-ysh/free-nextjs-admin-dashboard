@@ -4,8 +4,7 @@ import { SESSION_COOKIE_NAME } from '@/lib/auth/constants';
 import { detectDeviceType, hashUserAgent } from '@/lib/auth/device';
 import { verifyPassword } from '@/lib/auth/password';
 import { createSession, invalidateSessionsForDeviceType, revokeExpiredSessions } from '@/lib/auth/session';
-import { findUserByEmail, findUserById } from '@/lib/auth/user';
-import { findUserByEmployeeCode } from '@/lib/users';
+import { clearLoginFailures, findUserByLoginIdentifier, recordFailedLoginAttempt } from '@/lib/auth/user';
 
 export async function POST(request: Request) {
   try {
@@ -16,7 +15,7 @@ export async function POST(request: Request) {
         : typeof body.account === 'string'
           ? body.account
           : '';
-    const identifier = identifierRaw.trim().toLowerCase();
+    const identifier = identifierRaw.trim();
     const password = typeof body.password === 'string' ? body.password : '';
     const rememberMe = Boolean(body.rememberMe);
 
@@ -24,21 +23,39 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: '账号与密码不能为空' }, { status: 400 });
     }
 
-    let user = await findUserByEmail(identifier);
-    if (!user && !identifier.includes('@')) {
-      const bizUser = await findUserByEmployeeCode(identifierRaw.trim());
-      if (bizUser) {
-        user = await findUserById(bizUser.id);
+    let user;
+    try {
+      user = await findUserByLoginIdentifier(identifier);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'PHONE_NOT_UNIQUE') {
+        return NextResponse.json({ success: false, error: '手机号重复，请联系管理员处理' }, { status: 409 });
       }
+      throw error;
     }
     if (!user) {
       return NextResponse.json({ success: false, error: '账号或密码错误' }, { status: 401 });
     }
+    if (!user.is_active || user.employment_status === 'terminated') {
+      return NextResponse.json({ success: false, error: '账号已停用或离职' }, { status: 403 });
+    }
+    if (user.locked_until) {
+      const lockedUntil = new Date(user.locked_until);
+      if (!Number.isNaN(lockedUntil.getTime()) && lockedUntil > new Date()) {
+        return NextResponse.json({ success: false, error: '账号已被锁定，请稍后再试' }, { status: 429 });
+      }
+      await clearLoginFailures(user.id);
+    }
+
+    if (!user.password_hash) {
+      return NextResponse.json({ success: false, error: '账号尚未设置密码，请联系管理员' }, { status: 403 });
+    }
 
     const passwordOk = await verifyPassword(password, user.password_hash);
     if (!passwordOk) {
+      await recordFailedLoginAttempt(user.id);
       return NextResponse.json({ success: false, error: '账号或密码错误' }, { status: 401 });
     }
+    await clearLoginFailures(user.id);
 
     await revokeExpiredSessions();
 

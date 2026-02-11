@@ -8,6 +8,8 @@ import {
 	projectStatusBadgeClasses,
 	projectStatusLabels,
 } from '@/components/projects/constants';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import type { ProjectRecord } from '@/types/project';
 
 type ProjectsResponse = {
@@ -161,35 +163,37 @@ export default function ProjectSelector({ value, onChange, disabled = false, hel
 	return (
 		<div className="space-y-3">
 			<div className="flex flex-col gap-3 md:flex-row md:items-center">
-				<input
+				<Input
 					type="search"
 					value={search}
 					onChange={(event) => setSearch(event.target.value)}
 					disabled={disabled}
 					placeholder="搜索项目名称、编号或客户"
-					className="w-full rounded-lg border border-border bg-white px-4 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 dark:border-border dark:bg-gray-800 dark:text-gray-100"
+					className="h-10"
 				/>
 				<div className="flex gap-2">
-					<button
+					<Button
 						type="button"
+						variant="outline"
+						size="sm"
 						onClick={() => setRefreshKey((prev) => prev + 1)}
 						disabled={disabled || loading}
-						className="rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
 					>
 						刷新列表
-					</button>
-					<button
+					</Button>
+					<Button
 						type="button"
+						variant="outline"
+						size="sm"
 						onClick={handleClear}
 						disabled={disabled || !value}
-						className="rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50 dark:border-border dark:bg-gray-800 dark:text-gray-300"
 					>
 						清除关联
-					</button>
+					</Button>
 				</div>
 			</div>
 
-			<div className="rounded-2xl border border-border bg-white dark:border-border dark:bg-gray-900">
+			<div className="surface-card">
 				{loading && (
 					<div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">正在加载项目...</div>
 				)}

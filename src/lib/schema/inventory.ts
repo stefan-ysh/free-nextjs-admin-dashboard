@@ -283,6 +283,8 @@ export async function ensureInventorySchema() {
       category VARCHAR(120) NOT NULL,
       safety_stock INT NOT NULL DEFAULT 0,
       barcode VARCHAR(120) NULL,
+      is_deleted TINYINT(1) NOT NULL DEFAULT 0,
+      deleted_at DATETIME NULL,
       spec_fields_json JSON NULL,
       default_attributes_json JSON NULL,
       attributes_json JSON NULL,
@@ -300,6 +302,8 @@ export async function ensureInventorySchema() {
       address VARCHAR(255) NULL,
       capacity INT NULL,
       manager VARCHAR(120) NULL,
+      is_deleted TINYINT(1) NOT NULL DEFAULT 0,
+      deleted_at DATETIME NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -377,6 +381,11 @@ export async function ensureInventorySchema() {
   await ensureColumn('inventory_movements', 'client_contact', 'VARCHAR(120) NULL');
   await ensureColumn('inventory_movements', 'client_phone', 'VARCHAR(64) NULL');
   await ensureColumn('inventory_movements', 'client_address', 'VARCHAR(255) NULL');
+  await ensureColumn('inventory_items', 'is_deleted', 'TINYINT(1) NOT NULL DEFAULT 0');
+  await ensureColumn('inventory_items', 'deleted_at', 'DATETIME NULL');
+  await ensureColumn('inventory_warehouses', 'is_deleted', 'TINYINT(1) NOT NULL DEFAULT 0');
+  await ensureColumn('inventory_warehouses', 'deleted_at', 'DATETIME NULL');
+  await ensureColumn('inventory_items', 'image_url', 'VARCHAR(512) NULL');
 
   await ensureSalePriceColumn(pool);
 

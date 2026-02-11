@@ -29,8 +29,9 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import DatePicker from '@/components/ui/DatePicker';
 import FileUpload from '@/components/common/FileUpload';
 import { Label } from '@/components/ui/label';
-import { getCategoryGroups } from '@/constants/finance-categories';
+import { getCategoryGroups, getPinnedCategoryLabels } from '@/constants/finance-categories';
 import UserSelect from '@/components/common/UserSelect';
+import { formatDateOnly } from '@/lib/dates';
 
 interface FinanceFormProps {
   initialData?: Partial<FinanceRecord>;
@@ -41,6 +42,7 @@ interface FinanceFormProps {
   currentUserId: string;
   formId?: string;
   hideActions?: boolean;
+  layoutMode?: 'drawer' | 'wide';
 }
 
 export type FinanceFormSubmitPayload = FinanceRecordFormValues;
@@ -54,6 +56,7 @@ export default function FinanceForm({
   currentUserId,
   formId,
   hideActions = false,
+  layoutMode = 'drawer',
 }: FinanceFormProps) {
   const [loading, setLoading] = useState(false);
   const isEditing = Boolean(initialData?.id);
@@ -71,7 +74,7 @@ export default function FinanceForm({
     paymentChannel: initialData?.paymentChannel ?? '',
     payer: initialData?.payer ?? '',
     transactionNo: initialData?.transactionNo ?? '',
-    date: initialData?.date?.split('T')[0] ?? new Date().toISOString().split('T')[0],
+    date: initialData?.date?.split('T')[0] ?? formatDateOnly(new Date()) ?? '',
     description: initialData?.description ?? '',
     tags: initialData?.tags ?? [],
     handlerId: (initialData?.metadata as any)?.handlerId ?? currentUserId,
@@ -100,8 +103,13 @@ export default function FinanceForm({
   const totalAmount = contractAmount + fee;
   const categoryGroups = useMemo(() => {
     const labels = currentCategories.length ? currentCategories : undefined;
-    return getCategoryGroups(type, labels);
+    return getCategoryGroups(type, labels, getPinnedCategoryLabels(type));
   }, [currentCategories, type]);
+  const compact = layoutMode === 'drawer';
+  const gridClass = compact ? 'grid grid-cols-1 gap-4 md:grid-cols-2' : 'grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6';
+  const shortFieldClass = compact ? '' : 'xl:col-span-1';
+  const fullRowClass = compact ? 'md:col-span-2' : 'md:col-span-2 xl:col-span-6';
+  const wideFieldClass = compact ? 'md:col-span-2' : 'md:col-span-2 xl:col-span-3';
 
   const handleSubmit = async (data: FinanceRecordFormValues) => {
     setLoading(true);
@@ -131,12 +139,12 @@ export default function FinanceForm({
           </TabsList>
         </Tabs>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className={gridClass}>
           <FormField
             control={form.control}
             name="name"
             render={({ field }) => (
-              <FormItem className="md:col-span-2">
+              <FormItem className={fullRowClass}>
                 <FormLabel>明细名称 <span className="text-red-500">*</span></FormLabel>
                 <FormControl>
                   <Input placeholder="例如:办公室装修、员工工资" {...field} />
@@ -150,7 +158,7 @@ export default function FinanceForm({
             control={form.control}
             name="category"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className={shortFieldClass}>
                 <Label htmlFor={categorySelectId} className="text-sm font-medium">
                   分类 <span className="text-red-500">*</span>
                 </Label>
@@ -184,7 +192,7 @@ export default function FinanceForm({
             control={form.control}
             name="date"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className={shortFieldClass}>
                 <FormLabel>日期 <span className="text-red-500">*</span></FormLabel>
                 <FormControl>
                   <DatePicker
@@ -202,7 +210,7 @@ export default function FinanceForm({
             control={form.control}
             name="handlerId"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className={shortFieldClass}>
                 <FormLabel>经办人</FormLabel>
                 <FormControl>
                   <UserSelect
@@ -217,12 +225,12 @@ export default function FinanceForm({
           />
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className={gridClass}>
           <FormField
             control={form.control}
             name="quantity"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className={shortFieldClass}>
                 <FormLabel>数量</FormLabel>
                 <FormControl>
                   <Input
@@ -233,6 +241,7 @@ export default function FinanceForm({
                     onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                   />
                 </FormControl>
+                <p className="text-xs text-muted-foreground">仅记录数量，不参与金额计算。</p>
                 <FormMessage />
               </FormItem>
             )}
@@ -242,7 +251,7 @@ export default function FinanceForm({
             control={form.control}
             name="contractAmount"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className={shortFieldClass}>
                 <FormLabel>合同金额 (元) <span className="text-red-500">*</span></FormLabel>
                 <FormControl>
                   <Input
@@ -262,7 +271,7 @@ export default function FinanceForm({
             control={form.control}
             name="fee"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className={shortFieldClass}>
                 <FormLabel>手续费 (元) <span className="text-red-500">*</span></FormLabel>
                 <FormControl>
                   <Input
@@ -278,7 +287,7 @@ export default function FinanceForm({
             )}
           />
 
-          <div className="space-y-2">
+          <div className={compact ? 'space-y-2' : 'space-y-2 lg:col-span-1'}>
             <label className="text-sm font-medium text-foreground">总金额 (元)</label>
             <div className="flex h-10 items-center rounded-md border border-input bg-muted px-3 text-sm ring-offset-background">
               <span className="font-semibold">¥{totalAmount.toFixed(2)}</span>
@@ -286,12 +295,12 @@ export default function FinanceForm({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className={gridClass}>
           <FormField
             control={form.control}
             name="paymentType"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className={shortFieldClass}>
                 <FormLabel>款项类型 <span className="text-red-500">*</span></FormLabel>
                 <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                   <FormControl>
@@ -316,7 +325,7 @@ export default function FinanceForm({
             control={form.control}
             name="paymentChannel"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className={shortFieldClass}>
                 <FormLabel>支付方式</FormLabel>
                 <FormControl>
                   <div>
@@ -338,12 +347,12 @@ export default function FinanceForm({
           />
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className={gridClass}>
           <FormField
             control={form.control}
             name="payer"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className={shortFieldClass}>
                 <FormLabel>代付人</FormLabel>
                 <FormControl>
                   <Input placeholder="可选，如有代付同事" {...field} />
@@ -357,7 +366,7 @@ export default function FinanceForm({
             control={form.control}
             name="transactionNo"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className={shortFieldClass}>
                 <FormLabel>流水号</FormLabel>
                 <FormControl>
                   <Input
@@ -377,12 +386,12 @@ export default function FinanceForm({
 
         <div className="rounded-lg border-none p-4">
           <h3 className="mb-3 text-sm font-medium">发票信息</h3>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className={gridClass}>
             <FormField
               control={form.control}
               name="invoice.type"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className={shortFieldClass}>
                   <FormLabel>发票类型</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                     <FormControl>
@@ -407,7 +416,7 @@ export default function FinanceForm({
                   control={form.control}
                   name="invoice.status"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className={shortFieldClass}>
                       <FormLabel>开票状态</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                         <FormControl>
@@ -431,7 +440,7 @@ export default function FinanceForm({
                       control={form.control}
                       name="invoice.number"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className={shortFieldClass}>
                           <FormLabel>发票号码</FormLabel>
                           <FormControl>
                             <Input placeholder="发票号码" {...field} />
@@ -445,7 +454,7 @@ export default function FinanceForm({
                       control={form.control}
                       name="invoice.issueDate"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className={shortFieldClass}>
                           <FormLabel>开票日期</FormLabel>
                           <FormControl>
                             <DatePicker
@@ -458,7 +467,7 @@ export default function FinanceForm({
                       )}
                     />
 
-                    <div className="md:col-span-2">
+                    <div className={wideFieldClass}>
                       <FormField
                         control={form.control}
                         name="invoice.attachments"

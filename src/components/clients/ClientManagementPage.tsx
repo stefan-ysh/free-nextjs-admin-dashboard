@@ -514,22 +514,22 @@ export default function ClientManagementPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-border bg-card p-3 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-          <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3 lg:gap-4">
+      <div className="surface-toolbar p-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+          <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-1">
               <span className="text-xs font-medium text-muted-foreground">搜索</span>
               <Input
                 placeholder="搜索客户名称/手机号/税号"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                className="h-9 text-sm"
+                className="h-10 text-sm"
               />
             </div>
             <div className="space-y-1">
               <span className="text-xs font-medium text-muted-foreground">客户类型</span>
               <Select value={filterType} onValueChange={(value) => setFilterType(value as 'all' | ClientType)}>
-                <SelectTrigger className="h-9 text-sm">
+                <SelectTrigger className="h-10 text-sm">
                   <SelectValue placeholder="全部类型" />
                 </SelectTrigger>
                 <SelectContent>
@@ -542,7 +542,7 @@ export default function ClientManagementPage() {
             <div className="space-y-1">
               <span className="text-xs font-medium text-muted-foreground">状态</span>
               <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as 'all' | ClientStatus)}>
-                <SelectTrigger className="h-9 text-sm">
+                <SelectTrigger className="h-10 text-sm">
                   <SelectValue placeholder="全部状态" />
                 </SelectTrigger>
                 <SelectContent>
@@ -556,7 +556,7 @@ export default function ClientManagementPage() {
           </div>
           <div className="flex items-center pt-1">
             {canManage && (
-              <Button onClick={handleOpenDialog} size="sm" className="h-9">
+              <Button onClick={handleOpenDialog} size="sm" className="h-10">
                 <PlusCircle className="mr-2 h-4 w-4" /> 新增客户
               </Button>
             )}
@@ -564,7 +564,81 @@ export default function ClientManagementPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+      <div className="surface-table">
+        <div className="md:hidden">
+          <div className="space-y-3 p-4">
+            {loading ? (
+              <div className="rounded-2xl border border-border/60 bg-background/70 p-6 text-center text-sm text-muted-foreground">
+                <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> 正在加载...
+              </div>
+            ) : clients.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-6 text-center text-sm text-muted-foreground">
+                暂无客户数据，点击“新增客户”开始维护
+              </div>
+            ) : (
+              clients.map((client) => (
+                <div key={client.id} className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-foreground">{client.displayName}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{typeLabels[client.type]}</div>
+                    </div>
+                    <Badge variant="secondary" className={cn('px-3 py-1 text-xs', statusBadgeClass[client.status])}>
+                      {statusLabels[client.status]}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+                    <div className="flex items-center justify-between gap-3">
+                      <span>联系人</span>
+                      <span className="text-foreground">{client.contactPerson || '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span>电话</span>
+                      <span className="text-foreground">{client.mobile || '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span>税号</span>
+                      <span className="text-foreground">{client.taxNumber || '—'}</span>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+                    <span>授信额度</span>
+                    <span className="text-foreground">{formatCurrency(client.creditLimit)}</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                    <span>在途金额</span>
+                    <span className="text-foreground">{formatCurrency(client.outstandingAmount)}</span>
+                  </div>
+                  {canManage && (
+                    <div className="mt-4 flex justify-end">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm" className="h-8 px-3">
+                            <MoreHorizontal className="mr-2 h-4 w-4" /> 操作
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-32">
+                          <DropdownMenuItem onClick={() => handleEditDialog(client)}>
+                            <Edit2 className="mr-2 h-4 w-4" /> 编辑
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteClick(client)}
+                            className="text-rose-600 focus:text-rose-600"
+                            disabled={deletingId === client.id}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            {deletingId === client.id ? '删除中...' : '删除'}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+        <div className="hidden md:block">
         <Table className="[&_tbody_tr]:hover:bg-muted/40">
           <TableHeader className="[&_tr]:border-b border-border/40">
             <TableRow>
@@ -646,6 +720,7 @@ export default function ClientManagementPage() {
               ))}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={(open) => !saving && setDialogOpen(open)}>

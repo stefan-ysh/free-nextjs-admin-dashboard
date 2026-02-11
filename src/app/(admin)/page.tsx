@@ -1,26 +1,22 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  ClipboardList,
-  TrendingUp,
-  Users,
-} from 'lucide-react';
+import Link from 'next/link';
+import { ArrowDownRight, ArrowUpRight, ClipboardList, TrendingUp } from 'lucide-react';
 
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { toPermissionUser } from '@/lib/auth/permission-user';
 import { checkPermission, Permissions } from '@/lib/permissions';
 import type { UserProfile } from '@/types/user';
-import { formatDateTimeLocal } from '@/lib/dates';
+import { formatDateOnly, formatDateTimeLocal } from '@/lib/dates';
 import { getInventoryStats } from '@/lib/db/inventory';
-import { getStats as getFinanceStats } from '@/lib/db/finance';
+import { getRecords, getStats as getFinanceStats } from '@/lib/db/finance';
 import { getEmployeeDashboardStats } from '@/lib/hr/employees';
-import InventoryStatsCards from '@/components/inventory/InventoryStatsCards';
-import InventoryLowStockList from '@/components/inventory/InventoryLowStockList';
+import { getPurchaseStats } from '@/lib/db/purchases';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { USER_ROLE_LABELS } from '@/constants/user-roles';
+import { TransactionType } from '@/types/finance';
 
 const currencyFormatter = new Intl.NumberFormat('zh-CN', {
   style: 'currency',
@@ -97,22 +93,54 @@ export default async function AdminDashboardPage() {
   const { user } = await requireCurrentUser();
   const profile = await toPermissionUser(user);
 
-  const [inventoryPermission, financePermission, hrPermission] = await Promise.all([
+  const [
+    inventoryPermission,
+    financePermission,
+    hrPermission,
+    purchaseCreatePermission,
+    purchaseViewAllPermission,
+    purchaseViewDepartmentPermission,
+    purchaseApprovePermission,
+  ] = await Promise.all([
     checkPermission(profile, Permissions.INVENTORY_VIEW_DASHBOARD),
     checkPermission(profile, Permissions.FINANCE_VIEW_ALL),
     checkPermission(profile, Permissions.USER_VIEW_ALL),
+    checkPermission(profile, Permissions.PURCHASE_CREATE),
+    checkPermission(profile, Permissions.PURCHASE_VIEW_ALL),
+    checkPermission(profile, Permissions.PURCHASE_VIEW_DEPARTMENT),
+    checkPermission(profile, Permissions.PURCHASE_APPROVE),
   ]);
 
-  const [inventoryStats, financeStats, hrStats] = await Promise.all([
+  const today = new Date();
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const monthStartText = formatDateOnly(monthStart) ?? monthStart.toISOString().slice(0, 10);
+  const todayText = formatDateOnly(today) ?? today.toISOString().slice(0, 10);
+
+  const purchasePermissionAllowed =
+    purchaseCreatePermission.allowed ||
+    purchaseViewAllPermission.allowed ||
+    purchaseViewDepartmentPermission.allowed ||
+    purchaseApprovePermission.allowed;
+
+  const [inventoryStats, financeStats, recentFinanceRecords, hrStats, purchaseStats] = await Promise.all([
     inventoryPermission.allowed ? getInventoryStats() : null,
-    financePermission.allowed ? getFinanceStats() : null,
+    financePermission.allowed ? getFinanceStats({ startDate: monthStartText, endDate: todayText }) : null,
+    financePermission.allowed ? getRecords({ startDate: monthStartText, endDate: todayText, limit: 6, offset: 0 }) : [],
     hrPermission.allowed ? getEmployeeDashboardStats() : null,
+    purchasePermissionAllowed
+      ? getPurchaseStats(
+          purchaseViewAllPermission.allowed
+            ? {}
+            : { purchaserId: user.id }
+        )
+      : null,
   ]);
 
   const hasAnySection = [
     inventoryPermission.allowed,
     financePermission.allowed,
     hrPermission.allowed,
+    purchasePermissionAllowed,
   ].some(Boolean);
 
   const greetingName = profile.displayName || profile.firstName || profile.email;
@@ -120,37 +148,51 @@ export default async function AdminDashboardPage() {
   const lastLogin = formatDateTimeLocal(profile.lastLoginAt) ?? '暂无登录记录';
   const accessibleModules = (
     [
-      inventoryPermission.allowed && '库存',
       financePermission.allowed && '财务',
+      purchasePermissionAllowed && '采购与流程',
+      inventoryPermission.allowed && '库存',
       hrPermission.allowed && '组织架构',
     ].filter(Boolean) as string[]
   ).join(' / ');
-  const quickFacts = [
-    { label: '当前主角色', value: primaryRole },
-    { label: '上次登录', value: lastLogin },
-    { label: '可访问模块', value: accessibleModules || '基础权限' },
-  ];
 
   return (
-    <div className="space-y-10 p-6">
-      <Card className="bg-gradient-to-br from-indigo-50 via-white to-white/40 dark:from-indigo-950/40 dark:via-gray-900 dark:to-gray-900/40 border-none">
-        <CardHeader className="space-y-2 pb-0">
-          <CardTitle className="text-3xl font-semibold text-foreground">
-            你好，{greetingName}！
-          </CardTitle>
+    <div className="space-y-8 p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">运营概览</h1>
+          <p className="text-xs text-muted-foreground">你好，{greetingName} · {primaryRole}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {financePermission.allowed ? (
+            <>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/finance">查看财务</Link>
+              </Button>
+              <Button asChild size="sm">
+                <Link href="/finance?action=new">记一笔</Link>
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/purchases">我的采购</Link>
+              </Button>
+              <Button asChild size="sm">
+                <Link href="/workflow/todo">流程待办</Link>
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <Card className="border-none shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">账号概览</CardTitle>
+          <CardDescription>上次登录 {lastLogin}</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4 pt-0 mt-5">
-          <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
-            {quickFacts.map((fact) => (
-              <div
-                key={fact.label}
-                className="rounded-xl border border-white/60 bg-white/70 p-3 shadow-sm backdrop-blur transition hover:border-indigo-200 dark:border-white/10 dark:bg-slate-900/40"
-              >
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{fact.label}</p>
-                <p className="mt-1 text-sm font-semibold text-foreground">{fact.value}</p>
-              </div>
-            ))}
-          </div>
+        <CardContent className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+          <span className="rounded-full border border-border px-3 py-1">可访问模块：{accessibleModules || '基础权限'}</span>
+          <span className="rounded-full border border-border px-3 py-1">角色：{primaryRole}</span>
         </CardContent>
       </Card>
 
@@ -164,102 +206,128 @@ export default async function AdminDashboardPage() {
           </CardHeader>
         </Card>
       ) : (
-        <div className="space-y-12">
-          {inventoryPermission.allowed && (
-            <DashboardSection title="进销存总览" description="实时统计 SKU、仓库与今日出入库情况">
-              <div className="space-y-4">
-                <InventoryStatsCards stats={inventoryStats} />
-                <div className="grid gap-4 lg:grid-cols-3">
-                  <div className="lg:col-span-2">
-                    <InventoryLowStockList items={inventoryStats?.lowStockItems ?? []} />
-                  </div>
-                  <Card className="hidden lg:block border-none">
-                    <CardHeader>
-                      <CardTitle className="text-base">任务贴士</CardTitle>
-                      <CardDescription>根据库存提醒安排补货或调拨。</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3 text-sm text-muted-foreground">
-                      <p>· 低于安全线的 SKU 优先补货，标记责任仓库。</p>
-                      <p>· 今日出入库摘要可帮助排查异常调拨。</p>
-                      <p>· 查看左侧菜单可进入商品、仓库与流水详情。</p>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            </DashboardSection>
-          )}
-
+        <div className="space-y-8">
           {financePermission.allowed && (
-            <DashboardSection title="财务概览" description="汇总收入、支出与分类贡献">
+            <DashboardSection title="财务概览" description="本月收支与最新记录">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <MetricCard label="总收入" value={formatCurrency(financeStats?.totalIncome)} icon={<ArrowUpRight className="h-5 w-5 text-emerald-500" />} tone="positive" />
-                <MetricCard label="总支出" value={formatCurrency(financeStats?.totalExpense)} icon={<ArrowDownRight className="h-5 w-5 text-rose-500" />} tone="negative" />
-                <MetricCard label="净收支" value={formatCurrency(financeStats?.balance)} icon={<TrendingUp className="h-5 w-5 text-blue-500" />} tone={financeStats && financeStats.balance >= 0 ? 'positive' : 'negative'} />
-                <MetricCard label="记录数量" value={formatNumber(financeStats?.recordCount)} icon={<ClipboardList className="h-5 w-5 text-purple-500" />} helper="财务流水条目" />
+                <MetricCard label="本月收入" value={formatCurrency(financeStats?.totalIncome)} icon={<ArrowUpRight className="h-5 w-5 text-emerald-500" />} tone="positive" />
+                <MetricCard label="本月支出" value={formatCurrency(financeStats?.totalExpense)} icon={<ArrowDownRight className="h-5 w-5 text-rose-500" />} tone="negative" />
+                <MetricCard label="本月净额" value={formatCurrency(financeStats?.balance)} icon={<TrendingUp className="h-5 w-5 text-blue-500" />} tone={financeStats && financeStats.balance >= 0 ? 'positive' : 'negative'} />
+                <MetricCard label="记录数量" value={formatNumber(financeStats?.recordCount)} icon={<ClipboardList className="h-5 w-5 text-slate-500" />} helper="本月流水" />
               </div>
-              {financeStats?.categoryStats?.length ? (
-                <Card className="border-none shadow-sm">
+              <div className="grid gap-4 lg:grid-cols-3">
+                <Card className="border-none shadow-sm lg:col-span-2">
                   <CardHeader>
-                    <CardTitle className="text-base">分类排名（前 5）</CardTitle>
-                    <CardDescription>按金额排序的主要收入/支出分类。</CardDescription>
+                    <CardTitle className="text-base">最近记录</CardTitle>
+                    <CardDescription>显示本月最新 6 笔</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {financeStats.categoryStats.slice(0, 5).map((category) => (
-                      <div key={category.category} className="flex items-center justify-between text-sm">
-                        <div>
-                          <p className="font-medium text-foreground">{category.category}</p>
-                          <p className="text-xs text-muted-foreground">贡献 {category.percentage.toFixed(1)}%</p>
+                    {recentFinanceRecords.length ? (
+                      recentFinanceRecords.map((record) => (
+                        <div key={record.id} className="flex items-center justify-between text-sm">
+                          <div>
+                            <p className="font-medium text-foreground">{record.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {record.category} · {record.date?.slice(0, 10)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className={record.type === TransactionType.INCOME ? 'text-emerald-600' : 'text-rose-600'}>
+                              {record.type === TransactionType.INCOME ? '+' : '-'}{formatCurrency(record.totalAmount)}
+                            </p>
+                          </div>
                         </div>
-                        <p className="font-semibold">{formatCurrency(category.amount)}</p>
-                      </div>
-                    ))}
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">暂无财务记录。</p>
+                    )}
                   </CardContent>
                 </Card>
-              ) : null}
+                <Card className="border-none shadow-sm">
+                  <CardHeader>
+                    <CardTitle className="text-base">分类 Top 5</CardTitle>
+                    <CardDescription>本月金额排序</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    {financeStats?.categoryStats?.length ? (
+                      financeStats.categoryStats.slice(0, 5).map((category) => (
+                        <div key={category.category} className="flex items-center justify-between">
+                          <span className="text-foreground">{category.category}</span>
+                          <span className="text-muted-foreground">{formatCurrency(category.amount)}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">暂无分类统计。</p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </DashboardSection>
           )}
 
-          {hrPermission.allowed && (
-            <DashboardSection title="人员动态" description="员工状态与近 30 天变动">
+          {purchasePermissionAllowed && (
+            <DashboardSection title="采购与流程" description="采购申请与审批进度概览">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <MetricCard label="员工总数" value={formatNumber(hrStats?.totalEmployees)} icon={<Users className="h-5 w-5 text-slate-500" />} />
-                <MetricCard label="在职" value={formatNumber(hrStats?.activeEmployees)} helper="Active" tone="positive" />
-                <MetricCard label="近 30 天入职" value={formatNumber(hrStats?.newHires30d)} helper="New hires" tone="info" />
-                <MetricCard label="近 30 天离职" value={formatNumber(hrStats?.departures30d)} helper="Departures" tone="negative" />
+                <MetricCard
+                  label="采购总额"
+                  value={formatCurrency(purchaseStats?.totalAmount)}
+                  helper={`共 ${formatNumber(purchaseStats?.totalPurchases)} 条`}
+                  icon={<ClipboardList className="h-5 w-5 text-slate-500" />}
+                />
+                <MetricCard
+                  label="待审批金额"
+                  value={formatCurrency(purchaseStats?.pendingAmount)}
+                  helper={`待审批 ${formatNumber(purchaseStats?.pendingCount)} 条`}
+                  icon={<ArrowDownRight className="h-5 w-5 text-amber-500" />}
+                  tone="negative"
+                />
+                <MetricCard
+                  label="已批准金额"
+                  value={formatCurrency(purchaseStats?.approvedAmount)}
+                  helper={`已批准 ${formatNumber(purchaseStats?.approvedCount)} 条`}
+                  icon={<ArrowUpRight className="h-5 w-5 text-sky-500" />}
+                  tone="info"
+                />
+                <MetricCard
+                  label="已打款金额"
+                  value={formatCurrency(purchaseStats?.paidAmount)}
+                  helper={`已打款 ${formatNumber(purchaseStats?.paidCount)} 条`}
+                  icon={<TrendingUp className="h-5 w-5 text-emerald-500" />}
+                  tone="positive"
+                />
               </div>
-              <Card className="border-none shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-base">最新状态变更</CardTitle>
-                  <CardDescription>最多展示 6 条记录。</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {hrStats?.recentChanges?.length ? (
-                    hrStats.recentChanges.map((change) => {
-                      const previous = EMPLOYMENT_STATUS_META[change.previousStatus];
-                      const next = EMPLOYMENT_STATUS_META[change.nextStatus];
-                      return (
-                        <div key={change.id} className="rounded-lg border border-border p-4 text-sm">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div>
-                              <p className="font-semibold text-foreground">{change.employeeName}</p>
-                              <p className="text-xs text-muted-foreground">{change.department ?? '未分配部门'}</p>
-                            </div>
-                            <p className="text-xs text-muted-foreground">{formatDateTimeLocal(change.createdAt)}</p>
-                          </div>
-                          <div className="mt-3 flex flex-wrap items-center gap-2">
-                            <Badge variant={previous?.badge ?? 'outline'}>{previous?.label ?? change.previousStatus}</Badge>
-                            <span className="text-xs text-muted-foreground">→</span>
-                            <Badge variant={next?.badge ?? 'outline'}>{next?.label ?? change.nextStatus}</Badge>
-                          </div>
-                          {change.note ? <p className="mt-2 text-xs text-muted-foreground">备注：{change.note}</p> : null}
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <p className="text-sm text-muted-foreground">近期没有状态变更。</p>
-                  )}
-                </CardContent>
-              </Card>
+            </DashboardSection>
+          )}
+
+          {(inventoryPermission.allowed || hrPermission.allowed) && (
+            <DashboardSection title="其他概览" description="模块精简展示，避免干扰">
+              <div className="grid gap-4 md:grid-cols-2">
+                {inventoryPermission.allowed && (
+                  <Card className="border-none shadow-sm">
+                    <CardHeader>
+                      <CardTitle className="text-base">库存提醒</CardTitle>
+                      <CardDescription>低库存 SKU</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">待补货</span>
+                      <span className="text-lg font-semibold text-foreground">{formatNumber(inventoryStats?.lowStockItems?.length ?? 0)}</span>
+                    </CardContent>
+                  </Card>
+                )}
+                {hrPermission.allowed && (
+                  <Card className="border-none shadow-sm">
+                    <CardHeader>
+                      <CardTitle className="text-base">员工状态</CardTitle>
+                      <CardDescription>在职/休假/离职</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-wrap gap-2 text-xs">
+                      <Badge variant={EMPLOYMENT_STATUS_META.active.badge}>在职 {formatNumber(hrStats?.activeEmployees)}</Badge>
+                      <Badge variant={EMPLOYMENT_STATUS_META.on_leave.badge}>休假 {formatNumber(hrStats?.onLeaveEmployees)}</Badge>
+                      <Badge variant={EMPLOYMENT_STATUS_META.terminated.badge}>离职 {formatNumber(hrStats?.terminatedEmployees)}</Badge>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
             </DashboardSection>
           )}
         </div>

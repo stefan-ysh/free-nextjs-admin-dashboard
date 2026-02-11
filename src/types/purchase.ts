@@ -1,5 +1,6 @@
-import { PaymentType, InvoiceStatus, InvoiceType as FinanceInvoiceType } from '@/types/finance';
+import { PaymentType, InvoiceStatus, InvoiceType } from '@/types/finance';
 import type { Supplier, SupplierStatus } from '@/types/supplier';
+import type { PurchaseWorkflowNode } from '@/types/purchase-workflow';
 
 export { PaymentType, InvoiceStatus, InvoiceType } from '@/types/finance';
 
@@ -7,6 +8,11 @@ export { PaymentType, InvoiceStatus, InvoiceType } from '@/types/finance';
  * 购买渠道
  */
 export type PurchaseChannel = 'online' | 'offline';
+
+/**
+ * 采购组织
+ */
+export type PurchaseOrganization = 'school' | 'company';
 
 /**
  * 付款方式
@@ -17,11 +23,6 @@ export type PaymentMethod =
   | 'bank_transfer' // 银行转账
   | 'corporate_transfer' // 对公转账
   | 'cash'; // 现金
-
-/**
- * 发票类型(沿用财务模块枚举)
- */
-export type InvoiceType = FinanceInvoiceType;
 
 export const PAYMENT_TYPES: readonly PaymentType[] = [
   PaymentType.DEPOSIT,
@@ -48,6 +49,16 @@ export type PurchaseStatus =
   | 'paid'              // 已打款
   | 'cancelled';        // 已取消
 
+export type ReimbursementStatus =
+  | 'none'
+  | 'invoice_pending'
+  | 'reimbursement_pending'
+  | 'reimbursement_rejected'
+  | 'reimbursed';
+
+export const PAYMENT_QUEUE_STATUSES = ['all', 'pending', 'processing', 'paid', 'issue'] as const;
+export type PaymentQueueStatus = (typeof PAYMENT_QUEUE_STATUSES)[number];
+
 /**
  * 采购记录
  */
@@ -57,6 +68,7 @@ export interface PurchaseRecord {
   
   // 基本信息
   purchaseDate: string;
+  organizationType: PurchaseOrganization;
   itemName: string;
   specification: string | null;
   quantity: number;
@@ -98,6 +110,19 @@ export interface PurchaseRecord {
   
   // 状态流程
   status: PurchaseStatus;
+  reimbursementStatus: ReimbursementStatus;
+  reimbursementSubmittedAt: string | null;
+  reimbursementSubmittedBy: string | null;
+  reimbursementRejectedAt: string | null;
+  reimbursementRejectedBy: string | null;
+  reimbursementRejectedReason: string | null;
+  pendingApproverId?: string | null;
+  workflowStepIndex?: number | null;
+  workflowNodes?: PurchaseWorkflowNode[];
+  paymentIssueOpen?: boolean;
+  paymentIssueReason?: string | null;
+  paymentIssueAt?: string | null;
+  paymentIssueBy?: string | null;
   
   // 审批信息
   submittedAt: string | null;
@@ -126,6 +151,7 @@ export interface PurchaseRecord {
  */
 export interface CreatePurchaseInput {
   purchaseDate: string;
+  organizationType: PurchaseOrganization;
   itemName: string;
   specification?: string;
   quantity: number;
@@ -164,6 +190,7 @@ export interface CreatePurchaseInput {
  */
 export interface UpdatePurchaseInput {
   purchaseDate?: string;
+  organizationType?: PurchaseOrganization;
   itemName?: string;
   specification?: string | null;
   quantity?: number;
@@ -204,8 +231,12 @@ export interface ListPurchasesParams {
   search?: string;
   status?: PurchaseStatus | 'all';
   purchaserId?: string;
+  purchaserDepartment?: string;
   projectId?: string;
   supplierId?: string;
+  organizationType?: PurchaseOrganization;
+  pendingApproverId?: string;
+  includeUnassignedApprovals?: boolean;
   purchaseChannel?: PurchaseChannel;
   paymentMethod?: PaymentMethod;
   startDate?: string;
@@ -238,7 +269,10 @@ export type ReimbursementAction =
   | 'reject'    // 驳回
   | 'pay'       // 打款
   | 'cancel'    // 取消
-  | 'withdraw'; // 撤回
+  | 'withdraw'  // 撤回
+  | 'transfer'  // 转审
+  | 'issue'     // 标记异常
+  | 'resolve';  // 解除异常
 
 /**
  * 报销流程日志
@@ -250,6 +284,20 @@ export interface ReimbursementLog {
   fromStatus: PurchaseStatus;
   toStatus: PurchaseStatus;
   operatorId: string;
+  comment: string | null;
+  createdAt: string;
+}
+
+export interface PurchaseAuditLogItem {
+  id: string;
+  purchaseId: string;
+  purchaseNumber: string;
+  itemName: string;
+  action: ReimbursementAction;
+  fromStatus: PurchaseStatus;
+  toStatus: PurchaseStatus;
+  operatorId: string;
+  operatorName: string;
   comment: string | null;
   createdAt: string;
 }
@@ -281,6 +329,8 @@ export interface RejectReimbursementInput {
  */
 export interface MarkAsPaidInput {
   purchaseId: string;
+  amount: number;
+  note?: string | null;
 }
 
 /**
@@ -310,6 +360,10 @@ export interface PurchaseDetail extends PurchaseRecord {
     id: string;
     displayName: string;
   } | null;
+  pendingApprover: {
+    id: string;
+    displayName: string;
+  } | null;
   rejecter: {
     id: string;
     displayName: string;
@@ -318,8 +372,38 @@ export interface PurchaseDetail extends PurchaseRecord {
     id: string;
     displayName: string;
   } | null;
+  payments: PurchasePaymentDetail[];
+  paidAmount: number;
+  remainingAmount: number;
+  dueAmount: number;
   logs: ReimbursementLog[];
   supplier: Supplier | null;
+}
+
+export type PurchasePaymentQueueItem = PurchaseRecord & {
+  supplierName?: string | null;
+  paidAmount: number;
+  remainingAmount: number;
+  purchaserName?: string | null;
+  purchaserDepartment?: string | null;
+  purchaserEmployeeCode?: string | null;
+};
+
+export interface PurchasePayment {
+  id: string;
+  purchaseId: string;
+  amount: number;
+  paidAt: string;
+  paidBy: string;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface PurchasePaymentDetail extends PurchasePayment {
+  payer: {
+    id: string;
+    displayName: string;
+  } | null;
 }
 
 /**
@@ -334,6 +418,55 @@ export interface PurchaseStats {
   approvedAmount: number;
   paidCount: number;
   paidAmount: number;
+}
+
+export interface PurchaseMonitorStatusSummary {
+  status: PurchaseStatus;
+  count: number;
+  amount: number;
+}
+
+export interface PurchaseMonitorAgingBucket {
+  label: string;
+  minHours: number;
+  maxHours: number | null;
+  count: number;
+}
+
+export interface PurchaseMonitorApproverLoad {
+  approverId: string | null;
+  approverName: string;
+  pendingCount: number;
+  totalPendingAmount: number;
+  avgPendingHours: number;
+  maxPendingHours: number;
+}
+
+export interface PurchaseMonitorStuckRecord {
+  id: string;
+  purchaseNumber: string;
+  itemName: string;
+  purchaserId: string;
+  purchaserName: string;
+  pendingApproverId: string | null;
+  pendingApproverName: string;
+  submittedAt: string | null;
+  pendingHours: number;
+  dueAmount: number;
+}
+
+export interface PurchaseMonitorData {
+  generatedAt: string;
+  overdueHours: number;
+  activeCount: number;
+  pendingApprovalCount: number;
+  pendingPaymentCount: number;
+  overdueApprovalCount: number;
+  avgPendingHours: number;
+  statusSummary: PurchaseMonitorStatusSummary[];
+  agingBuckets: PurchaseMonitorAgingBucket[];
+  approverLoad: PurchaseMonitorApproverLoad[];
+  stuckRecords: PurchaseMonitorStuckRecord[];
 }
 
 /**
@@ -367,21 +500,47 @@ export interface ProjectPurchaseStats {
 }
 
 export const PURCHASE_STATUSES: readonly PurchaseStatus[] = ['draft', 'pending_approval', 'approved', 'rejected', 'paid', 'cancelled'] as const;
+export const REIMBURSEMENT_STATUSES: readonly ReimbursementStatus[] = [
+  'none',
+  'invoice_pending',
+  'reimbursement_pending',
+  'reimbursement_rejected',
+  'reimbursed',
+] as const;
 export const PURCHASE_CHANNELS: readonly PurchaseChannel[] = ['online', 'offline'] as const;
+export const PURCHASE_ORGANIZATIONS: readonly PurchaseOrganization[] = ['school', 'company'] as const;
 export const PAYMENT_METHODS: readonly PaymentMethod[] = ['wechat', 'alipay', 'bank_transfer', 'corporate_transfer', 'cash'] as const;
 export const INVOICE_TYPES: readonly InvoiceType[] = [
-  FinanceInvoiceType.SPECIAL,
-  FinanceInvoiceType.GENERAL,
-  FinanceInvoiceType.NONE,
+  InvoiceType.SPECIAL,
+  InvoiceType.GENERAL,
+  InvoiceType.NONE,
 ] as const;
-export const REIMBURSEMENT_ACTIONS: readonly ReimbursementAction[] = ['submit', 'approve', 'reject', 'pay', 'cancel', 'withdraw'] as const;
+export const REIMBURSEMENT_ACTIONS: readonly ReimbursementAction[] = [
+  'submit',
+  'approve',
+  'reject',
+  'pay',
+  'cancel',
+  'withdraw',
+  'transfer',
+  'issue',
+  'resolve',
+] as const;
 
 export function isPurchaseStatus(value: string | null | undefined): value is PurchaseStatus {
   return value != null && PURCHASE_STATUSES.includes(value as PurchaseStatus);
 }
 
+export function isReimbursementStatus(value: string | null | undefined): value is ReimbursementStatus {
+  return value != null && REIMBURSEMENT_STATUSES.includes(value as ReimbursementStatus);
+}
+
 export function isPurchaseChannel(value: string | null | undefined): value is PurchaseChannel {
   return value != null && PURCHASE_CHANNELS.includes(value as PurchaseChannel);
+}
+
+export function isPurchaseOrganization(value: string | null | undefined): value is PurchaseOrganization {
+  return value != null && PURCHASE_ORGANIZATIONS.includes(value as PurchaseOrganization);
 }
 
 export function isPaymentMethod(value: string | null | undefined): value is PaymentMethod {
@@ -394,6 +553,10 @@ export function isInvoiceType(value: string | null | undefined): value is Invoic
 
 export function isPaymentType(value: string | null | undefined): value is PaymentType {
   return value != null && PAYMENT_TYPES.includes(value as PaymentType);
+}
+
+export function isPaymentQueueStatus(value: string | null | undefined): value is PaymentQueueStatus {
+  return value != null && PAYMENT_QUEUE_STATUSES.includes(value as PaymentQueueStatus);
 }
 
 export function isInvoiceStatus(value: string | null | undefined): value is InvoiceStatus {
@@ -456,6 +619,12 @@ export function isPurchasePayable(status: PurchaseStatus): boolean {
   return status === 'approved';
 }
 
+export function isReimbursementSubmittable(
+  purchase: Pick<PurchaseRecord, 'status' | 'reimbursementStatus'>
+): boolean {
+  return purchase.status === 'approved' && purchase.reimbursementStatus === 'invoice_pending';
+}
+
 /**
  * 辅助函数：获取状态显示文本
  */
@@ -467,6 +636,17 @@ export function getPurchaseStatusText(status: PurchaseStatus): string {
     rejected: '已驳回',
     paid: '已打款',
     cancelled: '已取消',
+  };
+  return statusMap[status];
+}
+
+export function getReimbursementStatusText(status: ReimbursementStatus): string {
+  const statusMap: Record<ReimbursementStatus, string> = {
+    none: '未进入报销',
+    invoice_pending: '待补发票',
+    reimbursement_pending: '待财务确认',
+    reimbursement_rejected: '报销被驳回',
+    reimbursed: '报销完成',
   };
   return statusMap[status];
 }

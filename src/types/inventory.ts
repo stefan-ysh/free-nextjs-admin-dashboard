@@ -22,6 +22,7 @@ export interface InventoryItem {
   category: string;
   safetyStock: number;
   barcode?: string;
+  imageUrl?: string;
   specFields?: InventorySpecField[];
   createdAt: string;
   updatedAt: string;
@@ -87,11 +88,48 @@ export interface InventoryStats {
   todaysOutbound: number;
 }
 
+export interface InventoryTransferOrder {
+  transferId: string;
+  itemId: string;
+  itemName: string | null;
+  itemSku: string | null;
+  quantity: number;
+  unitCost: number | null;
+  amount: number | null;
+  sourceWarehouseId: string | null;
+  sourceWarehouseName: string | null;
+  targetWarehouseId: string | null;
+  targetWarehouseName: string | null;
+  operatorId: string | null;
+  occurredAt: string;
+  notes: string | null;
+}
+
+export interface InventoryTransferMovement {
+  id: string;
+  direction: InventoryDirection;
+  itemId: string;
+  itemName: string | null;
+  itemSku: string | null;
+  warehouseId: string;
+  warehouseName: string | null;
+  quantity: number;
+  unitCost: number | null;
+  amount: number | null;
+  operatorId: string | null;
+  occurredAt: string;
+  notes: string | null;
+}
+
+export interface InventoryTransferDetail extends InventoryTransferOrder {
+  movements: InventoryTransferMovement[];
+}
+
 export interface InventoryInboundPayload {
   itemId: string;
   warehouseId: string;
   quantity: number;
-  type: Extract<InventoryMovementType, 'purchase' | 'transfer' | 'adjust' | 'return'>;
+  type: Extract<InventoryMovementType, 'purchase' | 'adjust' | 'return'>;
   unitCost?: number;
   occurredAt?: string;
   attributes?: Record<string, string>;
@@ -103,6 +141,7 @@ export interface InventoryOutboundPayload {
   warehouseId: string;
   quantity: number;
   type: Extract<InventoryMovementType, 'sale' | 'transfer' | 'adjust' | 'return'>;
+  targetWarehouseId?: string;
   relatedOrderId?: string;
   clientId?: string;
   clientType?: ClientType;
@@ -115,6 +154,12 @@ export interface InventoryOutboundPayload {
   notes?: string;
 }
 
+export interface InventoryReservePayload {
+  itemId: string;
+  warehouseId: string;
+  quantity: number;
+}
+
 export interface InventoryItemPayload {
   sku: string;
   name: string;
@@ -124,6 +169,7 @@ export interface InventoryItemPayload {
   category: string;
   safetyStock: number;
   barcode?: string;
+  imageUrl?: string;
   specFields?: InventorySpecField[];
 }
 

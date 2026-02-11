@@ -134,7 +134,7 @@ export default function InventoryInboundPage() {
     <div className="space-y-6">
       <form
         onSubmit={handleSubmit}
-        className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow dark:border-gray-700 dark:bg-gray-900"
+        className="surface-card space-y-6 p-6"
       >
         <div className="space-y-2">
           <Label htmlFor="inbound-item" className="text-sm font-medium text-gray-700 dark:text-gray-200">

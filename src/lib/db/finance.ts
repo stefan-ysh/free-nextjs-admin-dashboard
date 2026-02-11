@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { RowDataPacket } from 'mysql2';
+import { unstable_cache, revalidateTag } from 'next/cache';
 
 import { mysqlPool } from '@/lib/mysql';
 import { ensureFinanceSchema } from '@/lib/schema/finance';
@@ -57,6 +58,7 @@ type FinanceRecordRow = RowDataPacket & {
   source_type: FinanceSourceType;
   status: FinanceRecordStatus;
   purchase_id: string | null;
+  purchase_payment_id: string | null;
   supplier_id: string | null;
   project_id: string | null;
   inventory_movement_id: string | null;
@@ -127,6 +129,7 @@ function mapFinanceRecord(row: FinanceRecordRow): FinanceRecord {
     createdBy: row.created_by ?? undefined,
     sourceType: row.source_type ?? 'manual',
     purchaseId: row.purchase_id ?? undefined,
+    purchasePaymentId: row.purchase_payment_id ?? undefined,
     supplierId: row.supplier_id ?? undefined,
     projectId: row.project_id ?? undefined,
     inventoryMovementId: row.inventory_movement_id ?? undefined,
@@ -296,6 +299,7 @@ export async function createRecord(
   const status: FinanceRecordStatus = record.status ?? 'draft';
   const projectId = record.projectId ?? null;
   const purchaseId = record.purchaseId ?? null;
+  const purchasePaymentId = record.purchasePaymentId ?? null;
   const supplierId = record.supplierId ?? null;
   const inventoryMovementId = record.inventoryMovementId ?? null;
   const projectPaymentId = record.projectPaymentId ?? null;
@@ -314,9 +318,9 @@ export async function createRecord(
       contract_amount, fee, total_amount, payment_type,
       quantity, payment_channel, payer, transaction_no,
       invoice_json, description, tags_json, created_by,
-      source_type, status, purchase_id, supplier_id, project_id,
+      source_type, status, purchase_id, purchase_payment_id, supplier_id, project_id,
       inventory_movement_id, project_payment_id, metadata_json
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id,
       record.name,
@@ -338,6 +342,7 @@ export async function createRecord(
       sourceType,
       status,
       purchaseId,
+      purchasePaymentId,
       supplierId,
       projectId,
       inventoryMovementId,
@@ -373,6 +378,21 @@ export async function findRecordByPurchaseId(purchaseId: string): Promise<Financ
   const [rows] = await pool.query<FinanceRecordRow[]>(
     'SELECT * FROM finance_records WHERE purchase_id = ? LIMIT 1',
     [purchaseId]
+  );
+  if (!rows.length) {
+    return null;
+  }
+  return mapFinanceRecord(rows[0]);
+}
+
+export async function findRecordByPurchasePaymentId(paymentId: string): Promise<FinanceRecord | null> {
+  await ensureFinanceSchema();
+  if (!paymentId) {
+    return null;
+  }
+  const [rows] = await pool.query<FinanceRecordRow[]>(
+    'SELECT * FROM finance_records WHERE purchase_payment_id = ? LIMIT 1',
+    [paymentId]
   );
   if (!rows.length) {
     return null;
@@ -451,6 +471,7 @@ export async function updateRecord(
   }
   merged.sourceType = updates.sourceType ?? existing.sourceType;
   merged.purchaseId = updates.purchaseId ?? existing.purchaseId;
+  merged.purchasePaymentId = updates.purchasePaymentId ?? existing.purchasePaymentId;
   merged.supplierId = updates.supplierId ?? existing.supplierId ?? null;
   merged.projectId = updates.projectId ?? existing.projectId;
   merged.inventoryMovementId = updates.inventoryMovementId ?? existing.inventoryMovementId;
@@ -481,6 +502,7 @@ export async function updateRecord(
       status = ?,
       source_type = ?,
       purchase_id = ?,
+      purchase_payment_id = ?,
       supplier_id = ?,
       project_id = ?,
       inventory_movement_id = ?,
@@ -507,6 +529,7 @@ export async function updateRecord(
       merged.status ?? 'draft',
       merged.sourceType ?? 'manual',
       merged.purchaseId ?? null,
+      merged.purchasePaymentId ?? null,
       merged.supplierId ?? null,
       merged.projectId ?? null,
       merged.inventoryMovementId ?? null,
@@ -605,15 +628,19 @@ export async function getStats(filters: FinanceRecordFilters = {}): Promise<Fina
   };
 }
 
-export async function getCategories(type: TransactionType): Promise<string[]> {
-  await ensureFinanceSchema();
-  const [rows] = await pool.query<RowDataPacket[]>(
-    'SELECT name FROM finance_categories WHERE type = ? ORDER BY is_default DESC, name ASC',
-    [type]
-  );
-
-  return rows.map((row) => row.name as string);
-}
+// ... imports removed from here
+export const getCategories = unstable_cache(
+  async (type: TransactionType): Promise<string[]> => {
+    await ensureFinanceSchema();
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT name FROM finance_categories WHERE type = ? ORDER BY is_default DESC, name ASC',
+      [type]
+    );
+    return rows.map((row) => row.name as string);
+  },
+  ['finance-categories'],
+  { tags: ['finance-categories'], revalidate: 3600 }
+);
 
 export async function addCategory(type: TransactionType, category: string): Promise<void> {
   await ensureFinanceSchema();
@@ -624,4 +651,5 @@ export async function addCategory(type: TransactionType, category: string): Prom
     'INSERT IGNORE INTO finance_categories (type, name, is_default) VALUES (?, ?, 0)',
     [type, name]
   );
+  revalidateTag('finance-categories', 'default');
 }

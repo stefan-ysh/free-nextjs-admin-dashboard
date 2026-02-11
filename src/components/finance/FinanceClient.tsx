@@ -6,6 +6,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { FinanceRecord, FinanceStats } from '@/types/finance';
 import FinanceTable from './FinanceTable';
 import FinanceForm, { FinanceFormSubmitPayload } from './FinanceForm';
+import QuickEntryForm from './QuickEntryForm';
 import FinanceStatsCards from './FinanceStatsCards';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,11 +19,16 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Drawer, DrawerClose, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 import { TransactionType } from '@/types/finance';
-import { getCategoryGroups } from '@/constants/finance-categories';
+import { Badge } from '@/components/ui/badge';
+import { getCategoryGroups, getPinnedCategoryLabels } from '@/constants/finance-categories';
 import UserSelect from '@/components/common/UserSelect';
+import { formatDateOnly } from '@/lib/dates';
+import {
+    FORM_DRAWER_WIDTH_STANDARD,
+    FORM_DRAWER_WIDTH_WIDE,
+} from '@/components/common/form-drawer-width';
 
 interface FinanceClientProps {
     records: FinanceRecord[];
@@ -54,6 +60,8 @@ export default function FinanceClient({
     const searchParams = useSearchParams();
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [editingRecord, setEditingRecord] = useState<FinanceRecord | null>(null);
+    const [isQuickDrawerOpen, setIsQuickDrawerOpen] = useState(false);
+    const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
     const [keywordInput, setKeywordInput] = useState(searchParams.get('keyword') || '');
     const [minAmountInput, setMinAmountInput] = useState(searchParams.get('minAmount') || '');
     const [maxAmountInput, setMaxAmountInput] = useState(searchParams.get('maxAmount') || '');
@@ -88,16 +96,32 @@ export default function FinanceClient({
 
     const categoryGroups = useMemo(() => {
         if (selectedType === TransactionType.INCOME) {
-            return getCategoryGroups(TransactionType.INCOME, categories.income);
+            return getCategoryGroups(
+                TransactionType.INCOME,
+                categories.income,
+                getPinnedCategoryLabels(TransactionType.INCOME)
+            );
         }
         if (selectedType === TransactionType.EXPENSE) {
-            return getCategoryGroups(TransactionType.EXPENSE, categories.expense);
+            return getCategoryGroups(
+                TransactionType.EXPENSE,
+                categories.expense,
+                getPinnedCategoryLabels(TransactionType.EXPENSE)
+            );
         }
-        const incomeGroups = getCategoryGroups(TransactionType.INCOME, categories.income).map((group) => ({
+        const incomeGroups = getCategoryGroups(
+            TransactionType.INCOME,
+            categories.income,
+            getPinnedCategoryLabels(TransactionType.INCOME)
+        ).map((group) => ({
             label: `收入 · ${group.label}`,
             options: group.options,
         }));
-        const expenseGroups = getCategoryGroups(TransactionType.EXPENSE, categories.expense).map((group) => ({
+        const expenseGroups = getCategoryGroups(
+            TransactionType.EXPENSE,
+            categories.expense,
+            getPinnedCategoryLabels(TransactionType.EXPENSE)
+        ).map((group) => ({
             label: `支出 · ${group.label}`,
             options: group.options,
         }));
@@ -112,6 +136,71 @@ export default function FinanceClient({
         categoryParam === 'all' || !categoryOptions.includes(categoryParam)
             ? 'all'
             : categoryParam;
+
+    const activeFilterChips = useMemo(() => {
+        const chips: Array<{ label: string; onRemove: () => void }> = [];
+        if (currentRange !== 'all') {
+            const rangeLabelMap: Record<string, string> = {
+                this_week: '本周',
+                this_month: '本月',
+                last_month: '上月',
+                '30d': '近 30 天',
+                '90d': '近 90 天',
+                ytd: '本年度',
+            };
+            chips.push({
+                label: rangeLabelMap[currentRange] ?? currentRange,
+                onRemove: () => handleRangeChange('all'),
+            });
+        }
+        if (selectedType !== 'all') {
+            chips.push({
+                label: selectedType === TransactionType.INCOME ? '仅收入' : '仅支出',
+                onRemove: () => handleTypeChange('all'),
+            });
+        }
+        if (categoryValue !== 'all') {
+            chips.push({
+                label: `分类：${categoryValue}`,
+                onRemove: () => handleCategoryChange('all'),
+            });
+        }
+        if (minAmountParam) {
+            chips.push({
+                label: `金额≥${minAmountParam}`,
+                onRemove: () => updateFilters((params) => params.delete('minAmount')),
+            });
+        }
+        if (maxAmountParam) {
+            chips.push({
+                label: `金额≤${maxAmountParam}`,
+                onRemove: () => updateFilters((params) => params.delete('maxAmount')),
+            });
+        }
+        if (handlerIdParam) {
+            chips.push({
+                label: '经办人已选',
+                onRemove: () => updateFilters((params) => params.delete('handlerId')),
+            });
+        }
+        if (keywordParam) {
+            chips.push({
+                label: `关键词：${keywordParam}`,
+                onRemove: () => updateFilters((params) => params.delete('keyword')),
+            });
+        }
+        return chips;
+    }, [
+        categoryValue,
+        currentRange,
+        handlerIdParam,
+        keywordParam,
+        maxAmountParam,
+        minAmountParam,
+        selectedType,
+    ]);
+
+    const activeFilterCount = activeFilterChips.length;
 
     const updateFilters = (mutator: (params: URLSearchParams) => void) => {
         const params = new URLSearchParams(searchParams.toString());
@@ -133,18 +222,32 @@ export default function FinanceClient({
 
             const now = new Date();
             let startDate = '';
-            const endDate = now.toISOString().slice(0, 10);
+            const endDate = formatDateOnly(now) ?? now.toISOString().slice(0, 10);
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
             if (value === '30d') {
                 const d = new Date();
                 d.setDate(d.getDate() - 30);
-                startDate = d.toISOString().slice(0, 10);
+                startDate = formatDateOnly(d) ?? d.toISOString().slice(0, 10);
             } else if (value === '90d') {
                 const d = new Date();
                 d.setDate(d.getDate() - 90);
-                startDate = d.toISOString().slice(0, 10);
+                startDate = formatDateOnly(d) ?? d.toISOString().slice(0, 10);
             } else if (value === 'ytd') {
                 startDate = `${now.getFullYear()}-01-01`;
+            } else if (value === 'this_month') {
+                startDate = formatDateOnly(startOfMonth) ?? startOfMonth.toISOString().slice(0, 10);
+            } else if (value === 'last_month') {
+                const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+                params.set('startDate', formatDateOnly(lastMonthStart) ?? lastMonthStart.toISOString().slice(0, 10));
+                params.set('endDate', formatDateOnly(lastMonthEnd) ?? lastMonthEnd.toISOString().slice(0, 10));
+                return;
+            } else if (value === 'this_week') {
+                const day = now.getDay() || 7;
+                const weekStart = new Date(now);
+                weekStart.setDate(now.getDate() - (day - 1));
+                startDate = formatDateOnly(weekStart) ?? weekStart.toISOString().slice(0, 10);
             }
 
             if (startDate) {
@@ -209,6 +312,15 @@ export default function FinanceClient({
         });
     };
 
+    const applyAmountRange = (min: number, max: number) => {
+        setMinAmountInput(String(min));
+        setMaxAmountInput(String(max));
+        updateFilters((params) => {
+            params.set('minAmount', String(min));
+            params.set('maxAmount', String(max));
+        });
+    };
+
     const handleResetFilters = () => {
         setKeywordInput('');
         setMinAmountInput('');
@@ -220,12 +332,12 @@ export default function FinanceClient({
         });
     };
 
-    const handleSubmit = async (data: FinanceFormSubmitPayload) => {
+    const submitRecord = async (data: FinanceFormSubmitPayload, recordId?: string) => {
         try {
-            const url = editingRecord
-                ? `/api/finance/records/${editingRecord.id}`
+            const url = recordId
+                ? `/api/finance/records/${recordId}`
                 : '/api/finance/records';
-            const method = editingRecord ? 'PATCH' : 'POST';
+            const method = recordId ? 'PATCH' : 'POST';
 
             const res = await fetch(url, {
                 method,
@@ -239,13 +351,28 @@ export default function FinanceClient({
                 return;
             }
 
-            toast.success(editingRecord ? '记录更新成功' : '记录添加成功');
-            setIsDrawerOpen(false);
-            setEditingRecord(null);
+            toast.success(recordId ? '记录更新成功' : '记录添加成功');
             router.refresh();
+            return true;
         } catch (error) {
             console.error(error);
             toast.error('操作失败');
+            return false;
+        }
+    };
+
+    const handleSubmit = async (data: FinanceFormSubmitPayload) => {
+        const success = await submitRecord(data, editingRecord?.id);
+        if (success) {
+            setIsDrawerOpen(false);
+            setEditingRecord(null);
+        }
+    };
+
+    const handleQuickSubmit = async (data: FinanceFormSubmitPayload) => {
+        const success = await submitRecord(data);
+        if (success) {
+            setIsQuickDrawerOpen(false);
         }
     };
 
@@ -274,175 +401,254 @@ export default function FinanceClient({
 
     return (
         <div className="space-y-6 p-0">
-            {/* Stats Section */}
-
-
             <FinanceStatsCards stats={stats} />
 
             {/* Filters */}
-            <div className="rounded-lg border border-border bg-white p-3 dark:bg-gray-900">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-                    <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 lg:gap-4">
-                        <div className="space-y-1">
-                            <span className="text-xs font-medium text-muted-foreground">时间范围</span>
-                            <Select value={currentRange} onValueChange={handleRangeChange}>
-                                <SelectTrigger className="h-9 w-full">
-                                    <SelectValue placeholder="时间范围" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="30d">近 30 天</SelectItem>
-                                    <SelectItem value="90d">近 90 天</SelectItem>
-                                    <SelectItem value="ytd">本年度</SelectItem>
-                                    <SelectItem value="all">全部数据</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="space-y-1">
-                            <span className="text-xs font-medium text-muted-foreground">收支类型</span>
-                            <Select value={selectedType} onValueChange={handleTypeChange}>
-                                <SelectTrigger className="h-9">
-                                    <SelectValue placeholder="全部" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">全部</SelectItem>
-                                    <SelectItem value={TransactionType.INCOME}>仅收入</SelectItem>
-                                    <SelectItem value={TransactionType.EXPENSE}>仅支出</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="space-y-1">
-                            <span className="text-xs font-medium text-muted-foreground">分类</span>
-                            <Select value={categoryValue} onValueChange={handleCategoryChange}>
-                                <SelectTrigger className="h-9">
-                                    <SelectValue placeholder="全部分类" />
-                                </SelectTrigger>
-                                <SelectContent className="max-h-72 overflow-y-auto">
-                                    <SelectItem value="all">全部分类</SelectItem>
-                                    {categoryGroups.map((group) => (
-                                        <SelectGroup key={`filter-${group.label}`}>
-                                            <SelectLabel className="text-xs text-muted-foreground">
-                                                {group.label}
-                                            </SelectLabel>
-                                            {group.options.map((option) => (
-                                                <SelectItem key={`${group.label}-${option.label}`} value={option.label}>
-                                                    {option.label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectGroup>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="space-y-1">
-                            <span className="text-xs font-medium text-muted-foreground">金额范围</span>
-                            <div className="flex items-center gap-1">
-                                <Input
-                                    type="number"
-                                    inputMode="decimal"
-                                    placeholder="Min"
-                                    className="h-9 px-2 text-xs"
-                                    value={minAmountInput}
-                                    onChange={(e) => setMinAmountInput(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()}
-                                />
-                                <span className="text-muted-foreground">-</span>
-                                <Input
-                                    type="number"
-                                    inputMode="decimal"
-                                    placeholder="Max"
-                                    className="h-9 px-2 text-xs"
-                                    value={maxAmountInput}
-                                    onChange={(e) => setMaxAmountInput(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="space-y-1">
-                            <span className="text-xs font-medium text-muted-foreground">经办人</span>
-                            <UserSelect
-                                value={handlerIdParam}
-                                onChange={(value) => {
-                                    updateFilters((params) => {
-                                        if (value) {
-                                            params.set('handlerId', value);
-                                        } else {
-                                            params.delete('handlerId');
-                                        }
-                                    });
-                                }}
-                                placeholder="全部人员"
-                                className="h-9"
-                            />
-                        </div>
-
-                        <div className="space-y-1">
-                            <span className="text-xs font-medium text-muted-foreground">搜索</span>
-                            <Input
-                                placeholder="搜索名称/备注"
-                                className="h-9"
-                                value={keywordInput}
-                                onChange={(e) => setKeywordInput(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-1">
-                        <Button variant="secondary" size="sm" onClick={handleApplyFilters} className="h-9">
+            <div className="surface-toolbar p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+                        <Input
+                            placeholder="搜索名称/备注"
+                            className="h-10 w-full"
+                            value={keywordInput}
+                            onChange={(e) => setKeywordInput(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()}
+                        />
+                        <Button variant="secondary" size="sm" onClick={handleApplyFilters} className="h-10 px-4">
                             查询
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={handleResetFilters} className="h-9 px-2 text-muted-foreground">
-                            重置
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Drawer open={filterDrawerOpen} onOpenChange={setFilterDrawerOpen} direction="right">
+                            <DrawerTrigger asChild>
+                                <Button variant="outline" size="sm" className="h-10 px-4">
+                                    筛选
+                                    {activeFilterCount > 0 && (
+                                        <Badge className="ml-1 rounded-full px-2 py-0 text-[10px]" variant="secondary">
+                                            {activeFilterCount}
+                                        </Badge>
+                                    )}
+                                </Button>
+                            </DrawerTrigger>
+                            <DrawerContent side="right" className="sm:max-w-xl">
+                                <DrawerHeader>
+                                    <DrawerTitle>筛选条件</DrawerTitle>
+                                </DrawerHeader>
+                                <DrawerBody className="space-y-4">
+                                    <div className="space-y-2">
+                                        <span className="text-xs font-medium text-muted-foreground">时间范围</span>
+                                        <Select value={currentRange} onValueChange={handleRangeChange}>
+                                            <SelectTrigger className="h-10 w-full">
+                                                <SelectValue placeholder="时间范围" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="this_week">本周</SelectItem>
+                                                <SelectItem value="this_month">本月</SelectItem>
+                                                <SelectItem value="last_month">上月</SelectItem>
+                                                <SelectItem value="30d">近 30 天</SelectItem>
+                                                <SelectItem value="90d">近 90 天</SelectItem>
+                                                <SelectItem value="ytd">本年度</SelectItem>
+                                                <SelectItem value="all">全部数据</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <span className="text-xs font-medium text-muted-foreground">收支类型</span>
+                                        <Select value={selectedType} onValueChange={handleTypeChange}>
+                                            <SelectTrigger className="h-10">
+                                                <SelectValue placeholder="全部" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">全部</SelectItem>
+                                                <SelectItem value={TransactionType.INCOME}>仅收入</SelectItem>
+                                                <SelectItem value={TransactionType.EXPENSE}>仅支出</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <span className="text-xs font-medium text-muted-foreground">分类</span>
+                                        <Select value={categoryValue} onValueChange={handleCategoryChange}>
+                                            <SelectTrigger className="h-10">
+                                                <SelectValue placeholder="全部分类" />
+                                            </SelectTrigger>
+                                            <SelectContent className="max-h-72 overflow-y-auto">
+                                                <SelectItem value="all">全部分类</SelectItem>
+                                                {categoryGroups.map((group) => (
+                                                    <SelectGroup key={`filter-${group.label}`}>
+                                                        <SelectLabel className="text-xs text-muted-foreground">
+                                                            {group.label}
+                                                        </SelectLabel>
+                                                        {group.options.map((option) => (
+                                                            <SelectItem key={`${group.label}-${option.label}`} value={option.label}>
+                                                                {option.label}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectGroup>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <span className="text-xs font-medium text-muted-foreground">金额范围</span>
+                                        <div className="flex items-center gap-2">
+                                            <Input
+                                                type="number"
+                                                inputMode="decimal"
+                                                placeholder="Min"
+                                                className="h-10 px-3 text-xs"
+                                                value={minAmountInput}
+                                                onChange={(e) => setMinAmountInput(e.target.value)}
+                                            />
+                                            <Input
+                                                type="number"
+                                                inputMode="decimal"
+                                                placeholder="Max"
+                                                className="h-10 px-3 text-xs"
+                                                value={maxAmountInput}
+                                                onChange={(e) => setMaxAmountInput(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <span className="text-xs font-medium text-muted-foreground">经办人</span>
+                                        <UserSelect
+                                            value={handlerIdParam}
+                                            onChange={(value) => {
+                                                updateFilters((params) => {
+                                                    if (value) {
+                                                        params.set('handlerId', value);
+                                                    } else {
+                                                        params.delete('handlerId');
+                                                    }
+                                                });
+                                            }}
+                                            placeholder="全部人员"
+                                            className="h-10"
+                                        />
+                                    </div>
+                                </DrawerBody>
+                                <DrawerFooter>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={handleResetFilters}
+                                    >
+                                        重置
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        onClick={() => {
+                                            handleApplyFilters();
+                                            setFilterDrawerOpen(false);
+                                        }}
+                                    >
+                                        应用筛选
+                                    </Button>
+                                </DrawerFooter>
+                            </DrawerContent>
+                        </Drawer>
+                        <Button variant="ghost" size="sm" onClick={handleResetFilters} className="h-10 px-3 text-muted-foreground">
+                            清空
                         </Button>
+                        {permissions.canManage && (
+                            <Drawer open={isQuickDrawerOpen} onOpenChange={setIsQuickDrawerOpen} direction="right">
+                                <DrawerTrigger asChild>
+                                    <Button size="sm" variant="outline" className="h-10" onClick={() => setIsQuickDrawerOpen(true)}>
+                                        快速记账
+                                    </Button>
+                                </DrawerTrigger>
+                                <DrawerContent side="right" className={FORM_DRAWER_WIDTH_STANDARD}>
+                                    <DrawerHeader>
+                                        <DrawerTitle>快速记账</DrawerTitle>
+                                    </DrawerHeader>
+                                    <DrawerBody>
+                                        <QuickEntryForm
+                                            onSubmit={handleQuickSubmit}
+                                            onCancel={() => setIsQuickDrawerOpen(false)}
+                                            incomeCategories={categories.income}
+                                            expenseCategories={categories.expense}
+                                            currentUserId={currentUserId}
+                                            formId="finance-quick-form"
+                                            hideActions
+                                        />
+                                    </DrawerBody>
+                                    <DrawerFooter>
+                                        <DrawerClose asChild>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={() => setIsQuickDrawerOpen(false)}
+                                            >
+                                                取消
+                                            </Button>
+                                        </DrawerClose>
+                                        <Button type="submit" form="finance-quick-form">
+                                            快速添加
+                                        </Button>
+                                    </DrawerFooter>
+                                </DrawerContent>
+                            </Drawer>
+                        )}
                         {permissions.canManage && (
                             <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen} direction="right">
                                 <DrawerTrigger asChild>
-                                    <Button size="sm" className="h-9" onClick={() => setEditingRecord(null)}>+ 记一笔</Button>
+                                    <Button size="sm" className="h-10" onClick={() => setEditingRecord(null)}>+ 记一笔</Button>
                                 </DrawerTrigger>
-                                <DrawerContent side="right" className="sm:max-w-xl">
-                                    <div className="flex h-full flex-col">
-                                        <DrawerHeader className="border-b px-6 py-4">
-                                            <DrawerTitle>{editingRecord ? '编辑记录' : '添加记录'}</DrawerTitle>
-                                        </DrawerHeader>
-                                        <div className="flex-1 overflow-y-auto px-6 py-4">
-                                            <FinanceForm
-                                                initialData={editingRecord || undefined}
-                                                onSubmit={handleSubmit}
-                                                onCancel={() => setIsDrawerOpen(false)}
-                                                incomeCategories={categories.income}
-                                                expenseCategories={categories.expense}
-                                                currentUserId={currentUserId}
-                                                formId="finance-record-form"
-                                                hideActions
-                                            />
-                                        </div>
-                                        <DrawerFooter className="border-t px-6 py-4">
-                                            <DrawerClose asChild>
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    onClick={() => {
-                                                        setIsDrawerOpen(false);
-                                                        setEditingRecord(null);
-                                                    }}
-                                                >
-                                                    取消
-                                                </Button>
-                                            </DrawerClose>
-                                            <Button type="submit" form="finance-record-form">
-                                                {editingRecord ? '更新记录' : '添加记录'}
+                                <DrawerContent side="right" className={FORM_DRAWER_WIDTH_WIDE}>
+                                    <DrawerHeader>
+                                        <DrawerTitle>{editingRecord ? '编辑记录' : '添加记录'}</DrawerTitle>
+                                    </DrawerHeader>
+                                    <DrawerBody>
+                                        <FinanceForm
+                                            initialData={editingRecord || undefined}
+                                            onSubmit={handleSubmit}
+                                            onCancel={() => setIsDrawerOpen(false)}
+                                            incomeCategories={categories.income}
+                                            expenseCategories={categories.expense}
+                                            currentUserId={currentUserId}
+                                            formId="finance-record-form"
+                                            hideActions
+                                            layoutMode="wide"
+                                        />
+                                    </DrawerBody>
+                                    <DrawerFooter>
+                                        <DrawerClose asChild>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={() => {
+                                                    setIsDrawerOpen(false);
+                                                    setEditingRecord(null);
+                                                }}
+                                            >
+                                                取消
                                             </Button>
-                                        </DrawerFooter>
-                                    </div>
+                                        </DrawerClose>
+                                        <Button type="submit" form="finance-record-form">
+                                            {editingRecord ? '更新记录' : '添加记录'}
+                                        </Button>
+                                    </DrawerFooter>
                                 </DrawerContent>
                             </Drawer>
                         )}
                     </div>
                 </div>
+                {activeFilterChips.length > 0 && (
+                    <div className="mt-3 flex flex-nowrap gap-2 overflow-x-auto pb-1 sm:flex-wrap">
+                        {activeFilterChips.map((chip) => (
+                            <Button
+                                key={chip.label}
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 shrink-0 rounded-full px-3 text-xs"
+                                onClick={chip.onRemove}
+                            >
+                                {chip.label} ×
+                            </Button>
+                        ))}
+                    </div>
+                )}
             </div>
 
             <FinanceTable
@@ -458,26 +664,28 @@ export default function FinanceClient({
 
             {/* Pagination */}
             {pagination.totalPages > 1 && (
-                <div className="flex items-center justify-end space-x-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handlePageChange(pagination.page - 1)}
-                        disabled={pagination.page <= 1}
-                    >
-                        上一页
-                    </Button>
-                    <div className="text-sm font-medium">
-                        第 {pagination.page} / {pagination.totalPages} 页
+                <div className="surface-card flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm text-muted-foreground">
+                    <div>共 {pagination.total} 条 · 第 {pagination.page} / {pagination.totalPages} 页</div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePageChange(pagination.page - 1)}
+                            disabled={pagination.page <= 1}
+                            className="h-9 px-3"
+                        >
+                            上一页
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePageChange(pagination.page + 1)}
+                            disabled={pagination.page >= pagination.totalPages}
+                            className="h-9 px-3"
+                        >
+                            下一页
+                        </Button>
                     </div>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handlePageChange(pagination.page + 1)}
-                        disabled={pagination.page >= pagination.totalPages}
-                    >
-                        下一页
-                    </Button>
                 </div>
             )}
         </div>

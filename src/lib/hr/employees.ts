@@ -5,6 +5,7 @@ import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { mysqlPool, mysqlQuery } from '@/lib/mysql';
 import { normalizeDateInput, formatDateTimeLocal } from '@/lib/dates';
 import { hashPassword } from '@/lib/auth/password';
+import { invalidateSessionsForUser } from '@/lib/auth/session';
 import type { UserRole } from '@/types/user';
 
 import { ensureHrSchema } from './schema';
@@ -25,6 +26,7 @@ export type EmployeeRecord = {
   userId: string | null;
   userRoles: UserRole[];
   userPrimaryRole: UserRole | null;
+  wecomUserId: string | null;
   employeeCode: string | null;
   firstName: string;
   lastName: string;
@@ -95,6 +97,7 @@ const BASE_EMPLOYEE_SELECT = `
     he.roles,
     he.primary_role,
     he.password_hash,
+    he.wecom_user_id,
     he.employee_code,
     he.first_name,
     he.last_name,
@@ -139,6 +142,7 @@ type RawEmployeeRow = RowDataPacket & {
   roles: unknown;
   primary_role: string | null;
   password_hash: string | null;
+  wecom_user_id: string | null;
   employee_code: string | null;
   first_name: string;
   last_name: string;
@@ -261,6 +265,7 @@ function mapEmployee(row: RawEmployeeRow | undefined): EmployeeRecord | null {
     userId: hasLoginAccount ? row.id : null,
     userRoles: parsedRoles,
     userPrimaryRole: primaryRole,
+    wecomUserId: row.wecom_user_id,
     employeeCode: row.employee_code,
     firstName: row.first_name,
     lastName: row.last_name,
@@ -676,12 +681,14 @@ export function employeesToCsv(records: EmployeeRecord[]): string {
 
 export type CreateEmployeeInput = {
   employeeCode?: string | null;
+  wecomUserId?: string | null;
   firstName: string;
   lastName: string;
   displayName?: string | null;
   avatarUrl?: string | null;
   email?: string | null;
   phone?: string | null;
+  initialPassword?: string | null;
   department?: string | null;
   departmentId?: string | null;
   jobTitle?: string | null;
@@ -710,13 +717,47 @@ function requireText(value: string | null | undefined, field: string): string {
 export async function createEmployee(input: CreateEmployeeInput): Promise<EmployeeRecord> {
   await ensureHrSchema();
 
+  if (input.email) {
+    const existingEmailId = await findEmployeeIdByEmail(input.email);
+    if (existingEmailId) {
+      throw new Error('EMAIL_EXISTS');
+    }
+  }
+
+  if (input.phone) {
+    const existingPhoneId = await findEmployeeIdByPhone(input.phone);
+    if (existingPhoneId) {
+      throw new Error('PHONE_EXISTS');
+    }
+  }
+
+  if (input.employeeCode) {
+    const existingCodeId = await findEmployeeIdByCode(input.employeeCode);
+    if (existingCodeId) {
+      throw new Error('EMPLOYEE_CODE_EXISTS');
+    }
+  }
+
+  if (input.wecomUserId) {
+    const existingWecomId = await findEmployeeIdByWecomUserId(input.wecomUserId);
+    if (existingWecomId) {
+      throw new Error('WECOM_USER_ID_EXISTS');
+    }
+  }
+
   const id = randomUUID();
+  const password = sanitizeNullableText(input.initialPassword ?? null);
+  const passwordHash = password ? await hashPassword(password) : null;
+  if (!passwordHash) {
+    throw new Error('MISSING_PASSWORD');
+  }
   const payload = {
     employeeCode: sanitizeNullableText(input.employeeCode ?? null),
+    wecomUserId: sanitizeNullableText(input.wecomUserId ?? null),
     firstName: requireText(input.firstName, 'first_name'),
     lastName: requireText(input.lastName, 'last_name'),
     displayName: sanitizeNullableText(input.displayName ?? null),
-  avatarUrl: sanitizeNullableText(input.avatarUrl ?? null),
+    avatarUrl: sanitizeNullableText(input.avatarUrl ?? null),
     email: sanitizeNullableText(input.email ?? null),
     phone: sanitizeNullableText(input.phone ?? null),
     department: sanitizeNullableText(input.department ?? null),
@@ -744,12 +785,14 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
     INSERT INTO hr_employees (
       id,
       employee_code,
+      wecom_user_id,
       first_name,
       last_name,
       display_name,
       avatar_url,
       email,
       phone,
+      password_hash,
       department,
       department_id,
       job_title,
@@ -769,12 +812,14 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
     VALUES (
       ${id},
       ${payload.employeeCode},
+      ${payload.wecomUserId},
       ${payload.firstName},
       ${payload.lastName},
       ${payload.displayName},
       ${payload.avatarUrl},
       ${payload.email},
       ${payload.phone},
+      ${passwordHash},
       ${payload.department},
       ${payload.departmentId},
       ${payload.jobTitle},
@@ -804,9 +849,38 @@ export type UpdateEmployeeInput = Partial<CreateEmployeeInput> & {
 export async function updateEmployee(id: string, input: UpdateEmployeeInput): Promise<EmployeeRecord | null> {
   await ensureHrSchema();
 
+  if (input.email) {
+    const existingEmailId = await findEmployeeIdByEmail(input.email);
+    if (existingEmailId && existingEmailId !== id) {
+      throw new Error('EMAIL_EXISTS');
+    }
+  }
+
+  if (input.phone) {
+    const existingPhoneId = await findEmployeeIdByPhone(input.phone);
+    if (existingPhoneId && existingPhoneId !== id) {
+      throw new Error('PHONE_EXISTS');
+    }
+  }
+
+  if (input.employeeCode) {
+    const existingCodeId = await findEmployeeIdByCode(input.employeeCode);
+    if (existingCodeId && existingCodeId !== id) {
+      throw new Error('EMPLOYEE_CODE_EXISTS');
+    }
+  }
+
+  if (input.wecomUserId) {
+    const existingWecomId = await findEmployeeIdByWecomUserId(input.wecomUserId);
+    if (existingWecomId && existingWecomId !== id) {
+      throw new Error('WECOM_USER_ID_EXISTS');
+    }
+  }
+
   const fields: string[] = [];
   const values: unknown[] = [];
   let pendingStatusLog: { previous: EmploymentStatus; next: EmploymentStatus; note?: string | null } | null = null;
+  let shouldInvalidateSessions = false;
 
   const pushField = (column: string, value: unknown) => {
     fields.push(`${column} = ?`);
@@ -815,6 +889,9 @@ export async function updateEmployee(id: string, input: UpdateEmployeeInput): Pr
 
   if (input.employeeCode !== undefined) {
     pushField('employee_code', sanitizeNullableText(input.employeeCode ?? null));
+  }
+  if (input.wecomUserId !== undefined) {
+    pushField('wecom_user_id', sanitizeNullableText(input.wecomUserId ?? null));
   }
   if (input.firstName !== undefined) {
     pushField('first_name', requireText(input.firstName, 'first_name'));
@@ -881,6 +958,13 @@ export async function updateEmployee(id: string, input: UpdateEmployeeInput): Pr
       };
     }
     pushField('employment_status', normalizedStatus);
+    if (normalizedStatus === 'terminated') {
+      pushField('is_active', 0);
+      shouldInvalidateSessions = true;
+    }
+    if (normalizedStatus === 'active') {
+      pushField('is_active', 1);
+    }
   }
   if (input.hireDate !== undefined) {
     pushField('hire_date', sanitizeDate(input.hireDate ?? null));
@@ -922,6 +1006,10 @@ export async function updateEmployee(id: string, input: UpdateEmployeeInput): Pr
       nextStatus: pendingStatusLog.next,
       note: pendingStatusLog.note,
     });
+  }
+
+  if (shouldInvalidateSessions) {
+    await invalidateSessionsForUser(id);
   }
 
   return getEmployeeById(id);
@@ -976,6 +1064,8 @@ export async function ensureEmployeeUserAccount(employeeId: string) {
     'roles = ?',
     'primary_role = ?',
     'is_active = 1',
+    'failed_login_attempts = 0',
+    'locked_until = NULL',
     'updated_at = NOW()',
   ];
   const values: unknown[] = [JSON.stringify(roles), primaryRole];
@@ -1061,6 +1151,8 @@ export type BulkEmployeeImportOptions = {
   upsert?: boolean;
   matchBy?: MatchField[];
   defaultStatus?: EmploymentStatus;
+  defaultInitialPassword?: string;
+  useEmployeeCodeAsPassword?: boolean;
   stopOnError?: boolean;
 };
 
@@ -1114,7 +1206,19 @@ export async function importEmployeesFromPayload(
       await createEmployee(normalizedInput);
       stats.created += 1;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
+      let message = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
+      if (message === 'MISSING_PASSWORD') {
+        message = '缺少初始密码';
+      }
+      if (message === 'EMAIL_EXISTS') {
+        message = '邮箱已存在';
+      }
+      if (message === 'PHONE_EXISTS') {
+        message = '手机号已存在';
+      }
+      if (message === 'EMPLOYEE_CODE_EXISTS') {
+        message = '员工编号已存在';
+      }
       const identifier = row.employeeCode ?? row.email ?? row.id ?? null;
       stats.errors.push({ index, message, identifier });
       if (options.stopOnError) {
@@ -1262,6 +1366,26 @@ async function findEmployeeIdByEmail(email: string): Promise<string | null> {
   return rows[0]?.id ?? null;
 }
 
+async function findEmployeeIdByPhone(phone: string): Promise<string | null> {
+  const normalized = phone.trim();
+  if (!normalized) return null;
+  const [rows] = await pool.query<Array<RowDataPacket & { id: string }>>(
+    'SELECT id FROM hr_employees WHERE phone = ? LIMIT 1',
+    [normalized]
+  );
+  return rows[0]?.id ?? null;
+}
+
+async function findEmployeeIdByWecomUserId(wecomUserId: string): Promise<string | null> {
+  const normalized = wecomUserId.trim();
+  if (!normalized) return null;
+  const [rows] = await pool.query<Array<RowDataPacket & { id: string }>>(
+    'SELECT id FROM hr_employees WHERE wecom_user_id = ? LIMIT 1',
+    [normalized]
+  );
+  return rows[0]?.id ?? null;
+}
+
 async function findDepartmentIdByCode(code: string | null | undefined): Promise<string | null> {
   if (!code) return null;
   const normalized = code.trim().toUpperCase();
@@ -1312,6 +1436,12 @@ async function normalizeBulkImportRow(
       ? row.customFields
       : null;
 
+  const resolvedPassword =
+    row.initialPassword ??
+    (options.useEmployeeCodeAsPassword ? row.employeeCode ?? null : null) ??
+    options.defaultInitialPassword ??
+    null;
+
   return {
     employeeCode: row.employeeCode ?? null,
     firstName: fallbackFirstName,
@@ -1320,6 +1450,7 @@ async function normalizeBulkImportRow(
     avatarUrl: row.avatarUrl ?? null,
     email: row.email ?? null,
     phone: row.phone ?? null,
+    initialPassword: resolvedPassword,
     department: row.department ?? null,
     departmentId,
     jobTitle: row.jobTitle ?? null,

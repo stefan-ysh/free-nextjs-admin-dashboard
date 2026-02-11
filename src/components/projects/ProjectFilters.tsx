@@ -56,7 +56,7 @@ export default function ProjectFilters({ value, onChange, disabled, actions }: P
 	const selectedPriority = useMemo(() => value.priority ?? 'all', [value.priority]);
 
 	return (
-		<div className="rounded-xl border border-border bg-card p-3 shadow-sm">
+		<div className="surface-toolbar p-3">
 			<div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 				<div className="flex flex-1 flex-wrap gap-2">
 					<label className="min-w-[200px] flex-1 lg:flex-none">

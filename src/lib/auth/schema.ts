@@ -49,5 +49,20 @@ export async function ensureAuthSchema() {
 
   await safeCreateIndex('CREATE INDEX idx_auth_sessions_user ON auth_sessions(user_id)');
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS auth_audit_logs (
+      id CHAR(36) NOT NULL PRIMARY KEY,
+      actor_id CHAR(36) NOT NULL,
+      target_id CHAR(36),
+      action VARCHAR(64) NOT NULL,
+      metadata_json JSON NOT NULL DEFAULT (JSON_OBJECT()),
+      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      CONSTRAINT fk_auth_audit_actor FOREIGN KEY (actor_id) REFERENCES hr_employees(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await safeCreateIndex('CREATE INDEX idx_auth_audit_actor ON auth_audit_logs(actor_id)');
+  await safeCreateIndex('CREATE INDEX idx_auth_audit_target ON auth_audit_logs(target_id)');
+
   initialized = true;
 }

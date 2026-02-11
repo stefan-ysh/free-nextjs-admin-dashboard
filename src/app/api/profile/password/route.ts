@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getCurrentUser } from '@/lib/auth/current-user';
+import { logAuthAudit } from '@/lib/auth/audit';
 import { verifyPassword } from '@/lib/auth/password';
 import { updateUserPassword } from '@/lib/auth/user';
 
@@ -38,6 +39,11 @@ export async function PUT(request: Request) {
     }
 
     await updateUserPassword(context.user.id, newPassword);
+    await logAuthAudit({
+      actorId: context.user.id,
+      targetId: context.user.id,
+      action: 'password.change',
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

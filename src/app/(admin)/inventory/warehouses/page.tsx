@@ -43,6 +43,7 @@ const warehouseTypeBadges: Record<Warehouse['type'], string> = {
 };
 
 export default function InventoryWarehousesPage() {
+  const isFixedWarehouseMode = true;
   const { hasPermission, loading: permissionLoading } = usePermissions();
   const canManageWarehouses = useMemo(
     () => hasPermission('INVENTORY_MANAGE_WAREHOUSE'),
@@ -182,31 +183,108 @@ export default function InventoryWarehousesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
-          <span className="font-medium text-foreground">仓库总数</span>
-          <span className="font-semibold text-blue-600 dark:text-blue-400">{warehouses.length}</span>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
+      <div className="surface-toolbar p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative max-w-sm flex-1">
             <Input
               placeholder="搜索仓库名称/编号/负责人..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-9 text-sm"
+              className="h-10 text-sm"
             />
           </div>
-          <Button onClick={openCreateDialog} size="sm" className="gap-2">
-            <PlusCircle className="h-4 w-4" /> 新增仓库
-          </Button>
+          {isFixedWarehouseMode ? (
+            <div className="text-xs text-muted-foreground">仓库已固定为“学校 / 单位”，不支持新增或删除。</div>
+          ) : (
+            <Button onClick={openCreateDialog} size="sm" className="h-10 gap-2">
+              <PlusCircle className="h-4 w-4" /> 新增仓库
+            </Button>
+          )}
         </div>
       </div>
 
       <Card className="border-none shadow-sm">
         <CardContent className="p-0">
+          <div className="md:hidden">
+            <div className="space-y-3 p-4">
+              {loading ? (
+                <div className="rounded-2xl border border-border/60 bg-background/70 p-6 text-center text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> 正在加载...
+                </div>
+              ) : filteredWarehouses.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-6 text-center text-sm text-muted-foreground">
+                  {search ? '未找到匹配的仓库' : '暂无仓库数据'}
+                </div>
+              ) : (
+                visibleWarehouses.map((warehouse) => {
+                  const capacity = warehouse.capacity ?? 0;
+                  const stockQuantity = warehouse.stockQuantity ?? 0;
+                  const usagePercent = capacity > 0 ? Math.min((stockQuantity / capacity) * 100, 100) : 0;
+                  return (
+                    <div key={warehouse.id} className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-foreground">{warehouse.name}</div>
+                          <div className="mt-1 text-xs text-muted-foreground">编号：{warehouse.code}</div>
+                        </div>
+                        <Badge variant="secondary" className={warehouseTypeBadges[warehouse.type]}>
+                          {warehouseTypeLabels[warehouse.type]}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+                        <div className="flex items-center justify-between gap-3">
+                          <span>负责人</span>
+                          <span className="text-foreground">{warehouse.manager || '—'}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span>容量</span>
+                          <span className="text-foreground">{capacity || '—'}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span>库存</span>
+                          <span className="text-foreground">{stockQuantity} 件</span>
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>使用率</span>
+                          <span>{usagePercent.toFixed(0)}%</span>
+                        </div>
+                        <div className="mt-2 h-1.5 w-full rounded-full bg-secondary">
+                          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${usagePercent}%` }} />
+                        </div>
+                      </div>
+                      {!isFixedWarehouseMode ? (
+                        <div className="mt-4 flex justify-end">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="sm" className="h-8 px-3">
+                                <MoreHorizontal className="mr-2 h-4 w-4" /> 操作
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEditDialog(warehouse)}>
+                                <Edit2 className="mr-2 h-4 w-4" /> 编辑
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleDelete(warehouse)}
+                                className="text-rose-600 focus:text-rose-600"
+                                disabled={deletingId === warehouse.id}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                {deletingId === warehouse.id ? '删除中...' : '删除'}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+          <div className="hidden md:block">
           <Table
             stickyHeader
             scrollAreaClassName="max-h-[calc(100vh-350px)] custom-scrollbar"
@@ -233,7 +311,7 @@ export default function InventoryWarehousesPage() {
               ) : filteredWarehouses.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
-                    {search ? '未找到匹配的仓库' : '暂无仓库数据，点击“新增仓库”以初始化仓储信息'}
+                    {search ? '未找到匹配的仓库' : '暂无仓库数据'}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -276,26 +354,28 @@ export default function InventoryWarehousesPage() {
                         {formatDateTimeLocal(warehouse.updatedAt)}
                       </TableCell>
                       <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openEditDialog(warehouse)}>
-                              <Edit2 className="mr-2 h-4 w-4" /> 编辑
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleDelete(warehouse)}
-                              className="text-rose-600 focus:text-rose-600"
-                              disabled={deletingId === warehouse.id}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              {deletingId === warehouse.id ? '删除中...' : '删除'}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {isFixedWarehouseMode ? <span className="text-xs text-muted-foreground">固定仓库</span> : (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEditDialog(warehouse)}>
+                                <Edit2 className="mr-2 h-4 w-4" /> 编辑
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleDelete(warehouse)}
+                                className="text-rose-600 focus:text-rose-600"
+                                disabled={deletingId === warehouse.id}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                {deletingId === warehouse.id ? '删除中...' : '删除'}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
@@ -303,6 +383,7 @@ export default function InventoryWarehousesPage() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -348,21 +429,23 @@ export default function InventoryWarehousesPage() {
         </div>
       )}
 
-      <WarehouseFormDialog
-        open={dialogOpen}
-        onOpenChange={(open) => {
-          setDialogOpen(open);
-          if (!open) {
+      {!isFixedWarehouseMode ? (
+        <WarehouseFormDialog
+          open={dialogOpen}
+          onOpenChange={(open) => {
+            setDialogOpen(open);
+            if (!open) {
+              setEditingWarehouse(null);
+            }
+          }}
+          warehouse={editingWarehouse}
+          onSuccess={() => {
+            setDialogOpen(false);
             setEditingWarehouse(null);
-          }
-        }}
-        warehouse={editingWarehouse}
-        onSuccess={() => {
-          setDialogOpen(false);
-          setEditingWarehouse(null);
-          fetchWarehouses();
-        }}
-      />
+            fetchWarehouses();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

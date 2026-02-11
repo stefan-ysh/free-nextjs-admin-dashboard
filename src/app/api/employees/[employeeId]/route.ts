@@ -88,13 +88,13 @@ export async function PUT(
     }
 
     const payload: UpdateEmployeeInput = {
-      userId: body.userId,
       employeeCode: body.employeeCode,
       firstName: body.firstName,
       lastName: body.lastName,
       displayName: body.displayName,
       email: body.email,
       phone: body.phone,
+      wecomUserId: body.wecomUserId,
       department: body.department,
       departmentId: body.departmentId,
       jobTitle: body.jobTitle,
@@ -154,6 +154,18 @@ export async function PUT(
     if (error instanceof Error) {
       if (error.message === 'UNAUTHENTICATED') {
         return unauthorizedResponse();
+      }
+      if (error.message === 'EMAIL_EXISTS') {
+        return badRequestResponse('邮箱已存在');
+      }
+      if (error.message === 'PHONE_EXISTS') {
+        return badRequestResponse('手机号已存在');
+      }
+      if (error.message === 'EMPLOYEE_CODE_EXISTS') {
+        return badRequestResponse('员工编号已存在');
+      }
+      if (error.message === 'WECOM_USER_ID_EXISTS') {
+        return badRequestResponse('企业微信账号已被其他员工占用');
       }
       if (error.message.startsWith('MISSING_')) {
         return badRequestResponse('缺少必填字段');

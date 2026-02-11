@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import PurchaseApprovalFlow from './PurchaseApprovalFlow';
 import PurchaseStatusBadge from './PurchaseStatusBadge';
 import type { PurchaseRowPermissions } from './PurchaseTable';
+import { getReimbursementStatusText } from '@/types/purchase';
 import type { PurchaseDetail, PurchaseRecord } from '@/types/purchase';
 
 type PurchaseDetailModalProps = {
@@ -23,8 +24,12 @@ type PurchaseDetailModalProps = {
 	onSubmit?: (purchase: PurchaseRecord) => void;
 	onWithdraw?: (purchase: PurchaseRecord) => void;
 	onApprove?: (purchase: PurchaseRecord) => void;
+	onTransfer?: (purchase: PurchaseRecord) => void;
 	onReject?: (purchase: PurchaseRecord) => void;
 	onPay?: (purchase: PurchaseRecord) => void;
+	onSubmitReimbursement?: (purchase: PurchaseRecord) => void;
+	onReceive?: (purchase: PurchaseRecord) => void;
+	canReceive?: boolean;
 };
 
 const currencyFormatter = new Intl.NumberFormat('zh-CN', {
@@ -41,6 +46,11 @@ const dateDisplayFormatter = new Intl.DateTimeFormat('zh-CN', {
 const CHANNEL_LABELS: Record<PurchaseDetail['purchaseChannel'], string> = {
 	online: '线上',
 	offline: '线下',
+};
+
+const ORGANIZATION_LABELS: Record<PurchaseDetail['organizationType'], string> = {
+	school: '学校',
+	company: '单位',
 };
 
 const PAYMENT_LABELS: Record<PurchaseDetail['paymentMethod'], string> = {
@@ -133,7 +143,7 @@ const columnClassMap: Record<NonNullable<InfoSectionConfig['columns']>, string> 
 
 function InfoSection({ title, rows, columns = 2 }: InfoSectionConfig) {
 	return (
-		<section className="rounded-2xl border bg-card text-card-foreground shadow-sm">
+		<section className="surface-panel">
 			<div className="border-b px-5 py-4">
 				<p className="text-xs uppercase tracking-wide text-muted-foreground">{title}</p>
 			</div>
@@ -149,102 +159,6 @@ function InfoSection({ title, rows, columns = 2 }: InfoSectionConfig) {
 	);
 }
 
-type FlowTimelineItem = {
-	key: string;
-	title: string;
-	description: string;
-	timestamp: string | null;
-	meta?: string;
-};
-
-function FlowTimeline({ items }: { items: FlowTimelineItem[] }) {
-	const firstPendingIndex = items.findIndex((item) => !item.timestamp);
-	return (
-		<ol className="space-y-4 px-5 py-5">
-			{items.map((item, index) => {
-				const status: 'done' | 'current' | 'upcoming' = item.timestamp
-					? 'done'
-					: firstPendingIndex === -1 || index < firstPendingIndex
-						? 'done'
-						: index === firstPendingIndex
-							? 'current'
-							: 'upcoming';
-				const dotClass = cn(
-					'h-3 w-3 rounded-full border-2',
-					status === 'done' && 'border-emerald-500 bg-emerald-500',
-					status === 'current' && 'border-sky-500 bg-sky-500 animate-pulse',
-					status === 'upcoming' && 'border-border bg-background'
-				);
-				const lineClass = cn(
-					'w-px flex-1',
-					status === 'done' ? 'bg-emerald-200 dark:bg-emerald-900/50' : 'bg-border'
-				);
-				return (
-					<li key={item.key} className="flex gap-4">
-						<div className="flex flex-col items-center">
-							<span className={dotClass} />
-							{index < items.length - 1 ? <span className={lineClass} /> : null}
-						</div>
-						<div className="flex-1 rounded-2xl border bg-background/70 px-4 py-3">
-							<div className="flex flex-wrap items-center justify-between gap-2">
-								<p className="text-sm font-semibold text-foreground">{item.title}</p>
-								<span className="text-xs text-muted-foreground">{item.timestamp ? formatDateTime(item.timestamp) : '待更新'}</span>
-							</div>
-							<p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
-							{item.meta ? <p className="mt-1 text-xs text-muted-foreground/80">{item.meta}</p> : null}
-						</div>
-					</li>
-				);
-			})}
-		</ol>
-	);
-}
-
-function buildFlowTimeline(purchase: PurchaseDetail): FlowTimelineItem[] {
-	const steps: FlowTimelineItem[] = [
-		{
-			key: 'created',
-			title: '创建申请',
-			description: `${resolvePurchaser(purchase)} 发起采购请求`,
-			timestamp: purchase.createdAt ?? purchase.submittedAt ?? null,
-			meta: `单号 ${purchase.purchaseNumber}`,
-		},
-		{
-			key: 'submitted',
-			title: '提交审批',
-			description: purchase.submittedAt ? '已进入审批流' : '等待提交至审批流',
-			timestamp: purchase.submittedAt,
-		},
-	];
-
-	if (purchase.rejectedAt) {
-		steps.push({
-			key: 'rejected',
-			title: '审批驳回',
-			description: purchase.rejectionReason ? `原因：${purchase.rejectionReason}` : '审批人退回该申请',
-			meta: `驳回人：${resolveUserName(purchase.rejecter)}`,
-			timestamp: purchase.rejectedAt,
-		});
-	} else {
-		steps.push({
-			key: 'approved',
-			title: '审批通过',
-			description: purchase.approvedAt ? `由 ${resolveUserName(purchase.approver)} 批准` : '等待审批人处理',
-			meta: purchase.approvedAt ? undefined : '审批节点未完成',
-			timestamp: purchase.approvedAt,
-		});
-		steps.push({
-			key: 'paid',
-			title: '打款完成',
-			description: purchase.paidAt ? `财务 ${resolveUserName(purchase.payer)} 已完成打款` : '等待财务确认打款',
-			meta: purchase.transactionNo ? `流水号：${purchase.transactionNo}` : undefined,
-			timestamp: purchase.paidAt,
-		});
-	}
-
-	return steps;
-}
-
 export default function PurchaseDetailModal({
 	purchase,
 	onClose,
@@ -253,8 +167,12 @@ export default function PurchaseDetailModal({
 	onSubmit,
 	onWithdraw,
 	onApprove,
+	onTransfer,
 	onReject,
 	onPay,
+	onSubmitReimbursement,
+	onReceive,
+	canReceive,
 	detailLoading,
 	detailError,
 	onReloadDetail,
@@ -263,13 +181,20 @@ export default function PurchaseDetailModal({
 
 	const statusUpdatedAt =
 		purchase.updatedAt || purchase.approvedAt || purchase.paidAt || purchase.rejectedAt || purchase.submittedAt || purchase.createdAt;
-	const timelineItems = buildFlowTimeline(purchase);
 
 	const highlightCards: Array<{ label: string; value: ReactNode; hint?: ReactNode }> = [
 		{
 			label: '当前状态',
 			value: <PurchaseStatusBadge status={purchase.status} />,
 			hint: statusUpdatedAt ? `更新于 ${formatDateTime(statusUpdatedAt)}` : undefined,
+		},
+		{
+			label: '当前审批人',
+			value: purchase.pendingApprover?.displayName ?? purchase.approver?.displayName ?? '—',
+		},
+		{
+			label: '采购组织',
+			value: ORGANIZATION_LABELS[purchase.organizationType] ?? purchase.organizationType,
 		},
 		{
 			label: '采购日期',
@@ -289,11 +214,37 @@ export default function PurchaseDetailModal({
 		{ label: '总金额（含手续费）', value: currencyFormatter.format(purchase.totalAmount + (purchase.feeAmount ?? 0)) },
 	];
 
+	const paymentRows: InfoRow[] = [
+		{ label: '报销状态', value: getReimbursementStatusText(purchase.reimbursementStatus) },
+		{ label: '已打款', value: currencyFormatter.format(purchase.paidAmount ?? 0) },
+		{ label: '待打款', value: currencyFormatter.format(purchase.remainingAmount ?? 0) },
+		{ label: '付款方式', value: PAYMENT_LABELS[purchase.paymentMethod] },
+		{ label: '款项类型', value: PAYMENT_TYPE_LABELS[purchase.paymentType] },
+		purchase.paymentIssueOpen
+			? {
+					label: '付款异常',
+					value: purchase.paymentIssueReason ? `已标记 · ${purchase.paymentIssueReason}` : '已标记',
+				}
+			: null,
+		purchase.paymentIssueAt
+			? {
+					label: '异常时间',
+					value: formatDateTime(purchase.paymentIssueAt),
+				}
+			: null,
+		purchase.paymentChannel ? { label: '支付通道', value: purchase.paymentChannel } : null,
+		purchase.payerName ? { label: '代付人', value: purchase.payerName } : null,
+		purchase.transactionNo ? { label: '支付流水号', value: purchase.transactionNo } : null,
+		purchase.paidAt ? { label: '打款时间', value: formatDateTime(purchase.paidAt) } : null,
+		purchase.payer ? { label: '打款人', value: resolveUserName(purchase.payer) } : null,
+	].filter(Boolean) as InfoRow[];
+
 	const infoSections: InfoSectionConfig[] = [
 		{
 			title: '申购信息',
 			rows: [
 				{ label: '物品名称', value: purchase.itemName },
+				{ label: '采购组织', value: ORGANIZATION_LABELS[purchase.organizationType] ?? purchase.organizationType },
 				{ label: '规格 / 型号', value: purchase.specification ?? '—' },
 				{ label: '数量', value: purchase.quantity },
 				{ label: '申请人', value: resolvePurchaser(purchase) },
@@ -307,15 +258,7 @@ export default function PurchaseDetailModal({
 		},
 		{
 			title: '付款与结算',
-			rows: [
-				{ label: '付款方式', value: PAYMENT_LABELS[purchase.paymentMethod] },
-				{ label: '款项类型', value: PAYMENT_TYPE_LABELS[purchase.paymentType] },
-				{ label: '支付通道', value: purchase.paymentChannel ?? '—' },
-				{ label: '代付人', value: purchase.payerName ?? '—' },
-				{ label: '支付流水号', value: purchase.transactionNo ?? '—' },
-				{ label: '打款时间', value: formatDateTime(purchase.paidAt) },
-				{ label: '打款人', value: resolveUserName(purchase.payer) },
-			],
+			rows: paymentRows,
 		},
 		{
 			title: '发票与凭证',
@@ -380,7 +323,7 @@ export default function PurchaseDetailModal({
 							) : null}
 						</div>
 					) : null}
-					<div className="grid gap-4 md:grid-cols-3">
+					<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 						{highlightCards.map((card) => (
 							<div key={card.label} className="rounded-2xl border bg-muted/30 px-5 py-4">
 								<p className="text-xs uppercase tracking-wide text-muted-foreground">{card.label}</p>
@@ -395,17 +338,34 @@ export default function PurchaseDetailModal({
 							{infoSections.map((section) => (
 								<InfoSection key={section.title} {...section} />
 							))}
-							{timelineItems.length ? (
-								<section className="rounded-2xl border bg-card text-card-foreground shadow-sm">
-									<div className="border-b px-5 py-4">
-										<p className="text-xs uppercase tracking-wide text-muted-foreground">流程节点</p>
-										<p className="mt-1 text-xs text-muted-foreground">以时间轴展示审批与打款节点</p>
-									</div>
-									<FlowTimeline items={timelineItems} />
-								</section>
-							) : null}
+							<section className="surface-panel">
+								<div className="border-b px-5 py-4">
+									<p className="text-xs uppercase tracking-wide text-muted-foreground">打款记录</p>
+								</div>
+								<div className="px-5 py-4">
+									{purchase.payments.length ? (
+										<div className="space-y-3">
+											{purchase.payments.map((payment, index) => (
+												<div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-background/60 px-4 py-3 text-xs">
+													<div>
+														<p className="text-[11px] text-muted-foreground">第 {index + 1} 笔</p>
+														<p className="mt-1 text-sm font-semibold text-foreground">{currencyFormatter.format(payment.amount)}</p>
+													</div>
+													<div className="text-right text-muted-foreground">
+														<p>{formatDateTime(payment.paidAt)}</p>
+														<p>{payment.payer?.displayName ?? payment.paidBy}</p>
+													</div>
+													{payment.note ? <p className="w-full text-muted-foreground">{payment.note}</p> : null}
+												</div>
+											))}
+										</div>
+									) : (
+										<p className="text-xs text-muted-foreground">暂无打款记录</p>
+									)}
+								</div>
+							</section>
 							{hasAnyAttachment ? (
-								<section className="rounded-2xl border bg-card text-card-foreground shadow-sm">
+								<section className="surface-panel">
 									<div className="border-b px-5 py-4">
 										<p className="text-xs uppercase tracking-wide text-muted-foreground">凭证资料</p>
 									</div>
@@ -433,22 +393,34 @@ export default function PurchaseDetailModal({
 							) : null}
 						</div>
 						<div className="space-y-6 lg:col-span-5">
-							<section className="rounded-2xl border bg-card text-card-foreground shadow-sm">
+							<section className="surface-panel">
 								<div className="border-b px-5 py-4">
 									<p className="text-xs uppercase tracking-wide text-muted-foreground">审批流转</p>
 									<p className="mt-1 text-xs text-muted-foreground">自动根据流程节点更新</p>
 								</div>
-								<div className="px-5 py-5">
-									<PurchaseApprovalFlow
-										purchase={purchase}
-										permissions={permissions}
-										onSubmit={onSubmit}
-										onWithdraw={onWithdraw}
-										onApprove={onApprove}
-										onReject={onReject}
-										onPay={onPay}
-										busy={busy}
-									/>
+								<div className="space-y-3 px-5 py-5">
+									{canReceive ? (
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() => onReceive?.(purchase)}
+											className="w-full justify-center"
+										>
+											到货入库
+										</Button>
+									) : null}
+						<PurchaseApprovalFlow
+							purchase={purchase}
+							permissions={permissions}
+							onSubmit={onSubmit}
+							onWithdraw={onWithdraw}
+							onApprove={onApprove}
+							onTransfer={onTransfer}
+							onReject={onReject}
+							onPay={onPay}
+							onSubmitReimbursement={onSubmitReimbursement}
+							busy={busy}
+						/>
 								</div>
 							</section>
 						</div>

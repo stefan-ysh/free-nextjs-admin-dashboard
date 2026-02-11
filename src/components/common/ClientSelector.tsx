@@ -121,7 +121,7 @@ export default function ClientSelector({
 						<ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
 					</Button>
 				</PopoverTrigger>
-				<PopoverContent className="w-[360px] p-3" align="start">
+				<PopoverContent className="surface-card w-[360px] p-3" align="start">
 					<div className="space-y-3">
 						<Input
 							autoFocus
@@ -130,7 +130,7 @@ export default function ClientSelector({
 							value={search}
 							onChange={(event) => setSearch(event.target.value)}
 						/>
-						<div className="rounded-lg border">
+						<div className="surface-panel">
 							{loading && (
 								<div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
 									<Loader2 className="h-4 w-4 animate-spin" /> 正在加载客户...
@@ -185,7 +185,7 @@ export default function ClientSelector({
 				)}
 			</div>
 			{value && (
-				<div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
+				<div className="surface-panel px-3 py-2 text-xs text-primary">
 					当前选择：{value}
 				</div>
 			)}

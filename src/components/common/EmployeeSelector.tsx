@@ -241,7 +241,7 @@ useEffect(() => {
 							<ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
 						</Button>
 					</PopoverTrigger>
-					<PopoverContent className="w-[420px] p-3" align="start">
+					<PopoverContent className="surface-card w-[420px] p-3" align="start">
 						<div className="space-y-3">
 							<div className="flex gap-2">
 								<Input
@@ -265,7 +265,7 @@ useEffect(() => {
 									<XCircle className="h-4 w-4" />
 								</Button>
 							</div>
-							<div className="rounded-xl border">
+							<div className="surface-panel">
 								{loading && (
 									<div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
 										<Loader2 className="h-4 w-4 animate-spin" /> 正在加载员工...

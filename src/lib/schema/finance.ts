@@ -75,6 +75,7 @@ export async function ensureFinanceSchema() {
       source_type ENUM('manual','purchase','project','import','inventory','project_payment') NOT NULL DEFAULT 'manual',
       status ENUM('draft','cleared') NOT NULL DEFAULT 'draft',
       purchase_id CHAR(36) NULL,
+      purchase_payment_id CHAR(36) NULL,
       supplier_id CHAR(36) NULL,
       project_id CHAR(36) NULL,
       inventory_movement_id VARCHAR(64) NULL,
@@ -94,6 +95,7 @@ export async function ensureFinanceSchema() {
     "ALTER TABLE `finance_records` MODIFY COLUMN `source_type` ENUM('manual','purchase','project','import','inventory','project_payment') NOT NULL DEFAULT 'manual'"
   );
   await ensureColumn('finance_records', 'purchase_id', 'CHAR(36) NULL');
+  await ensureColumn('finance_records', 'purchase_payment_id', 'CHAR(36) NULL');
   await ensureColumn('finance_records', 'supplier_id', 'CHAR(36) NULL');
   await ensureColumn('finance_records', 'project_id', 'CHAR(36) NULL');
   await ensureColumn('finance_records', 'inventory_movement_id', 'VARCHAR(64) NULL');
@@ -119,6 +121,7 @@ export async function ensureFinanceSchema() {
   await createIndex(pool, 'CREATE INDEX idx_finance_type ON finance_records(type)');
   await createIndex(pool, 'CREATE INDEX idx_finance_category ON finance_records(category)');
   await createIndex(pool, 'CREATE INDEX idx_finance_purchase ON finance_records(purchase_id)');
+  await createIndex(pool, 'CREATE INDEX idx_finance_purchase_payment ON finance_records(purchase_payment_id)');
   await createIndex(pool, 'CREATE INDEX idx_finance_supplier ON finance_records(supplier_id)');
   await createIndex(pool, 'CREATE INDEX idx_finance_project ON finance_records(project_id)');
   await createIndex(pool, 'CREATE INDEX idx_finance_inventory_movement ON finance_records(inventory_movement_id)');
@@ -127,6 +130,11 @@ export async function ensureFinanceSchema() {
     'finance_records',
     'fk_finance_purchase',
     'FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE SET NULL'
+  );
+  await ensureForeignKey(
+    'finance_records',
+    'fk_finance_purchase_payment',
+    'FOREIGN KEY (purchase_payment_id) REFERENCES purchase_payments(id) ON DELETE SET NULL'
   );
   await ensureForeignKey(
     'finance_records',

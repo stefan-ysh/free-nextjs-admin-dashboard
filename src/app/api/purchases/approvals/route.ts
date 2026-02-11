@@ -4,6 +4,8 @@ import { requireCurrentUser } from '@/lib/auth/current-user';
 import { toPermissionUser } from '@/lib/auth/permission-user';
 import { listPendingApprovals } from '@/lib/db/purchases';
 import { checkPermission, Permissions } from '@/lib/permissions';
+import { isAdmin } from '@/types/user';
+import { parsePurchaseListParams } from '../query-utils';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -11,13 +13,6 @@ function unauthorizedResponse() {
 
 function forbiddenResponse() {
   return NextResponse.json({ success: false, error: '无权访问' }, { status: 403 });
-}
-
-function parseNumber(value: string | null, fallback: number) {
-  if (!value) return fallback;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-  return parsed;
 }
 
 export async function GET(request: Request) {
@@ -36,11 +31,13 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const search = searchParams.get('search') ?? undefined;
-    const page = parseNumber(searchParams.get('page'), 1);
-    const pageSize = parseNumber(searchParams.get('pageSize'), 50);
+    const params = parsePurchaseListParams(searchParams);
 
-    const data = await listPendingApprovals({ search, page, pageSize });
+    const data = await listPendingApprovals({
+      ...params,
+      pendingApproverId: isAdmin(permissionUser) ? undefined : context.user.id,
+      includeUnassignedApprovals: true,
+    });
     return NextResponse.json({ success: true, data });
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHENTICATED') {

@@ -4,6 +4,7 @@ import {
   deleteInventoryItem,
   getInventoryItem,
   updateInventoryItem,
+  INVENTORY_ERRORS,
 } from '@/lib/db/inventory';
 import type { InventoryItemPayload } from '@/types/inventory';
 import { sanitizeItemPayload, validateItemPayload } from '../validator';
@@ -78,6 +79,9 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[inventory.item] failed to delete item', error);
+    if (error instanceof Error && error.message === INVENTORY_ERRORS.ITEM_IN_USE) {
+      return NextResponse.json({ error: '该商品仍有库存或历史出入库记录，无法删除' }, { status: 409 });
+    }
     return NextResponse.json({ error: '删除商品失败' }, { status: 500 });
   }
 }

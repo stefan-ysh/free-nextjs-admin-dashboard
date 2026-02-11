@@ -14,6 +14,12 @@ const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
 	minute: '2-digit',
 });
 
+const currencyFormatter = new Intl.NumberFormat('zh-CN', {
+	style: 'currency',
+	currency: 'CNY',
+	minimumFractionDigits: 2,
+});
+
 type TimelineStatus = 'done' | 'active' | 'pending';
 type TimelineTone = 'default' | 'success' | 'danger' | 'warning';
 
@@ -35,6 +41,8 @@ type PurchaseApprovalFlowProps = {
 	onApprove?: (purchase: PurchaseRecord) => void;
 	onReject?: (purchase: PurchaseRecord) => void;
 	onPay?: (purchase: PurchaseRecord) => void;
+	onSubmitReimbursement?: (purchase: PurchaseRecord) => void;
+	onTransfer?: (purchase: PurchaseRecord) => void;
 	busy?: boolean;
 };
 
@@ -67,8 +75,11 @@ const ACTION_STYLES = {
 	submit: 'border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-400 dark:text-emerald-200',
 	withdraw: 'border-amber-500 text-amber-600 hover:bg-amber-50 dark:border-amber-400 dark:text-amber-200',
 	approve: 'border-indigo-500 text-indigo-600 hover:bg-indigo-50 dark:border-indigo-400 dark:text-indigo-200',
+	transfer: 'border-slate-500 text-slate-600 hover:bg-slate-50 dark:border-slate-400 dark:text-slate-200',
 	reject: 'border-rose-500 text-rose-600 hover:bg-rose-50 dark:border-rose-400 dark:text-rose-200',
 	pay: 'border-purple-500 text-purple-600 hover:bg-purple-50 dark:border-purple-400 dark:text-purple-200',
+	submitReimbursement:
+		'border-cyan-500 text-cyan-600 hover:bg-cyan-50 dark:border-cyan-400 dark:text-cyan-200',
 };
 
 const ACTION_LABELS: Record<ReimbursementAction, string> = {
@@ -76,8 +87,11 @@ const ACTION_LABELS: Record<ReimbursementAction, string> = {
 	approve: '审批通过',
 	reject: '驳回申请',
 	pay: '标记打款',
+	issue: '付款异常',
+	resolve: '解除异常',
 	cancel: '取消记录',
 	withdraw: '撤回申请',
+	transfer: '转交审批',
 };
 
 function formatDateTime(value?: string | null) {
@@ -124,15 +138,15 @@ function buildTimeline(purchase: PurchaseDetail): TimelineStep[] {
 		return steps;
 	}
 
-	const approvalStep: TimelineStep = {
-		key: 'approval',
-		title: purchase.status === 'rejected' ? '审批驳回' : '审批环节',
-		description: '等待审批人处理',
-		timestamp: purchase.approvedAt ?? purchase.rejectedAt ?? undefined,
-		status: 'pending',
-		tone: 'default',
-		note: purchase.rejectionReason ?? undefined,
-	};
+		const approvalStep: TimelineStep = {
+			key: 'approval',
+			title: purchase.status === 'rejected' ? '审批驳回' : '审批环节',
+			description: '等待审批人处理',
+			timestamp: purchase.approvedAt ?? purchase.rejectedAt ?? undefined,
+			status: 'pending',
+			tone: 'default',
+			note: purchase.rejectionReason ?? undefined,
+		};
 
 	if (purchase.rejectedAt) {
 		approvalStep.status = 'done';
@@ -142,13 +156,15 @@ function buildTimeline(purchase: PurchaseDetail): TimelineStep[] {
 		approvalStep.status = purchase.status === 'approved' || purchase.status === 'paid' ? 'done' : 'active';
 		approvalStep.tone = 'success';
 		approvalStep.description = `审批人 ${purchase.approver?.displayName ?? purchase.approvedBy ?? '—'}`;
-	} else if (isPendingApproval) {
-		approvalStep.status = 'active';
-		approvalStep.description = '正在等待审批人确认';
-	} else if (!hasSubmitted) {
-		approvalStep.status = 'pending';
-		approvalStep.description = '提交后进入审批流程';
-	}
+		} else if (isPendingApproval) {
+			approvalStep.status = 'active';
+			approvalStep.description = purchase.pendingApprover?.displayName
+				? `等待 ${purchase.pendingApprover.displayName} 审批`
+				: '正在等待审批人确认';
+		} else if (!hasSubmitted) {
+			approvalStep.status = 'pending';
+			approvalStep.description = '提交后进入审批流程';
+		}
 
 	steps.push(approvalStep);
 
@@ -156,12 +172,53 @@ function buildTimeline(purchase: PurchaseDetail): TimelineStep[] {
 		return steps;
 	}
 
+	const reimbursementStep: TimelineStep = {
+		key: 'reimbursement',
+		title: '报销申请',
+		description: '审批通过后，申请人上传发票并提交报销',
+		timestamp: purchase.reimbursementSubmittedAt ?? undefined,
+		status: 'pending',
+		tone: 'default',
+	};
+
+	if (purchase.reimbursementStatus === 'invoice_pending') {
+		reimbursementStep.status = 'active';
+		reimbursementStep.description = '待申请人补充发票并提交报销';
+	} else if (purchase.reimbursementStatus === 'reimbursement_pending') {
+		reimbursementStep.status = 'done';
+		reimbursementStep.tone = 'success';
+		reimbursementStep.description = '已提交报销，等待财务确认';
+	} else if (purchase.reimbursementStatus === 'reimbursement_rejected') {
+		reimbursementStep.status = 'active';
+		reimbursementStep.tone = 'danger';
+		reimbursementStep.description = purchase.reimbursementRejectedReason
+			? `报销被驳回：${purchase.reimbursementRejectedReason}`
+			: '报销被驳回，请补充后再次提交';
+	} else if (purchase.reimbursementStatus === 'reimbursed') {
+		reimbursementStep.status = 'done';
+		reimbursementStep.tone = 'success';
+		reimbursementStep.description = '报销流程完成';
+	}
+	steps.push(reimbursementStep);
+
 	const paymentStep: TimelineStep = {
 		key: 'payment',
 		title: purchase.status === 'paid' ? '打款完成' : '等待打款',
-		description: purchase.status === 'paid' ? `经办人 ${purchase.payer?.displayName ?? purchase.paidBy ?? '—'}` : '审批通过后由财务打款',
-		timestamp: purchase.paidAt ?? undefined,
-		status: purchase.status === 'paid' ? 'done' : purchase.status === 'approved' ? 'active' : 'pending',
+		description:
+			purchase.status === 'paid'
+				? `经办人 ${purchase.payer?.displayName ?? purchase.paidBy ?? '—'}`
+				: purchase.paidAmount > 0
+					? `已打款 ${currencyFormatter.format(purchase.paidAmount)} / ${currencyFormatter.format(purchase.dueAmount)}`
+					: purchase.reimbursementStatus === 'reimbursement_pending'
+						? '财务待打款'
+						: '提交报销后由财务打款',
+		timestamp: purchase.payments.length ? purchase.payments[purchase.payments.length - 1].paidAt : purchase.paidAt ?? undefined,
+		status:
+			purchase.status === 'paid'
+				? 'done'
+				: purchase.reimbursementStatus === 'reimbursement_pending'
+					? 'active'
+					: 'pending',
 		tone: purchase.status === 'paid' ? 'success' : 'default',
 	};
 
@@ -192,6 +249,21 @@ function renderLogEntry(purchase: PurchaseDetail, log: ReimbursementLog) {
 	);
 }
 
+function classifyLogToStep(log: ReimbursementLog): TimelineStep['key'] | 'other' {
+	if (log.action === 'approve' || log.action === 'reject' || log.action === 'transfer') return 'approval';
+	if (log.action === 'pay' || log.action === 'issue' || log.action === 'resolve') return 'payment';
+	if (log.action === 'withdraw' || log.action === 'cancel') return 'submit';
+
+	if (log.action === 'submit') {
+		if (log.fromStatus === 'draft' && log.toStatus === 'draft') return 'draft';
+		if (log.toStatus === 'pending_approval' || log.fromStatus === 'draft') return 'submit';
+		if (log.fromStatus === 'approved' || log.fromStatus === 'paid') return 'reimbursement';
+		return 'submit';
+	}
+
+	return 'other';
+}
+
 export default function PurchaseApprovalFlow({
 	purchase,
 	permissions,
@@ -200,6 +272,8 @@ export default function PurchaseApprovalFlow({
 	onApprove,
 	onReject,
 	onPay,
+	onSubmitReimbursement,
+	onTransfer,
 	busy,
 }: PurchaseApprovalFlowProps) {
 	const timeline = buildTimeline(purchase);
@@ -213,12 +287,31 @@ export default function PurchaseApprovalFlow({
 		{ key: 'submit', label: '提交审批', visible: Boolean(permissions?.canSubmit), handler: onSubmit },
 		{ key: 'withdraw', label: '撤回申请', visible: Boolean(permissions?.canWithdraw), handler: onWithdraw },
 		{ key: 'approve', label: '审批通过', visible: Boolean(permissions?.canApprove), handler: onApprove },
+		{ key: 'transfer', label: '转审', visible: Boolean(permissions?.canTransfer), handler: onTransfer },
 		{ key: 'reject', label: '驳回申请', visible: Boolean(permissions?.canReject), handler: onReject },
+		{
+			key: 'submitReimbursement',
+			label: '提交报销',
+			visible: Boolean(permissions?.canSubmitReimbursement),
+			handler: onSubmitReimbursement,
+		},
 		{ key: 'pay', label: '标记打款', visible: Boolean(permissions?.canPay), handler: onPay },
 	];
 
 	const visibleActions = actions.filter((action) => action.visible);
 	const sortedLogs = [...purchase.logs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+	const stepLogsMap = new Map<string, ReimbursementLog[]>();
+	const otherLogs: ReimbursementLog[] = [];
+	for (const log of sortedLogs) {
+		const stepKey = classifyLogToStep(log);
+		if (stepKey === 'other') {
+			otherLogs.push(log);
+			continue;
+		}
+		const group = stepLogsMap.get(stepKey) ?? [];
+		group.push(log);
+		stepLogsMap.set(stepKey, group);
+	}
 
 	return (
 		<div className="space-y-4">
@@ -240,10 +333,10 @@ export default function PurchaseApprovalFlow({
 			<div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
 				<div className="mb-4 flex items-center justify-between gap-2">
 					<div>
-						<p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">审批流</p>
-						<h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">流程节点</h4>
+						<p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">审批流与日志</p>
+						<h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">流程节点与操作记录</h4>
 					</div>
-					<span className="text-xs text-gray-500 dark:text-gray-400">自动根据状态推导</span>
+					<span className="text-xs text-gray-500 dark:text-gray-400">按节点聚合展示</span>
 				</div>
 				<ol className="relative space-y-6 border-l border-gray-200 pl-6 dark:border-gray-800">
 					{timeline.map((step) => (
@@ -270,10 +363,28 @@ export default function PurchaseApprovalFlow({
 								{step.note && (
 									<p className="text-xs text-rose-500 dark:text-rose-300">{step.note}</p>
 								)}
+								{(stepLogsMap.get(step.key)?.length ?? 0) > 0 ? (
+									<div className="mt-2 rounded-xl border border-dashed border-border/80 bg-background/40 p-2">
+										<p className="mb-2 text-[11px] text-muted-foreground">
+											相关记录 {stepLogsMap.get(step.key)?.length}
+										</p>
+										<ol className="space-y-2">
+											{(stepLogsMap.get(step.key) ?? []).map((log) => renderLogEntry(purchase, log))}
+										</ol>
+									</div>
+								) : null}
 							</div>
 						</li>
 					))}
 				</ol>
+				{otherLogs.length > 0 ? (
+					<div className="mt-4 rounded-xl border border-dashed border-border/80 bg-background/40 p-3">
+						<p className="mb-2 text-xs text-muted-foreground">其他操作记录</p>
+						<ol className="space-y-2">
+							{otherLogs.map((log) => renderLogEntry(purchase, log))}
+						</ol>
+					</div>
+				) : null}
 			</div>
 
 			<div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
@@ -302,22 +413,6 @@ export default function PurchaseApprovalFlow({
 				</div>
 			</div>
 
-			<div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-				<div className="flex items-center justify-between gap-2">
-					<div>
-						<p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">流程日志</p>
-						<h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">审批操作记录</h4>
-					</div>
-					<span className="text-xs text-gray-500 dark:text-gray-400">最新在顶部</span>
-				</div>
-				{sortedLogs.length === 0 ? (
-					<p className="mt-3 text-xs text-gray-500 dark:text-gray-400">暂无日志。</p>
-				) : (
-					<ol className="mt-4 space-y-3">
-						{sortedLogs.map((log) => renderLogEntry(purchase, log))}
-					</ol>
-				)}
-			</div>
 		</div>
 	);
 }

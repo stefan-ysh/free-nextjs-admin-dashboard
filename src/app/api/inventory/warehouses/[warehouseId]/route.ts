@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { deleteWarehouse, getWarehouse, updateWarehouse } from '@/lib/db/inventory';
+import { getWarehouse } from '@/lib/db/inventory';
 import type { WarehousePayload } from '@/types/inventory';
 import { sanitizeWarehousePayload, validateWarehousePayload } from '../validator';
 
@@ -40,18 +40,15 @@ export async function PATCH(
 ) {
   try {
     const { warehouseId } = await params;
-    const raw = (await request.json()) as Partial<WarehousePayload>;
-    const payload = sanitizeWarehousePayload(raw);
-    const errorMessage = validateWarehousePayload(payload, { partial: true });
-    if (errorMessage) {
-      return NextResponse.json({ error: errorMessage }, { status: 400 });
-    }
-
-    const data = await updateWarehouse(warehouseId, payload);
-    if (!data) {
-      return notFoundResponse();
-    }
-    return NextResponse.json({ data });
+    const _raw = (await request.json()) as Partial<WarehousePayload>;
+    const _payload = sanitizeWarehousePayload(_raw);
+    const _errorMessage = validateWarehousePayload(_payload, { partial: true });
+    const data = await getWarehouse(warehouseId);
+    if (!data) return notFoundResponse();
+    return NextResponse.json(
+      { error: '仓库已固定为“学校/单位”两类，不支持编辑。' },
+      { status: 403 }
+    );
   } catch (error) {
     console.error('[inventory.warehouse] failed to update warehouse', error);
     if (isDuplicateError(error)) {
@@ -67,11 +64,12 @@ export async function DELETE(
 ) {
   try {
     const { warehouseId } = await params;
-    const success = await deleteWarehouse(warehouseId);
-    if (!success) {
-      return notFoundResponse();
-    }
-    return NextResponse.json({ success: true });
+    const data = await getWarehouse(warehouseId);
+    if (!data) return notFoundResponse();
+    return NextResponse.json(
+      { error: '仓库已固定为“学校/单位”两类，不支持删除。' },
+      { status: 403 }
+    );
   } catch (error) {
     console.error('[inventory.warehouse] failed to delete warehouse', error);
     return NextResponse.json({ error: '删除仓库失败' }, { status: 500 });

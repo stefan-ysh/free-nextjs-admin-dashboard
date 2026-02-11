@@ -75,6 +75,7 @@ export interface FinanceRecord {
   tags?: string[];                 // 标签
   sourceType?: FinanceSourceType;  // 数据来源
   purchaseId?: string | null;      // 关联采购记录
+  purchasePaymentId?: string | null; // 关联采购打款记录
   supplierId?: string | null;      // 关联供应商
   projectId?: string | null;       // 关联项目
   inventoryMovementId?: string | null; // 关联库存流水

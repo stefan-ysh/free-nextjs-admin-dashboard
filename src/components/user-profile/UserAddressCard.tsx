@@ -6,7 +6,7 @@ import { useModal } from "../../hooks/useModal";
 import Input from "../form/input/InputField";
 import Label from "../form/Label";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { ProfileData } from "./types";
 
 type UserAddressCardProps = {
@@ -106,14 +106,13 @@ export default function UserAddressCard({ profile, onUpdate, loading = false }: 
         </div>
       </div>
       <Dialog open={isOpen} onOpenChange={(nextOpen) => (nextOpen ? openModal() : closeModal())}>
-        <DialogContent className="max-w-[640px] border-0 bg-white p-0 text-left shadow-none outline-none dark:bg-gray-900">
-          <div className="relative w-full rounded-3xl p-4 lg:p-9">
-          <div className="px-2">
-            <h4 className="mb-2 text-2xl font-semibold text-gray-800 dark:text-white/90">编辑地址信息</h4>
-            <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">完善联系地址有助于发票、对账等工作。</p>
-          </div>
-          <form className="flex flex-col" onSubmit={handleSubmit}>
-            <div className="px-2 overflow-y-auto custom-scrollbar max-h-[360px]">
+        <DialogContent className="max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle>编辑地址信息</DialogTitle>
+            <DialogDescription>完善联系地址有助于发票、对账等工作。</DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <form id="user-address-form" className="flex flex-col gap-6" onSubmit={handleSubmit}>
               <div className="grid grid-cols-1 gap-x-6 gap-y-5 lg:grid-cols-2">
                 <div>
                   <Label>国家/地区</Label>
@@ -151,18 +150,17 @@ export default function UserAddressCard({ profile, onUpdate, loading = false }: 
                   />
                 </div>
               </div>
-            </div>
-            {error && <p className="px-2 text-sm text-error-500">{error}</p>}
-            <div className="flex items-center gap-3 px-2 mt-6 lg:justify-end">
-              <Button size="sm" variant="outline" type="button" onClick={closeModal} disabled={saving}>
-                取消
-              </Button>
-              <Button size="sm" type="submit" disabled={saving}>
-                {saving ? "保存中..." : "保存修改"}
-              </Button>
-            </div>
-          </form>
-          </div>
+              {error && <p className="text-sm text-error-500">{error}</p>}
+            </form>
+          </DialogBody>
+          <DialogFooter>
+            <Button size="sm" variant="outline" type="button" onClick={closeModal} disabled={saving}>
+              取消
+            </Button>
+            <Button size="sm" type="submit" form="user-address-form" disabled={saving}>
+              {saving ? "保存中..." : "保存修改"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

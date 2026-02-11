@@ -144,7 +144,7 @@ export default function InventoryMovementsPage() {
           { label: '出库合计', value: summary.outbound, tone: 'text-rose-600 bg-rose-50 dark:text-rose-300 dark:bg-rose-500/10' },
           { label: '净变化', value: summary.net, tone: 'text-indigo-600 bg-indigo-50 dark:text-indigo-300 dark:bg-indigo-500/10' },
         ] as const).map((card) => (
-          <div key={card.label} className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
+          <div key={card.label} className="surface-panel p-4">
             <div className="flex items-center justify-between text-sm text-muted-foreground">
               <span>{card.label}</span>
               <Badge variant="outline" className={card.tone + ' border-transparent'}>
@@ -161,11 +161,11 @@ export default function InventoryMovementsPage() {
       </div>
 
       {/* Filters & Actions Bar */}
-      <div className="rounded-lg border border-border bg-card p-3 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-4 lg:gap-4">
+      <div className="surface-toolbar p-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+          <div className="grid flex-1 grid-cols-2 gap-4 sm:grid-cols-4">
             <Select value={directionFilter} onValueChange={(value) => setDirectionFilter(value as typeof directionFilter)}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger className="h-10">
                 <SelectValue placeholder="方向" />
               </SelectTrigger>
               <SelectContent>
@@ -176,7 +176,7 @@ export default function InventoryMovementsPage() {
             </Select>
 
             <Select value={itemFilter} onValueChange={(value) => setItemFilter(value)}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger className="h-10">
                 <SelectValue placeholder="SKU" />
               </SelectTrigger>
               <SelectContent>
@@ -190,7 +190,7 @@ export default function InventoryMovementsPage() {
             </Select>
 
             <Select value={warehouseFilter} onValueChange={(value) => setWarehouseFilter(value)}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger className="h-10">
                 <SelectValue placeholder="仓库" />
               </SelectTrigger>
               <SelectContent>
@@ -204,7 +204,7 @@ export default function InventoryMovementsPage() {
             </Select>
 
             <Select value={rangeFilter} onValueChange={(value) => setRangeFilter(value as RangeFilter)}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger className="h-10">
                 <SelectValue placeholder="时间范围" />
               </SelectTrigger>
               <SelectContent>
@@ -218,14 +218,14 @@ export default function InventoryMovementsPage() {
           </div>
 
           <div className="flex items-center pt-1 lg:pt-0">
-            <Button variant="outline" onClick={handleExport} size="sm" className="h-9 w-full lg:w-auto">
+            <Button variant="outline" onClick={handleExport} size="sm" className="h-10 w-full lg:w-auto">
               导出 CSV（规划中）
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+      <div className="surface-table">
         <InventoryMovementsTable
           movements={filteredMovements}
           loading={loading}

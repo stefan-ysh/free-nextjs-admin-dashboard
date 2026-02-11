@@ -1,7 +1,8 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import Image from 'next/image';
 
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']);
 
@@ -33,29 +34,38 @@ export default function FilePreviewDialog({ open, fileUrl, fileLabel, onClose }:
           <DialogTitle>附件预览</DialogTitle>
           {fileLabel ? <DialogDescription className="break-all text-xs text-muted-foreground">{fileLabel}</DialogDescription> : null}
         </DialogHeader>
-        {previewType === 'image' && fileUrl ? (
-          <div className="max-h-[70vh] overflow-auto rounded-md border bg-muted/40 p-2">
-            <img src={fileUrl} alt={fileLabel ?? '附件预览'} className="mx-auto max-h-[65vh] w-auto rounded-md" />
-          </div>
-        ) : previewType === 'pdf' && fileUrl ? (
-          <iframe
-            src={fileUrl}
-            title="附件预览"
-            className="h-[70vh] w-full rounded-md border"
-          />
-        ) : (
-          <p className="rounded-md border border-dashed px-4 py-6 text-sm text-muted-foreground">
-            暂不支持此格式的在线预览，可点击下方按钮在新窗口打开或下载附件。
-          </p>
-        )}
+        <DialogBody>
+          {previewType === 'image' && fileUrl ? (
+            <div className="relative flex max-h-[70vh] w-full justify-center overflow-auto rounded-md border bg-muted/40 p-2">
+              <Image
+                src={fileUrl}
+                alt={fileLabel ?? '附件预览'}
+                width={800}
+                height={600}
+                className="h-auto w-auto max-w-full rounded-md object-contain"
+                unoptimized
+              />
+            </div>
+          ) : previewType === 'pdf' && fileUrl ? (
+            <iframe
+              src={fileUrl}
+              title="附件预览"
+              className="h-[70vh] w-full rounded-md border"
+            />
+          ) : (
+            <p className="rounded-md border border-dashed px-4 py-6 text-sm text-muted-foreground">
+              暂不支持此格式的在线预览，可点击下方按钮在新窗口打开或下载附件。
+            </p>
+          )}
+        </DialogBody>
         {fileUrl ? (
-          <div className="flex justify-end gap-3">
+          <DialogFooter>
             <Button variant="outline" asChild>
               <a href={fileUrl} target="_blank" rel="noopener noreferrer">
                 在新窗口打开
               </a>
             </Button>
-          </div>
+          </DialogFooter>
         ) : null}
       </DialogContent>
     </Dialog>

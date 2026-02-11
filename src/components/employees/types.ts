@@ -20,6 +20,7 @@ export type Employee = {
 	userId: string | null;
 	userRoles?: UserRole[];
 	userPrimaryRole?: UserRole | null;
+	wecomUserId?: string | null;
 	employeeCode: string | null;
 	firstName: string;
 	lastName: string;
@@ -114,11 +115,13 @@ export type EmployeeBulkImportResponse = {
 export type EmployeeImportRow = {
 	id?: string | null;
 	employeeCode?: string | null;
+	wecomUserId?: string | null;
 	firstName?: string | null;
 	lastName?: string | null;
 	displayName?: string | null;
 	email?: string | null;
 	phone?: string | null;
+	initialPassword?: string | null;
 	department?: string | null;
 	departmentId?: string | null;
 	departmentCode?: string | null;
@@ -140,6 +143,7 @@ export type EmployeeImportRow = {
 
 export type EmployeeFormSubmitPayload = {
 	employeeCode?: string | null;
+	wecomUserId?: string | null;
 	firstName: string;
 	lastName: string;
 	displayName?: string | null;
@@ -147,6 +151,7 @@ export type EmployeeFormSubmitPayload = {
 	removeAvatar?: boolean;
 	email?: string | null;
 	phone?: string | null;
+	initialPassword?: string | null;
 	department?: string | null;
 	departmentId?: string | null;
 	jobTitle?: string | null;

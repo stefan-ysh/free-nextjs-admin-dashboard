@@ -22,6 +22,8 @@ const defaultPayload: InventoryInboundPayload = {
     quantity: 1,
     type: 'purchase',
 };
+const FORM_GRID_CLASS = 'grid gap-5 grid-cols-1 md:grid-cols-3 lg:grid-cols-6';
+const FIELD_CLASS = 'w-full lg:col-span-1';
 
 interface InventoryInboundFormProps {
     onSuccess?: () => void;
@@ -135,8 +137,9 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
     }
 
     return (
-        <form id={formId} onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
+        <form id={formId} onSubmit={handleSubmit} className="space-y-5">
+            <div className={FORM_GRID_CLASS}>
+            <div className={`space-y-2 lg:col-span-3`}>
                 <Label htmlFor="inbound-item" className="text-sm font-medium">
                     商品
                 </Label>
@@ -159,17 +162,17 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
             </div>
 
             {selectedItem && (
-                <div className="rounded-lg border border-dashed border-brand-200 bg-brand-50/40 p-3 text-sm text-brand-700 dark:border-brand-500/40 dark:bg-brand-500/10 dark:text-brand-100">
+                <div className="rounded-lg border border-dashed border-brand-200 bg-brand-50/40 p-3 text-sm text-brand-700 dark:border-brand-500/40 dark:bg-brand-500/10 dark:text-brand-100 lg:col-span-3">
                     标准单价：¥{selectedItem.unitPrice.toLocaleString()} / {selectedItem.unit}
                 </div>
             )}
 
             {selectedItem?.specFields?.length ? (
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className={`${FORM_GRID_CLASS} lg:col-span-6`}>
                     {selectedItem.specFields.map((field) => {
                         const specValue = payload.attributes?.[field.key] ?? '';
                         return (
-                            <div key={field.key} className="space-y-2">
+                            <div key={field.key} className={`space-y-2 ${FIELD_CLASS}`}>
                                 <Label className="text-sm font-medium">{field.label}</Label>
                                 {field.options ? (
                                     <Select
@@ -202,8 +205,7 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
                 </div>
             ) : null}
 
-            <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-2">
+                <div className={`space-y-2 ${FIELD_CLASS}`}>
                     <Label htmlFor="inbound-warehouse" className="text-sm font-medium">
                         仓库
                     </Label>
@@ -224,7 +226,7 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="space-y-2">
+                <div className={`space-y-2 ${FIELD_CLASS}`}>
                     <Label htmlFor="inbound-type" className="text-sm font-medium">
                         入库类型
                     </Label>
@@ -238,16 +240,13 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="purchase">采购入库</SelectItem>
-                            <SelectItem value="transfer">调拨入库</SelectItem>
                             <SelectItem value="adjust">盘盈调整</SelectItem>
                             <SelectItem value="return">退货入库</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
-            </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-2">
+                <div className={`space-y-2 ${FIELD_CLASS}`}>
                     <Label htmlFor="inbound-quantity" className="text-sm font-medium">
                         数量
                     </Label>
@@ -261,7 +260,7 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
                         disabled={submitting}
                     />
                 </div>
-                <div className="space-y-2">
+                <div className={`space-y-2 ${FIELD_CLASS}`}>
                     <Label htmlFor="inbound-unit-cost" className="text-sm font-medium">
                         单价 (¥)
                     </Label>
@@ -277,9 +276,8 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
                         disabled={submitting}
                     />
                 </div>
-            </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 lg:col-span-3">
                 <Label htmlFor="inbound-notes" className="text-sm font-medium">
                     备注
                 </Label>
@@ -287,10 +285,11 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
                     id="inbound-notes"
                     value={payload.notes ?? ''}
                     onChange={(event) => handleChange('notes', event.target.value)}
-                    rows={3}
+                    rows={2}
                     placeholder="可填写采购单号、批次等信息"
                     disabled={submitting}
                 />
+            </div>
             </div>
 
             {!hideActions && (

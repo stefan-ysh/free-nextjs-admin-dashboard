@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Package, PackagePlus, PackageMinus, Warehouse } from 'lucide-react';
+import { PackagePlus, PackageMinus, List, ArrowRightLeft } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -24,6 +24,7 @@ import InventoryMovementsTable, {
 } from '@/components/inventory/InventoryMovementsTable';
 import type { InventoryStats } from '@/types/inventory';
 import { usePermissions } from '@/hooks/usePermissions';
+import { FORM_DRAWER_WIDTH_STANDARD } from '@/components/common/form-drawer-width';
 
 export default function InventoryOverviewPage() {
   const { hasPermission, loading: permissionLoading } = usePermissions();
@@ -102,7 +103,7 @@ export default function InventoryOverviewPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Quick Actions - 1/3 width */}
         <div className="lg:col-span-1">
-          <div className="h-full rounded-2xl border border-border/60 bg-card p-5 text-sm shadow-sm">
+          <div className="surface-card h-full p-5 text-sm">
             <p className="font-semibold mb-4 text-foreground">快速操作</p>
             <div className="grid grid-cols-2 gap-3">
               <Button
@@ -126,9 +127,9 @@ export default function InventoryOverviewPage() {
                 className="h-auto flex-col gap-2 py-4 border-border/60 bg-background/50 hover:bg-accent hover:text-accent-foreground"
                 asChild
               >
-                <Link href="/inventory/items">
-                  <Package className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-                  <span>商品管理</span>
+                <Link href="/inventory/movements">
+                  <List className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                  <span>库存流水</span>
                 </Link>
               </Button>
               <Button
@@ -136,9 +137,9 @@ export default function InventoryOverviewPage() {
                 className="h-auto flex-col gap-2 py-4 border-border/60 bg-background/50 hover:bg-accent hover:text-accent-foreground"
                 asChild
               >
-                <Link href="/inventory/warehouses">
-                  <Warehouse className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-                  <span>仓库管理</span>
+                <Link href="/inventory/transfers">
+                  <ArrowRightLeft className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                  <span>调拨单</span>
                 </Link>
               </Button>
             </div>
@@ -172,7 +173,7 @@ export default function InventoryOverviewPage() {
 
       {/* Inbound Drawer */}
       <Drawer open={inboundDrawerOpen} onOpenChange={setInboundDrawerOpen} direction="right">
-        <DrawerContent side="right" className="w-full sm:max-w-2xl">
+        <DrawerContent side="right" className={FORM_DRAWER_WIDTH_STANDARD}>
           <div className="flex h-full flex-col">
             <DrawerHeader className="border-b px-6 py-4">
               <DrawerTitle>创建入库单</DrawerTitle>
@@ -208,7 +209,7 @@ export default function InventoryOverviewPage() {
 
       {/* Outbound Drawer */}
       <Drawer open={outboundDrawerOpen} onOpenChange={setOutboundDrawerOpen} direction="right">
-        <DrawerContent side="right" className="w-full sm:max-w-2xl">
+        <DrawerContent side="right" className={FORM_DRAWER_WIDTH_STANDARD}>
           <div className="flex h-full flex-col">
             <DrawerHeader className="border-b px-6 py-4">
               <DrawerTitle>创建出库单</DrawerTitle>

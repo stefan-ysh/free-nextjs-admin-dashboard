@@ -67,6 +67,15 @@ export async function POST(request: NextRequest) {
       if (error.message === INVENTORY_ERRORS.WAREHOUSE_NOT_FOUND) {
         return NextResponse.json({ error: '仓库不存在' }, { status: 404 });
       }
+      if (error.message === INVENTORY_ERRORS.TRANSFER_TARGET_REQUIRED) {
+        return NextResponse.json({ error: '调拨需要选择目标仓库' }, { status: 400 });
+      }
+      if (error.message === INVENTORY_ERRORS.TRANSFER_TARGET_NOT_FOUND) {
+        return NextResponse.json({ error: '目标仓库不存在' }, { status: 404 });
+      }
+      if (error.message === INVENTORY_ERRORS.TRANSFER_SAME_WAREHOUSE) {
+        return NextResponse.json({ error: '目标仓库不能与来源仓库相同' }, { status: 400 });
+      }
       if (error.message === INVENTORY_ERRORS.INSUFFICIENT_STOCK) {
         return NextResponse.json({ error: '可用库存不足' }, { status: 409 });
       }
