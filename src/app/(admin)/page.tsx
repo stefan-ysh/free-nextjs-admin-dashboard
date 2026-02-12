@@ -6,7 +6,7 @@ import { ArrowDownRight, ArrowUpRight, ClipboardList, TrendingUp } from 'lucide-
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { toPermissionUser } from '@/lib/auth/permission-user';
 import { checkPermission, Permissions } from '@/lib/permissions';
-import type { UserProfile } from '@/types/user';
+
 import { formatDateOnly, formatDateTimeLocal } from '@/lib/dates';
 import { getInventoryStats } from '@/lib/db/inventory';
 import { getRecords, getStats as getFinanceStats } from '@/lib/db/finance';
@@ -56,12 +56,12 @@ type MetricCardProps = {
 function MetricCard({ label, value, helper, icon, tone = 'default' }: MetricCardProps) {
   const toneClass =
     tone === 'positive'
-      ? 'text-emerald-600 dark:text-emerald-400'
+      ? 'text-chart-5'
       : tone === 'negative'
-        ? 'text-rose-600 dark:text-rose-400'
+        ? 'text-destructive'
         : tone === 'info'
-          ? 'text-blue-600 dark:text-blue-400'
-          : 'text-gray-900 dark:text-white';
+          ? 'text-chart-2'
+          : 'text-foreground';
 
   return (
     <Card className="shadow-sm border-none">
@@ -168,9 +168,7 @@ export default async function AdminDashboardPage() {
               <Button asChild size="sm" variant="outline">
                 <Link href="/finance">查看财务</Link>
               </Button>
-              <Button asChild size="sm">
-                <Link href="/finance?action=new">记一笔</Link>
-              </Button>
+
             </>
           ) : (
             <>
@@ -210,10 +208,10 @@ export default async function AdminDashboardPage() {
           {financePermission.allowed && (
             <DashboardSection title="财务概览" description="本月收支与最新记录">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <MetricCard label="本月收入" value={formatCurrency(financeStats?.totalIncome)} icon={<ArrowUpRight className="h-5 w-5 text-emerald-500" />} tone="positive" />
-                <MetricCard label="本月支出" value={formatCurrency(financeStats?.totalExpense)} icon={<ArrowDownRight className="h-5 w-5 text-rose-500" />} tone="negative" />
-                <MetricCard label="本月净额" value={formatCurrency(financeStats?.balance)} icon={<TrendingUp className="h-5 w-5 text-blue-500" />} tone={financeStats && financeStats.balance >= 0 ? 'positive' : 'negative'} />
-                <MetricCard label="记录数量" value={formatNumber(financeStats?.recordCount)} icon={<ClipboardList className="h-5 w-5 text-slate-500" />} helper="本月流水" />
+                <MetricCard label="本月收入" value={formatCurrency(financeStats?.totalIncome)} icon={<ArrowUpRight className="h-5 w-5 text-chart-5" />} tone="positive" />
+                <MetricCard label="本月支出" value={formatCurrency(financeStats?.totalExpense)} icon={<ArrowDownRight className="h-5 w-5 text-destructive" />} tone="negative" />
+                <MetricCard label="本月净额" value={formatCurrency(financeStats?.balance)} icon={<TrendingUp className="h-5 w-5 text-chart-2" />} tone={financeStats && financeStats.balance >= 0 ? 'positive' : 'negative'} />
+                <MetricCard label="记录数量" value={formatNumber(financeStats?.recordCount)} icon={<ClipboardList className="h-5 w-5 text-muted-foreground" />} helper="本月流水" />
               </div>
               <div className="grid gap-4 lg:grid-cols-3">
                 <Card className="border-none shadow-sm lg:col-span-2">
@@ -232,7 +230,7 @@ export default async function AdminDashboardPage() {
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className={record.type === TransactionType.INCOME ? 'text-emerald-600' : 'text-rose-600'}>
+                            <p className={record.type === TransactionType.INCOME ? 'text-chart-5' : 'text-destructive'}>
                               {record.type === TransactionType.INCOME ? '+' : '-'}{formatCurrency(record.totalAmount)}
                             </p>
                           </div>
@@ -272,27 +270,27 @@ export default async function AdminDashboardPage() {
                   label="采购总额"
                   value={formatCurrency(purchaseStats?.totalAmount)}
                   helper={`共 ${formatNumber(purchaseStats?.totalPurchases)} 条`}
-                  icon={<ClipboardList className="h-5 w-5 text-slate-500" />}
+                  icon={<ClipboardList className="h-5 w-5 text-muted-foreground" />}
                 />
                 <MetricCard
                   label="待审批金额"
                   value={formatCurrency(purchaseStats?.pendingAmount)}
                   helper={`待审批 ${formatNumber(purchaseStats?.pendingCount)} 条`}
-                  icon={<ArrowDownRight className="h-5 w-5 text-amber-500" />}
+                  icon={<ArrowDownRight className="h-5 w-5 text-chart-3" />}
                   tone="negative"
                 />
                 <MetricCard
                   label="已批准金额"
                   value={formatCurrency(purchaseStats?.approvedAmount)}
                   helper={`已批准 ${formatNumber(purchaseStats?.approvedCount)} 条`}
-                  icon={<ArrowUpRight className="h-5 w-5 text-sky-500" />}
+                  icon={<ArrowUpRight className="h-5 w-5 text-chart-2" />}
                   tone="info"
                 />
                 <MetricCard
                   label="已打款金额"
                   value={formatCurrency(purchaseStats?.paidAmount)}
                   helper={`已打款 ${formatNumber(purchaseStats?.paidCount)} 条`}
-                  icon={<TrendingUp className="h-5 w-5 text-emerald-500" />}
+                  icon={<TrendingUp className="h-5 w-5 text-chart-5" />}
                   tone="positive"
                 />
               </div>

@@ -80,7 +80,7 @@ export function ApprovalCommentDialog({
               placeholder="例如：同意采购，请按流程执行"
               disabled={submitting}
             />
-            {error ? <p className="text-sm text-rose-500">{error}</p> : null}
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
           </div>
         </ModalShell>
       </DialogContent>

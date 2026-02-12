@@ -157,7 +157,7 @@ export default function PurchaseTable({
 										<button
 											onClick={() => onEdit(purchase)}
 											disabled={rowBusy}
-											className="rounded-lg border border-blue-500 px-3 py-1 text-blue-600 hover:bg-blue-50 disabled:opacity-60 dark:border-blue-400 dark:text-blue-200"
+											className="rounded-lg border border-chart-1 px-3 py-1 text-chart-1 hover:bg-chart-1/10 disabled:opacity-60"
 										>
 											编辑
 										</button>
@@ -166,7 +166,7 @@ export default function PurchaseTable({
 										<button
 											onClick={() => onDuplicate(purchase)}
 											disabled={rowBusy}
-											className="rounded-lg border border-indigo-500 px-3 py-1 text-indigo-600 hover:bg-indigo-50 disabled:opacity-60 dark:border-indigo-400 dark:text-indigo-200"
+											className="rounded-lg border border-chart-4 px-3 py-1 text-chart-4 hover:bg-chart-4/10 disabled:opacity-60"
 										>
 											复制
 										</button>
@@ -175,7 +175,7 @@ export default function PurchaseTable({
 										<button
 											onClick={() => onSubmit(purchase)}
 											disabled={rowBusy}
-											className="rounded-lg border border-emerald-500 px-3 py-1 text-emerald-600 hover:bg-emerald-50 disabled:opacity-60 dark:border-emerald-400 dark:text-emerald-200"
+											className="rounded-lg border border-chart-5 px-3 py-1 text-chart-5 hover:bg-chart-5/10 disabled:opacity-60"
 										>
 											提交
 										</button>
@@ -184,7 +184,7 @@ export default function PurchaseTable({
 										<button
 											onClick={() => onWithdraw(purchase)}
 											disabled={rowBusy}
-											className="rounded-lg border border-amber-500 px-3 py-1 text-amber-600 hover:bg-amber-50 disabled:opacity-60 dark:border-amber-400 dark:text-amber-200"
+											className="rounded-lg border border-chart-3 px-3 py-1 text-chart-3 hover:bg-chart-3/10 disabled:opacity-60"
 										>
 											撤回
 										</button>
@@ -193,7 +193,7 @@ export default function PurchaseTable({
 										<button
 											onClick={() => onApprove(purchase)}
 											disabled={rowBusy}
-											className="rounded-lg border border-indigo-500 px-3 py-1 text-indigo-600 hover:bg-indigo-50 disabled:opacity-60 dark:border-indigo-400 dark:text-indigo-200"
+											className="rounded-lg border border-chart-4 px-3 py-1 text-chart-4 hover:bg-chart-4/10 disabled:opacity-60"
 										>
 											审批
 										</button>
@@ -202,7 +202,7 @@ export default function PurchaseTable({
 										<button
 											onClick={() => onTransfer(purchase)}
 											disabled={rowBusy}
-											className="rounded-lg border border-slate-500 px-3 py-1 text-slate-600 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-400 dark:text-slate-200"
+											className="rounded-lg border border-secondary-foreground/50 px-3 py-1 text-secondary-foreground hover:bg-secondary/50 disabled:opacity-60"
 										>
 											转审
 										</button>
@@ -211,7 +211,7 @@ export default function PurchaseTable({
 										<button
 											onClick={() => onReject(purchase)}
 											disabled={rowBusy}
-											className="rounded-lg border border-rose-500 px-3 py-1 text-rose-600 hover:bg-rose-50 disabled:opacity-60 dark:border-rose-400 dark:text-rose-200"
+											className="rounded-lg border border-destructive px-3 py-1 text-destructive hover:bg-destructive/10 disabled:opacity-60"
 										>
 											驳回
 										</button>
@@ -220,7 +220,7 @@ export default function PurchaseTable({
 										<button
 											onClick={() => onPay(purchase)}
 											disabled={rowBusy}
-											className="rounded-lg border border-purple-500 px-3 py-1 text-purple-600 hover:bg-purple-50 disabled:opacity-60 dark:border-purple-400 dark:text-purple-200"
+											className="rounded-lg border border-primary px-3 py-1 text-primary hover:bg-primary/10 disabled:opacity-60"
 										>
 											打款
 										</button>
@@ -229,7 +229,7 @@ export default function PurchaseTable({
 										<button
 											onClick={() => onSubmitReimbursement(purchase)}
 											disabled={rowBusy}
-											className="rounded-lg border border-cyan-500 px-3 py-1 text-cyan-600 hover:bg-cyan-50 disabled:opacity-60 dark:border-cyan-400 dark:text-cyan-200"
+											className="rounded-lg border border-chart-2 px-3 py-1 text-chart-2 hover:bg-chart-2/10 disabled:opacity-60"
 										>
 											提交报销
 										</button>
@@ -304,7 +304,7 @@ export default function PurchaseTable({
 												<button
 													onClick={() => onEdit(purchase)}
 													disabled={rowBusy}
-													className="rounded-lg border border-blue-500 px-3 py-1 text-blue-600 hover:bg-blue-50 disabled:opacity-60 dark:border-blue-400 dark:text-blue-200"
+													className="rounded-lg border border-chart-1 px-3 py-1 text-chart-1 hover:bg-chart-1/10 disabled:opacity-60"
 												>
 													编辑
 												</button>
@@ -313,7 +313,7 @@ export default function PurchaseTable({
 												<button
 													onClick={() => onDuplicate(purchase)}
 													disabled={rowBusy}
-													className="rounded-lg border border-indigo-500 px-3 py-1 text-indigo-600 hover:bg-indigo-50 disabled:opacity-60 dark:border-indigo-400 dark:text-indigo-200"
+													className="rounded-lg border border-chart-4 px-3 py-1 text-chart-4 hover:bg-chart-4/10 disabled:opacity-60"
 												>
 													复制
 												</button>
@@ -322,7 +322,7 @@ export default function PurchaseTable({
 												<button
 													onClick={() => onSubmit(purchase)}
 													disabled={rowBusy}
-													className="rounded-lg border border-emerald-500 px-3 py-1 text-emerald-600 hover:bg-emerald-50 disabled:opacity-60 dark:border-emerald-400 dark:text-emerald-200"
+													className="rounded-lg border border-chart-5 px-3 py-1 text-chart-5 hover:bg-chart-5/10 disabled:opacity-60"
 												>
 													提交
 												</button>
@@ -331,7 +331,7 @@ export default function PurchaseTable({
 												<button
 													onClick={() => onWithdraw(purchase)}
 													disabled={rowBusy}
-													className="rounded-lg border border-amber-500 px-3 py-1 text-amber-600 hover:bg-amber-50 disabled:opacity-60 dark:border-amber-400 dark:text-amber-200"
+													className="rounded-lg border border-chart-3 px-3 py-1 text-chart-3 hover:bg-chart-3/10 disabled:opacity-60"
 												>
 													撤回
 												</button>
@@ -340,7 +340,7 @@ export default function PurchaseTable({
 												<button
 													onClick={() => onApprove(purchase)}
 													disabled={rowBusy}
-													className="rounded-lg border border-indigo-500 px-3 py-1 text-indigo-600 hover:bg-indigo-50 disabled:opacity-60 dark:border-indigo-400 dark:text-indigo-200"
+													className="rounded-lg border border-chart-4 px-3 py-1 text-chart-4 hover:bg-chart-4/10 disabled:opacity-60"
 												>
 													审批
 												</button>
@@ -349,7 +349,7 @@ export default function PurchaseTable({
 												<button
 													onClick={() => onTransfer(purchase)}
 													disabled={rowBusy}
-													className="rounded-lg border border-slate-500 px-3 py-1 text-slate-600 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-400 dark:text-slate-200"
+													className="rounded-lg border border-secondary-foreground/50 px-3 py-1 text-secondary-foreground hover:bg-secondary/50 disabled:opacity-60"
 												>
 													转审
 												</button>
@@ -358,7 +358,7 @@ export default function PurchaseTable({
 												<button
 													onClick={() => onReject(purchase)}
 													disabled={rowBusy}
-													className="rounded-lg border border-rose-500 px-3 py-1 text-rose-600 hover:bg-rose-50 disabled:opacity-60 dark:border-rose-400 dark:text-rose-200"
+													className="rounded-lg border border-destructive px-3 py-1 text-destructive hover:bg-destructive/10 disabled:opacity-60"
 												>
 													驳回
 												</button>
@@ -367,7 +367,7 @@ export default function PurchaseTable({
 												<button
 													onClick={() => onPay(purchase)}
 													disabled={rowBusy}
-													className="rounded-lg border border-purple-500 px-3 py-1 text-purple-600 hover:bg-purple-50 disabled:opacity-60 dark:border-purple-400 dark:text-purple-200"
+													className="rounded-lg border border-primary px-3 py-1 text-primary hover:bg-primary/10 disabled:opacity-60"
 												>
 													打款
 												</button>
@@ -376,7 +376,7 @@ export default function PurchaseTable({
 												<button
 													onClick={() => onSubmitReimbursement(purchase)}
 													disabled={rowBusy}
-													className="rounded-lg border border-cyan-500 px-3 py-1 text-cyan-600 hover:bg-cyan-50 disabled:opacity-60 dark:border-cyan-400 dark:text-cyan-200"
+													className="rounded-lg border border-chart-2 px-3 py-1 text-chart-2 hover:bg-chart-2/10 disabled:opacity-60"
 												>
 													提交报销
 												</button>

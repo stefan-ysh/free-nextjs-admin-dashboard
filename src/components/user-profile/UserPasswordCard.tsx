@@ -65,12 +65,12 @@ export default function UserPasswordCard({ passwordUpdatedAt, onChangePassword, 
   };
 
   return (
-    <div className="p-5 border border-gray-200 rounded-2xl dark:border-gray-800 lg:p-6">
+    <div className="p-5 border border-border rounded-2xl lg:p-6">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h4 className="text-lg font-semibold text-gray-800 dark:text-white/90 lg:mb-3">账户密码</h4>
-          <p className="text-sm text-gray-500 dark:text-gray-400">建议定期更新密码，提升账户安全性。</p>
-          <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">上次更新时间：{formattedUpdatedAt}</p>
+          <h4 className="text-lg font-semibold text-foreground lg:mb-3">账户密码</h4>
+          <p className="text-sm text-muted-foreground">建议定期更新密码，提升账户安全性。</p>
+          <p className="mt-2 text-xs text-muted-foreground/70">上次更新时间：{formattedUpdatedAt}</p>
         </div>
       </div>
 

@@ -41,9 +41,9 @@ const statusLabels: Record<ClientStatus, string> = {
 };
 
 const statusBadgeClass: Record<ClientStatus, string> = {
-  active: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-100',
-  inactive: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-100',
-  blacklisted: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-100',
+  active: 'bg-chart-5/15 text-chart-5',
+  inactive: 'bg-chart-3/20 text-chart-3',
+  blacklisted: 'bg-destructive/15 text-destructive',
 };
 
 const typeLabels: Record<ClientType, string> = {
@@ -498,19 +498,19 @@ export default function ClientManagementPage() {
       <div className="flex flex-wrap gap-2">
         <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
           <span className="font-medium text-foreground">客户总数</span>
-          <span className="font-semibold text-blue-600 dark:text-blue-400">{total}</span>
+          <span className="font-semibold text-chart-1">{total}</span>
         </div>
         <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
           <span className="font-medium text-foreground">活跃客户</span>
-          <span className="font-semibold text-emerald-600 dark:text-emerald-400">{stats.active}</span>
+          <span className="font-semibold text-chart-5">{stats.active}</span>
         </div>
         <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
           <span className="font-medium text-foreground">在途额度</span>
-          <span className="font-semibold text-amber-600 dark:text-amber-400">{formatCurrency(stats.outstanding)}</span>
+          <span className="font-semibold text-chart-3">{formatCurrency(stats.outstanding)}</span>
         </div>
         <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
           <span className="font-medium text-foreground">授信总额</span>
-          <span className="font-semibold text-purple-600 dark:text-purple-400">{formatCurrency(stats.totalCredit)}</span>
+          <span className="font-semibold text-chart-4">{formatCurrency(stats.totalCredit)}</span>
         </div>
       </div>
 
@@ -623,7 +623,7 @@ export default function ClientManagementPage() {
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => handleDeleteClick(client)}
-                            className="text-rose-600 focus:text-rose-600"
+                            className="text-destructive focus:text-destructive"
                             disabled={deletingId === client.id}
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
@@ -706,7 +706,7 @@ export default function ClientManagementPage() {
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => handleDeleteClick(client)}
-                            className="text-rose-600 focus:text-rose-600"
+                            className="text-destructive focus:text-destructive"
                             disabled={deletingId === client.id}
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
@@ -1069,7 +1069,7 @@ export default function ClientManagementPage() {
                                   variant="ghost"
                                   onClick={() => handleRemoveContact(index)}
                                   disabled={formDisabled}
-                                  className="text-rose-600 hover:text-rose-600"
+                                  className="text-destructive hover:text-destructive"
                                 >
                                   <Trash2 className="mr-1 h-4 w-4" /> 删除
                                 </Button>

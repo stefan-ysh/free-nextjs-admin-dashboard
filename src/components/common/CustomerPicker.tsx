@@ -12,9 +12,9 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 const statusClass: Record<Client['status'], string> = {
-  active: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-100',
-  inactive: 'bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-100',
-  blacklisted: 'bg-rose-50 text-rose-700 dark:bg-rose-500/20 dark:text-rose-100',
+  active: 'bg-chart-5/15 text-chart-5',
+  inactive: 'bg-chart-3/15 text-chart-3',
+  blacklisted: 'bg-destructive/15 text-destructive',
 };
 
 const statusLabel: Record<Client['status'], string> = {

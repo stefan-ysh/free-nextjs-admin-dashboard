@@ -130,7 +130,7 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
 
     if (!canOperate) {
         return (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-600 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300">
+            <div className="alert-box alert-danger">
                 当前账户无权创建入库单。
             </div>
         );
@@ -162,7 +162,7 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
             </div>
 
             {selectedItem && (
-                <div className="rounded-lg border border-dashed border-brand-200 bg-brand-50/40 p-3 text-sm text-brand-700 dark:border-brand-500/40 dark:bg-brand-500/10 dark:text-brand-100 lg:col-span-3">
+                <div className="rounded-lg border border-dashed border-primary/40 bg-primary/10 p-3 text-sm text-primary lg:col-span-3">
                     标准单价：¥{selectedItem.unitPrice.toLocaleString()} / {selectedItem.unit}
                 </div>
             )}

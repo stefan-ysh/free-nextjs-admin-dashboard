@@ -51,7 +51,7 @@ export default function UserDropdown() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center text-gray-700 dark:text-gray-400 dropdown-toggle">
+        <button className="dropdown-toggle flex items-center text-foreground">
           <span className="mr-3 overflow-hidden rounded-full h-11 w-11">
             <Image
               width={44}
@@ -67,7 +67,7 @@ export default function UserDropdown() {
           </span>
 
           <svg
-            className="stroke-gray-500 dark:stroke-gray-400 transition-transform duration-200"
+            className="stroke-muted-foreground transition-transform duration-200"
             width="18"
             height="20"
             viewBox="0 0 18 20"
@@ -84,7 +84,7 @@ export default function UserDropdown() {
           </svg>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="surface-card w-[260px] p-4 shadow-lg">
+      <DropdownMenuContent align="end" className="surface-card w-[260px] p-4">
         <div>
           <DropdownMenuLabel className="px-0 pb-0 text-theme-sm font-medium text-foreground">
             {displayName || "访客"}

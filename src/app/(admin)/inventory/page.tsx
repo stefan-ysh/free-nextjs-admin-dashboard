@@ -78,7 +78,7 @@ export default function InventoryOverviewPage() {
   if (permissionLoading) {
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+        <div className="alert-box alert-info">
           正在校验权限...
         </div>
       </div>
@@ -88,7 +88,7 @@ export default function InventoryOverviewPage() {
   if (!canViewDashboard) {
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl border border-rose-200 bg-white p-6 text-sm text-rose-600 shadow dark:border-rose-500/40 dark:bg-gray-900 dark:text-rose-300">
+        <div className="alert-box alert-danger">
           当前账户无权访问进销存总览，请联系管理员配置权限。
         </div>
       </div>
@@ -111,7 +111,7 @@ export default function InventoryOverviewPage() {
                 className="h-auto flex-col gap-2 py-4 border-border/60 bg-background/50 hover:bg-accent hover:text-accent-foreground"
                 onClick={() => setInboundDrawerOpen(true)}
               >
-                <PackagePlus className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                <PackagePlus className="h-6 w-6 text-chart-2" />
                 <span>入库作业</span>
               </Button>
               <Button
@@ -119,7 +119,7 @@ export default function InventoryOverviewPage() {
                 className="h-auto flex-col gap-2 py-4 border-border/60 bg-background/50 hover:bg-accent hover:text-accent-foreground"
                 onClick={() => setOutboundDrawerOpen(true)}
               >
-                <PackageMinus className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                <PackageMinus className="h-6 w-6 text-chart-3" />
                 <span>出库作业</span>
               </Button>
               <Button
@@ -128,7 +128,7 @@ export default function InventoryOverviewPage() {
                 asChild
               >
                 <Link href="/inventory/movements">
-                  <List className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                  <List className="h-6 w-6 text-chart-5" />
                   <span>库存流水</span>
                 </Link>
               </Button>
@@ -138,7 +138,7 @@ export default function InventoryOverviewPage() {
                 asChild
               >
                 <Link href="/inventory/transfers">
-                  <ArrowRightLeft className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                  <ArrowRightLeft className="h-6 w-6 text-primary" />
                   <span>调拨单</span>
                 </Link>
               </Button>
@@ -165,7 +165,7 @@ export default function InventoryOverviewPage() {
             emptyHint="暂无库存流水，可通过入库/出库功能创建"
           />
         ) : (
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 text-sm text-gray-500 shadow dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+          <div className="alert-box alert-info">
             当前账户无权查看库存流水。
           </div>
         )}

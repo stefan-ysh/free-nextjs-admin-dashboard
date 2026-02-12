@@ -121,10 +121,10 @@ export default function FinanceTable({
 										<div className="text-sm font-semibold text-foreground">{record.name}</div>
 										<div className="mt-1 text-xs text-muted-foreground">{formatDate(record.date)}</div>
 									</div>
-									<Badge
-										variant={record.type === TransactionType.INCOME ? 'default' : 'destructive'}
-										className={record.type === TransactionType.INCOME ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
-									>
+								<Badge
+									variant={record.type === TransactionType.INCOME ? 'default' : 'destructive'}
+									className={record.type === TransactionType.INCOME ? 'bg-chart-5 text-primary-foreground hover:bg-chart-5/90' : ''}
+								>
 										{record.type === TransactionType.INCOME ? '收入' : '支出'}
 									</Badge>
 								</div>
@@ -135,7 +135,7 @@ export default function FinanceTable({
 									</div>
 									<div className="flex items-center justify-between gap-3">
 										<span>金额</span>
-										<span className={record.type === TransactionType.INCOME ? 'text-emerald-600' : 'text-red-600'}>
+										<span className={record.type === TransactionType.INCOME ? 'text-chart-5' : 'text-destructive'}>
 											¥{totalAmount.toFixed(2)}
 										</span>
 									</div>
@@ -203,7 +203,7 @@ export default function FinanceTable({
 									<TableCell className="px-4 py-3">
 										<Badge
 											variant={record.type === TransactionType.INCOME ? 'default' : 'destructive'}
-											className={record.type === TransactionType.INCOME ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+											className={record.type === TransactionType.INCOME ? 'bg-chart-5 text-primary-foreground hover:bg-chart-5/90' : ''}
 										>
 											{record.type === TransactionType.INCOME ? '收入' : '支出'}
 										</Badge>
@@ -212,7 +212,7 @@ export default function FinanceTable({
 										{record.category}
 									</TableCell>
 									<TableCell
-										className={`px-4 py-3 font-semibold ${record.type === TransactionType.INCOME ? 'text-emerald-600' : 'text-red-600'}`}
+										className={`px-4 py-3 font-semibold ${record.type === TransactionType.INCOME ? 'text-chart-5' : 'text-destructive'}`}
 									>
 										¥{totalAmount.toFixed(2)}
 									</TableCell>
@@ -228,8 +228,8 @@ export default function FinanceTable({
 													variant="outline"
 													className={
 														record.invoice.status === InvoiceStatus.ISSUED
-															? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-															: 'border-amber-200 bg-amber-50 text-amber-700'
+															? 'border-chart-5/30 bg-chart-5/15 text-chart-5'
+															: 'border-chart-3/30 bg-chart-3/15 text-chart-3'
 													}
 												>
 													{getInvoiceStatusLabel(record.invoice.status)}
@@ -247,7 +247,7 @@ export default function FinanceTable({
 																	handlePreview(attachments[0], record.name);
 																}
 															}}
-															className="inline-flex h-6 items-center gap-1 rounded-full bg-blue-50 px-2 text-xs text-blue-700 hover:bg-blue-100"
+															className="inline-flex h-6 items-center gap-1 rounded-full bg-secondary px-2 text-xs text-secondary-foreground hover:bg-secondary/80"
 															title={`查看 ${record.invoice.attachments.length} 个附件`}
 														>
 															📎 {record.invoice.attachments.length}
@@ -266,7 +266,7 @@ export default function FinanceTable({
 														variant="ghost"
 														size="sm"
 														onClick={() => onEdit(record)}
-														className="h-8 px-2 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+														className="h-8 px-2 text-primary hover:bg-primary/10 hover:text-primary"
 													>
 														编辑
 													</Button>
@@ -276,7 +276,7 @@ export default function FinanceTable({
 														variant="ghost"
 														size="sm"
 														onClick={() => handleDelete(record)}
-														className="h-8 px-2 text-red-600 hover:bg-red-50 hover:text-red-700"
+														className="h-8 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
 													>
 														删除
 													</Button>

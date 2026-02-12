@@ -202,10 +202,10 @@ export default function UserMetaCard({ profile, onProfileUpdate, onAvatarUpdate,
 
   return (
     <>
-      <div className="p-5 border border-gray-200 rounded-2xl dark:border-gray-800 lg:p-6">
+      <div className="p-5 border border-border rounded-2xl lg:p-6">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-col items-center w-full gap-6 xl:flex-row">
-            <div className="relative w-20 h-20 overflow-hidden border border-gray-200 rounded-full dark:border-gray-800">
+            <div className="relative w-20 h-20 overflow-hidden border border-border rounded-full">
               <Image width={80} height={80} src={avatarInfo.src} alt={displayName || "用户头像"} unoptimized={avatarInfo.unoptimized} className={loading ? "animate-pulse" : ""} />
               <button
                 className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white transition-opacity bg-gray-900/70 opacity-0 hover:opacity-100"
@@ -217,12 +217,12 @@ export default function UserMetaCard({ profile, onProfileUpdate, onAvatarUpdate,
               </button>
             </div>
             <div className="order-3 text-center xl:order-2 xl:text-left">
-              <h4 className="mb-1 text-lg font-semibold text-gray-800 dark:text-white/90">
+              <h4 className="mb-1 text-lg font-semibold text-foreground">
                 {loading ? "加载中..." : displayName || "未命名用户"}
               </h4>
-              <div className="flex flex-col items-center gap-1 text-center text-sm text-gray-500 dark:text-gray-400 xl:flex-row xl:gap-3 xl:text-left">
+              <div className="flex flex-col items-center gap-1 text-center text-sm text-muted-foreground xl:flex-row xl:gap-3 xl:text-left">
                 <span>{profile?.jobTitle || (loading ? "" : "未填写职位")}</span>
-                <div className="hidden h-3.5 w-px bg-gray-300 dark:bg-gray-700 xl:block"></div>
+                <div className="hidden h-3.5 w-px bg-border xl:block"></div>
                 <span>{location || (loading ? "" : "未填写地区")}</span>
               </div>
             </div>
@@ -231,7 +231,7 @@ export default function UserMetaCard({ profile, onProfileUpdate, onAvatarUpdate,
                 const url = socialLinks?.[key] ?? "";
                 const isActive = Boolean(url);
                 const commonClasses = "flex h-11 w-11 items-center justify-center rounded-full border text-sm font-medium shadow-theme-xs";
-                const baseClasses = "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200";
+                const baseClasses = "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground";
                 if (isActive) {
                   return (
                     <a

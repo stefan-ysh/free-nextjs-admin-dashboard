@@ -278,18 +278,18 @@ async function parseCsvFile(file: File) {
 
 const STATUS_CARD_META: Record<EmploymentStatus, { accent: string; badge: string; description: string }> = {
   active: {
-    accent: 'text-emerald-600 dark:text-emerald-300',
-    badge: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200',
+    accent: 'text-chart-5',
+    badge: 'bg-chart-5/15 text-chart-5',
     description: '当前在岗',
   },
   on_leave: {
-    accent: 'text-amber-600 dark:text-amber-200',
-    badge: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200',
+    accent: 'text-chart-3',
+    badge: 'bg-chart-3/20 text-chart-3',
     description: '休假或请假',
   },
   terminated: {
-    accent: 'text-rose-600 dark:text-rose-200',
-    badge: 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-200',
+    accent: 'text-destructive',
+    badge: 'bg-destructive/15 text-destructive',
     description: '已离任',
   },
 };
@@ -1172,7 +1172,7 @@ export default function EmployeeClient({
 
   if (permissionLoading) {
     return (
-      <div className="rounded-lg border border-border bg-white p-6 text-sm text-gray-600 shadow-sm dark:border-border dark:bg-gray-900 dark:text-gray-300">
+      <div className="panel-frame p-6 text-sm text-muted-foreground">
         正在加载权限信息...
       </div>
     );
@@ -1180,7 +1180,7 @@ export default function EmployeeClient({
 
   if (!canViewEmployees) {
     return (
-      <div className="rounded-lg border border-amber-200 bg-white p-6 text-sm text-amber-600 shadow-sm dark:border-amber-900/60 dark:bg-gray-900 dark:text-amber-200">
+      <div className="alert-box alert-warning p-6 text-sm">
         当前账户无权访问员工模块，请联系管理员或系统管理员开通 USER_VIEW_ALL 权限。
       </div>
     );
@@ -1592,7 +1592,7 @@ export default function EmployeeClient({
               </div>
             </div>
             {csvError && (
-              <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
+              <div className="alert-box alert-danger rounded-md px-3 py-2 text-xs">
                 {csvError}
               </div>
             )}
@@ -1646,17 +1646,17 @@ export default function EmployeeClient({
             className="font-mono text-xs"
           />
           {importError && (
-            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
+            <div className="alert-box alert-danger rounded-md px-3 py-2 text-xs">
               {importError}
             </div>
           )}
             {importResult && (
-              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-200">
+              <div className="rounded-md border border-chart-5/40 bg-chart-5/10 px-3 py-2 text-xs text-chart-5">
                 <p>
                   新增 {importResult.created} 条，更新 {importResult.updated} 条，跳过 {importResult.skipped} 条。
                 </p>
                 {importResult.errors?.length ? (
-                  <div className="mt-2 space-y-1 text-[11px] text-emerald-900/80 dark:text-emerald-100">
+                  <div className="mt-2 space-y-1 text-[11px] text-chart-5/90">
                     {importResult.errors?.slice(0, 3).map((err: NonNullable<EmployeeBulkImportResponse['data']>['errors'][number]) => (
                       <p key={`${err.index}-${err.message}`}>
                         第 {err.index + 1} 行：{err.identifier ? `${err.identifier} - ` : ''}{err.message}
@@ -1685,7 +1685,7 @@ export default function EmployeeClient({
       </Drawer>
 
       {error && (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/60 dark:text-rose-200">
+        <div className="alert-box alert-danger px-4 py-3 text-sm">
           {error}
         </div>
       )}

@@ -43,9 +43,9 @@ const statusLabels: Record<SupplierStatus, string> = {
 };
 
 const statusBadgeClass: Record<SupplierStatus, string> = {
-  active: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-100',
-  inactive: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-100',
-  blacklisted: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-100',
+  active: 'bg-chart-5/15 text-chart-5',
+  inactive: 'bg-chart-3/20 text-chart-3',
+  blacklisted: 'bg-destructive/15 text-destructive',
 };
 
 const paymentTerms = ['cash', 't+7', 't+15', 't+30', 't+60', 'custom'] as const;
@@ -453,15 +453,15 @@ export default function SupplierManagementPage() {
         <div className="flex flex-wrap gap-2">
           <div className={SUMMARY_CHIP_CLASS}>
             <span className="font-medium text-foreground">合作中</span>
-            <span className="font-semibold text-emerald-600 dark:text-emerald-400">{stats.active}</span>
+            <span className="font-semibold text-chart-5">{stats.active}</span>
           </div>
           <div className={SUMMARY_CHIP_CLASS}>
             <span className="font-medium text-foreground">黑名单</span>
-            <span className="font-semibold text-rose-600 dark:text-rose-400">{stats.blacklisted}</span>
+            <span className="font-semibold text-destructive">{stats.blacklisted}</span>
           </div>
           <div className={SUMMARY_CHIP_CLASS}>
             <span className="font-medium text-foreground">授信额度</span>
-            <span className="font-semibold text-purple-600 dark:text-purple-400">{formattedCredit}</span>
+            <span className="font-semibold text-chart-4">{formattedCredit}</span>
           </div>
         </div>
         {canManage && (

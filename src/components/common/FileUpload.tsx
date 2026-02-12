@@ -138,11 +138,11 @@ export default function FileUpload({
 						return (
 							<div
 								key={`${fileUrl}-${index}`}
-								className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-700"
+								className="flex items-center justify-between rounded-lg border border-border bg-muted p-3"
 							>
 								<div className="flex items-center gap-3">
 									<svg
-										className="h-5 w-5 text-gray-500 dark:text-gray-400"
+										className="h-5 w-5 text-muted-foreground"
 										fill="none"
 										stroke="currentColor"
 										viewBox="0 0 24 24"
@@ -154,7 +154,7 @@ export default function FileUpload({
 											d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
 										/>
 									</svg>
-									<span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
+									<span className="text-sm text-foreground">{label}</span>
 								</div>
 								<div className="flex items-center gap-3">
 									<button
@@ -183,7 +183,7 @@ export default function FileUpload({
 			)}
 
 			{files.length < maxFiles && (
-				<label className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-white px-4 py-3 text-sm transition-colors hover:border-gray-400 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:border-gray-500 dark:hover:bg-gray-600">
+				<label className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-border bg-card px-4 py-3 text-sm transition-colors hover:border-muted-foreground/40 hover:bg-muted">
 					<input
 						type="file"
 						multiple
@@ -192,7 +192,7 @@ export default function FileUpload({
 						disabled={interactionDisabled}
 						className="hidden"
 					/>
-					<div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+					<div className="flex items-center gap-2 text-muted-foreground">
 						{uploading ? (
 							<>
 								<svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -224,7 +224,7 @@ export default function FileUpload({
 				</label>
 			)}
 
-			<p className="text-xs text-gray-500 dark:text-gray-400">{helperText}</p>
+			<p className="text-xs text-muted-foreground">{helperText}</p>
 			<FilePreviewDialog
 				open={Boolean(previewTarget)}
 				fileUrl={previewTarget?.url ?? null}

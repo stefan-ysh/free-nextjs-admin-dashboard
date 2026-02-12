@@ -199,10 +199,10 @@ export default function NotificationDropdown() {
   }, [activeTab, items]);
 
   const typePillClass: Record<UiNotificationItem["type"], string> = {
-    approval: "bg-amber-500/15 text-amber-300",
-    applicant: "bg-sky-500/15 text-sky-300",
-    finance: "bg-emerald-500/15 text-emerald-300",
-    other: "bg-gray-500/15 text-gray-300",
+    approval: "bg-chart-3/15 text-chart-3",
+    applicant: "bg-chart-2/15 text-chart-2",
+    finance: "bg-chart-5/15 text-chart-5",
+    other: "bg-muted text-muted-foreground",
   };
 
   const handleMarkAllRead = useCallback(() => {
@@ -227,14 +227,14 @@ export default function NotificationDropdown() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="relative flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+          className="relative flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <span
-            className={`absolute right-0 top-0.5 z-10 h-2 w-2 rounded-full bg-orange-400 ${
+            className={`absolute right-0 top-0.5 z-10 h-2 w-2 rounded-full bg-primary ${
               showingNotifyDot ? "flex" : "hidden"
             }`}
           >
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-orange-400 opacity-75" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
           </span>
           <svg
             className="fill-current"
@@ -256,26 +256,26 @@ export default function NotificationDropdown() {
       <DropdownMenuContent
         align="end"
         sideOffset={12}
-        className="z-[120] flex h-[480px] w-[360px] flex-col rounded-2xl border border-gray-200 bg-white p-3 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark"
+        className="surface-card z-[120] flex h-[480px] w-[360px] flex-col rounded-xl bg-popover p-3"
       >
-        <div className="mb-3 flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-700">
-          <h5 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+        <div className="mb-3 flex items-center justify-between border-b border-border pb-3">
+          <h5 className="text-lg font-semibold text-popover-foreground">
             通知
           </h5>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 dark:text-gray-400">未读 {unreadCount}</span>
+            <span className="text-xs text-muted-foreground">未读 {unreadCount}</span>
             <button
               type="button"
               onClick={handleMarkAllRead}
               disabled={unreadCount === 0}
-              className="rounded-md border border-gray-300 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              className="rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
             >
               全部已读
             </button>
             <button
               type="button"
               onClick={() => void loadNotifications()}
-              className="rounded-md border border-gray-300 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              className="rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
             >
               刷新
             </button>
@@ -296,7 +296,7 @@ export default function NotificationDropdown() {
                 className={`rounded-full border px-3 py-1 text-xs transition ${
                   activeTab === tab.key
                     ? "border-primary bg-primary/15 text-primary"
-                    : "border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                    : "border-border text-muted-foreground hover:bg-muted"
                 }`}
               >
                 {tab.label} {tab.count}
@@ -306,11 +306,11 @@ export default function NotificationDropdown() {
         ) : null}
 
         {loading ? (
-          <div className="flex h-full items-center justify-center text-sm text-gray-500">加载中...</div>
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">加载中...</div>
         ) : null}
 
         {!loading && error ? (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
             {error}
           </div>
         ) : null}
@@ -318,17 +318,17 @@ export default function NotificationDropdown() {
         {!loading && !error ? (
           <ul className="custom-scrollbar flex flex-1 flex-col overflow-y-auto">
             {visibleItems.length === 0 ? (
-              <li className="flex h-full items-center justify-center text-sm text-gray-500">暂无通知</li>
+              <li className="flex h-full items-center justify-center text-sm text-muted-foreground">暂无通知</li>
             ) : (
               visibleItems.map((item) => (
                 <li key={item.id}>
                   <Link
                     href={item.link}
                     onClick={() => handleItemOpen(item)}
-                    className="block rounded-lg border-b border-gray-100 px-4 py-3 hover:bg-gray-100 dark:border-gray-800 dark:hover:bg-white/5"
+                    className="block rounded-lg border-b border-border px-4 py-3 hover:bg-muted/50"
                   >
                     <div className="mb-1 flex items-center justify-between gap-2">
-                      <p className="line-clamp-1 text-sm font-medium text-gray-800 dark:text-white/90">
+                      <p className="line-clamp-1 text-sm font-medium text-foreground">
                         {item.unread ? <span className="mr-1 inline-block h-2 w-2 rounded-full bg-primary" /> : null}
                         {item.title}
                       </p>
@@ -342,11 +342,11 @@ export default function NotificationDropdown() {
                               : "其他"}
                       </span>
                     </div>
-                    <p className="line-clamp-1 text-xs text-gray-500 dark:text-gray-400">{item.subtitle}</p>
+                    <p className="line-clamp-1 text-xs text-muted-foreground">{item.subtitle}</p>
                     <div className="mt-1 flex items-center justify-between gap-2">
-                      <p className="text-[11px] text-gray-400">{item.time}</p>
+                      <p className="text-[11px] text-muted-foreground">{item.time}</p>
                       {item.source === "pending_approval" ? (
-                        <span className="text-[11px] text-amber-300">实时待办</span>
+                        <span className="text-[11px] text-primary">实时待办</span>
                       ) : null}
                     </div>
                   </Link>
@@ -359,7 +359,7 @@ export default function NotificationDropdown() {
         <Link
           href="/workflow/notifications"
           onClick={() => setOpen(false)}
-          className="mt-3 block rounded-lg border border-gray-300 bg-white px-4 py-2 text-center text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+          className="mt-3 block rounded-lg border border-border bg-card px-4 py-2 text-center text-sm font-medium text-foreground hover:bg-muted"
         >
           查看全部通知
         </Link>

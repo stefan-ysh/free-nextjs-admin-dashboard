@@ -174,7 +174,7 @@ export default function InventoryOutboundForm({ onSuccess, onCancel, formId, hid
 
     if (!canOperate) {
         return (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-600 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300">
+            <div className="alert-box alert-danger">
                 当前账户无权创建出库单。
             </div>
         );
@@ -206,7 +206,7 @@ export default function InventoryOutboundForm({ onSuccess, onCancel, formId, hid
             </div>
 
             {selectedItem && payload.type !== 'transfer' && (
-                <div className="space-y-1 rounded-lg border border-dashed border-rose-200 bg-rose-50/40 p-3 text-sm text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100 lg:col-span-3">
+                <div className="space-y-1 rounded-lg border border-dashed border-chart-3/40 bg-chart-3/10 p-3 text-sm text-chart-3 lg:col-span-3">
                     <div>
                         建议售价：¥{selectedItem.salePrice.toLocaleString()} / {selectedItem.unit}
                     </div>

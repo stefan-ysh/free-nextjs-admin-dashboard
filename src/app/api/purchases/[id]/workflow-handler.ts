@@ -20,7 +20,7 @@ import {
 } from '@/lib/db/purchases';
 import { checkPermission, Permissions } from '@/lib/permissions';
 import { mapPurchaseValidationError } from '@/lib/purchases/error-messages';
-import { isAdmin } from '@/types/user';
+import { isAdmin, UserRole } from '@/types/user';
 import { getEmployeeById } from '@/lib/hr/employees';
 import { ensureDepartmentBudgetWithinLimit } from '@/lib/purchases/budget-guard';
 import { notifyPurchaseEvent } from '@/lib/notify';
@@ -148,18 +148,7 @@ export async function handlePurchaseWorkflowAction(
           return forbiddenResponse();
         }
         const comment = options.comment?.trim();
-        const workflowNodes = purchase.workflowNodes ?? [];
-        const currentStepIndex =
-          purchase.workflowStepIndex != null
-            ? Number(purchase.workflowStepIndex)
-            : workflowNodes.length > 0
-              ? 0
-              : null;
-        const currentNode =
-          currentStepIndex != null && currentStepIndex >= 0 && currentStepIndex < workflowNodes.length
-            ? workflowNodes[currentStepIndex]
-            : null;
-        if (currentNode?.requiredComment && !comment) return badRequestResponse('审批意见不能为空');
+        // Hardcoded: removed dynamic node checks
         const updated = await approvePurchase(id, context.user.id, comment);
         if (updated.status === 'pending_approval') {
           await notifySafely('purchase_submitted', id);
@@ -192,6 +181,11 @@ export async function handlePurchaseWorkflowAction(
         if (!comment) return badRequestResponse('转审说明不能为空');
         const approver = await getEmployeeById(toApproverId);
         if (!approver) return badRequestResponse('转审对象不存在');
+        const approverRoles = new Set(approver.userRoles ?? []);
+        if (approver.userPrimaryRole) approverRoles.add(approver.userPrimaryRole);
+        const APPROVAL_ROLES: readonly string[] = Permissions.PURCHASE_APPROVE.anyRoles ?? [];
+        const hasApprovalRole = APPROVAL_ROLES.some((role) => approverRoles.has(role as UserRole));
+        if (!hasApprovalRole) return badRequestResponse('该用户没有审批权限，无法作为转审对象');
         await transferPurchaseApprover(id, context.user.id, toApproverId, comment);
         return respondWithDetail(id);
       }
@@ -260,6 +254,7 @@ export async function handlePurchaseWorkflowAction(
     if (error instanceof Error) {
       if (error.message === 'UNAUTHENTICATED') return unauthorizedResponse();
       if (error.message === 'BUDGET_EXCEEDED') return badRequestResponse('超出部门预算，无法提交采购申请');
+
       const purchaseFriendly = mapPurchaseValidationError(error);
       if (purchaseFriendly) return badRequestResponse(purchaseFriendly);
       const friendly = financeErrorMessages[error.message];

@@ -134,8 +134,8 @@ export default function FinanceForm({
           className="w-full"
         >
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value={TransactionType.INCOME} className="data-[state=active]:bg-green-100 data-[state=active]:text-green-900 dark:data-[state=active]:bg-green-900 dark:data-[state=active]:text-green-100">收入</TabsTrigger>
-            <TabsTrigger value={TransactionType.EXPENSE} className="data-[state=active]:bg-red-100 data-[state=active]:text-red-900 dark:data-[state=active]:bg-red-900 dark:data-[state=active]:text-red-100">支出</TabsTrigger>
+            <TabsTrigger value={TransactionType.INCOME} className="data-[state=active]:bg-chart-5/15 data-[state=active]:text-chart-5">收入</TabsTrigger>
+            <TabsTrigger value={TransactionType.EXPENSE} className="data-[state=active]:bg-destructive/15 data-[state=active]:text-destructive">支出</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -145,7 +145,7 @@ export default function FinanceForm({
             name="name"
             render={({ field }) => (
               <FormItem className={fullRowClass}>
-                <FormLabel>明细名称 <span className="text-red-500">*</span></FormLabel>
+                <FormLabel>明细名称 <span className="text-destructive">*</span></FormLabel>
                 <FormControl>
                   <Input placeholder="例如:办公室装修、员工工资" {...field} />
                 </FormControl>
@@ -160,7 +160,7 @@ export default function FinanceForm({
             render={({ field }) => (
               <FormItem className={shortFieldClass}>
                 <Label htmlFor={categorySelectId} className="text-sm font-medium">
-                  分类 <span className="text-red-500">*</span>
+                  分类 <span className="text-destructive">*</span>
                 </Label>
                 <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                   <FormControl>
@@ -193,7 +193,7 @@ export default function FinanceForm({
             name="date"
             render={({ field }) => (
               <FormItem className={shortFieldClass}>
-                <FormLabel>日期 <span className="text-red-500">*</span></FormLabel>
+                <FormLabel>日期 <span className="text-destructive">*</span></FormLabel>
                 <FormControl>
                   <DatePicker
                     value={field.value}
@@ -252,7 +252,7 @@ export default function FinanceForm({
             name="contractAmount"
             render={({ field }) => (
               <FormItem className={shortFieldClass}>
-                <FormLabel>合同金额 (元) <span className="text-red-500">*</span></FormLabel>
+                <FormLabel>合同金额 (元) <span className="text-destructive">*</span></FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -272,7 +272,7 @@ export default function FinanceForm({
             name="fee"
             render={({ field }) => (
               <FormItem className={shortFieldClass}>
-                <FormLabel>手续费 (元) <span className="text-red-500">*</span></FormLabel>
+                <FormLabel>手续费 (元) <span className="text-destructive">*</span></FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -301,7 +301,7 @@ export default function FinanceForm({
             name="paymentType"
             render={({ field }) => (
               <FormItem className={shortFieldClass}>
-                <FormLabel>款项类型 <span className="text-red-500">*</span></FormLabel>
+                <FormLabel>款项类型 <span className="text-destructive">*</span></FormLabel>
                 <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                   <FormControl>
                     <SelectTrigger>

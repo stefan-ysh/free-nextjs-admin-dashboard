@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 
-import { mysqlPool } from '@/lib/mysql';
+import { mysqlPool, mysqlQuery } from '@/lib/mysql';
 import { ensureInventorySchema } from '@/lib/schema/inventory';
 import { specFieldsToDefaultRecord } from '@/lib/inventory/spec';
 import type {
@@ -326,7 +326,19 @@ async function fetchItem(queryable: Queryable, id: string): Promise<InventoryIte
 export async function getInventoryItem(id: string): Promise<InventoryItem | null> {
   await ensureInventorySchema();
   const row = await fetchItem(pool, id);
-  return row ? mapInventoryItem(row) : null;
+  if (!row) return null;
+
+  const item = mapInventoryItem(row);
+
+  const [stockRows] = await pool.query<(RowDataPacket & { total: number })[]>(
+    `SELECT SUM(quantity) as total 
+     FROM inventory_stock_snapshots 
+     WHERE item_id = ?`,
+    [id]
+  );
+  item.stockQuantity = Number(stockRows[0]?.total ?? 0);
+
+  return item;
 }
 
 async function fetchWarehouse(queryable: Queryable, id: string): Promise<WarehouseRow | null> {
@@ -369,7 +381,20 @@ export async function listInventoryItems(): Promise<InventoryItem[]> {
   const [rows] = await pool.query<InventoryItemRow[]>(
     'SELECT * FROM inventory_items WHERE is_deleted = 0 ORDER BY name ASC'
   );
-  return rows.map(mapInventoryItem);
+
+  const [stockRows] = await pool.query<(RowDataPacket & { item_id: string; total: number })[]>(
+    `SELECT item_id, SUM(quantity) as total 
+     FROM inventory_stock_snapshots 
+     GROUP BY item_id`
+  );
+  
+  const stockMap = new Map<string, number>(stockRows.map((r) => [r.item_id, Number(r.total)]));
+
+  return rows.map((row) => {
+    const item = mapInventoryItem(row);
+    item.stockQuantity = stockMap.get(item.id) ?? 0;
+    return item;
+  });
 }
 
 export async function listWarehouses(): Promise<Warehouse[]> {
@@ -760,8 +785,7 @@ export async function getTransferOrderDetail(transferId: string): Promise<Invent
 }
 
 export async function reserveStock(
-  payload: { itemId: string; warehouseId: string; quantity: number },
-  operatorId = 'system'
+  payload: { itemId: string; warehouseId: string; quantity: number }
 ): Promise<void> {
   await ensureInventorySchema();
   if (!payload.itemId || !payload.warehouseId || payload.quantity <= 0) {
@@ -790,8 +814,7 @@ export async function reserveStock(
 }
 
 export async function releaseReservedStock(
-  payload: { itemId: string; warehouseId: string; quantity: number },
-  operatorId = 'system'
+  payload: { itemId: string; warehouseId: string; quantity: number }
 ): Promise<void> {
   await ensureInventorySchema();
   if (!payload.itemId || !payload.warehouseId || payload.quantity <= 0) {
@@ -1080,4 +1103,27 @@ export async function revertOutboundMovement(
 
     await connection.query('DELETE FROM inventory_movements WHERE id = ?', [movement.id]);
   });
+}
+
+const STOCK_PLACEHOLDER = 0;
+
+export async function getWarehouseByCode(code: string): Promise<Warehouse | null> {
+  const rows = await mysqlQuery<WarehouseRow>`
+    SELECT * FROM warehouses WHERE code = ${code} AND is_deleted = 0 LIMIT 1
+  `;
+  const row = rows.rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    code: row.code,
+    type: row.type,
+    address: row.address ?? undefined,
+    capacity: row.capacity ?? undefined,
+    manager: row.manager ?? undefined,
+    stockQuantity: STOCK_PLACEHOLDER,
+    stockReserved: STOCK_PLACEHOLDER,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+  };
 }

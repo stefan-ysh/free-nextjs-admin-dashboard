@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import ModalShell from '@/components/common/ModalShell';
-import UserSelect from '@/components/common/UserSelect';
+import ApproverSelect from '@/components/common/ApproverSelect';
 
 export type TransferApprovalDialogProps = {
   open: boolean;
@@ -76,7 +76,7 @@ export function TransferApprovalDialog({
           <div className="grid gap-3">
             <div className="grid gap-2">
               <Label>转审对象</Label>
-              <UserSelect value={approverId} onChange={setApproverId} placeholder="选择审批人" disabled={submitting} />
+              <ApproverSelect value={approverId} onChange={setApproverId} placeholder="选择审批人" disabled={submitting} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="transfer-comment">转审说明</Label>
@@ -89,7 +89,7 @@ export function TransferApprovalDialog({
                 disabled={submitting}
               />
             </div>
-            {error ? <p className="text-sm text-rose-500">{error}</p> : null}
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
           </div>
         </ModalShell>
       </DialogContent>

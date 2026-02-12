@@ -11,7 +11,7 @@ import {
 import { UserProfile } from '@/types/user';
 import { USER_ROLE_LABELS } from '@/constants/user-roles';
 
-interface UserSelectProps {
+interface ApproverSelectProps {
     value?: string | null;
     onChange: (value: string) => void;
     disabled?: boolean;
@@ -19,21 +19,25 @@ interface UserSelectProps {
     className?: string;
 }
 
-export default function UserSelect({
+/**
+ * A user selector that only lists users with purchase approval permissions
+ * (super_admin, admin, finance, department_manager).
+ */
+export default function ApproverSelect({
     value,
     onChange,
     disabled = false,
-    placeholder = '选择人员...',
+    placeholder = '选择审批人...',
     className,
-}: UserSelectProps) {
+}: ApproverSelectProps) {
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        async function fetchUsers() {
+        async function fetchApprovers() {
             setLoading(true);
             try {
-                const response = await fetch('/api/users');
+                const response = await fetch('/api/users/approvers');
                 if (response.ok) {
                     const data = await response.json();
                     if (data.success && Array.isArray(data.data)) {
@@ -41,13 +45,13 @@ export default function UserSelect({
                     }
                 }
             } catch (error) {
-                console.error('Failed to fetch users', error);
+                console.error('Failed to fetch approvers', error);
             } finally {
                 setLoading(false);
             }
         }
 
-        fetchUsers();
+        fetchApprovers();
     }, []);
 
     return (

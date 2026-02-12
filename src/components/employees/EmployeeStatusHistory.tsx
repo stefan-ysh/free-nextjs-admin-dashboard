@@ -9,9 +9,9 @@ import { EMPLOYMENT_STATUS_LABELS, EmployeeStatusLog, EmployeeStatusLogResponse 
 import { formatDateTimeLocal } from '@/lib/dates';
 
 const STATUS_BADGE_COLORS: Record<string, string> = {
-  active: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200',
-  on_leave: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200',
-  terminated: 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-200',
+  active: 'bg-chart-5/15 text-chart-5',
+  on_leave: 'bg-chart-3/15 text-chart-3',
+  terminated: 'bg-destructive/15 text-destructive',
 };
 
 function formatTimestamp(value: string) {

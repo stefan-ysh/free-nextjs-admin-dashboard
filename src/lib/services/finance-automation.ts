@@ -1,7 +1,7 @@
 import { InvoiceType as FinanceInvoiceType, FinanceRecord, FinanceRecordMetadata, InvoiceInfo, InvoiceStatus, PaymentType, TransactionType } from '@/types/finance';
 import { getDefaultCategoryLabels, matchCategoryLabel } from '@/constants/finance-categories';
 
-import type { PurchaseRecord, PurchasePayment } from '@/types/purchase';
+import type { PurchaseRecord } from '@/types/purchase';
 import type { InventoryMovement, InventoryItem, Warehouse } from '@/types/inventory';
 import type { ProjectPayment, ProjectRecord } from '@/types/project';
 import { getInventoryItem, getWarehouse } from '@/lib/db/inventory';
@@ -242,7 +242,7 @@ function formatDateLabel(value?: string | null): string | undefined {
   try {
     const iso = toIsoDateString(value);
     return iso.slice(0, 10);
-  } catch (error) {
+  } catch {
     return undefined;
   }
 }
@@ -417,7 +417,7 @@ export async function createPurchaseExpense(
   paymentDate: string
 ): Promise<FinanceRecord> {
   const basePayload = {
-    name: `采购支出 - ${purchase.itemName}`,
+    name: purchase.itemName,
     type: TransactionType.EXPENSE,
     category: PURCHASE_EXPENSE_CATEGORY,
     date: toIsoDateString(paymentDate),

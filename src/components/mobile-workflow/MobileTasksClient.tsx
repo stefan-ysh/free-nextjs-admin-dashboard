@@ -102,7 +102,7 @@ export default function MobileTasksClient({
             <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
               <span>待审批 {approvalItems.length}</span>
               <span>待财务 {paymentItems.length}</span>
-              {paymentError ? <span className="text-amber-500">财务队列暂不可用</span> : null}
+              {paymentError ? <span className="text-chart-3">财务队列暂不可用</span> : null}
             </div>
           </div>
           <Button size="sm" variant="outline" onClick={() => void load()}>
@@ -156,7 +156,7 @@ export default function MobileTasksClient({
                 </span>
               </div>
               {paymentError ? (
-                <p className="surface-panel border-amber-500/40 px-3 py-2 text-xs text-amber-500">
+                <p className="surface-panel border-chart-3/40 px-3 py-2 text-xs text-chart-3">
                   财务队列暂时不可用：{paymentError}
                 </p>
               ) : null}

@@ -21,18 +21,18 @@ export function formatMoney(value: unknown): string {
 }
 
 export function statusBadgeClass(status: string): string {
-  if (status === 'pending_approval') return 'bg-amber-100 text-amber-700 border-amber-200';
-  if (status === 'approved') return 'bg-blue-100 text-blue-700 border-blue-200';
-  if (status === 'paid') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-  if (status === 'rejected') return 'bg-rose-100 text-rose-700 border-rose-200';
+  if (status === 'pending_approval') return 'bg-chart-3/15 text-chart-3 border-chart-3/30';
+  if (status === 'approved') return 'bg-chart-2/15 text-chart-2 border-chart-2/30';
+  if (status === 'paid') return 'bg-chart-5/15 text-chart-5 border-chart-5/30';
+  if (status === 'rejected') return 'bg-destructive/15 text-destructive border-destructive/30';
   return 'bg-muted text-muted-foreground border-border';
 }
 
 export function reimbursementBadgeClass(status: string): string {
-  if (status === 'invoice_pending') return 'bg-amber-100 text-amber-700 border-amber-200';
-  if (status === 'reimbursement_pending') return 'bg-blue-100 text-blue-700 border-blue-200';
-  if (status === 'reimbursed') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-  if (status === 'reimbursement_rejected') return 'bg-rose-100 text-rose-700 border-rose-200';
+  if (status === 'invoice_pending') return 'bg-chart-3/15 text-chart-3 border-chart-3/30';
+  if (status === 'reimbursement_pending') return 'bg-chart-2/15 text-chart-2 border-chart-2/30';
+  if (status === 'reimbursed') return 'bg-chart-5/15 text-chart-5 border-chart-5/30';
+  if (status === 'reimbursement_rejected') return 'bg-destructive/15 text-destructive border-destructive/30';
   return 'bg-muted text-muted-foreground border-border';
 }
 

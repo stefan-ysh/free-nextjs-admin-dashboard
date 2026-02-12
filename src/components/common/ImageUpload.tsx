@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { Loader2, Upload, X, ImagePlus } from 'lucide-react';
+import { Loader2, X, ImagePlus } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
@@ -68,7 +68,7 @@ export default function ImageUpload({
 
     return (
         <div className={cn('relative flex flex-col gap-4', className)}>
-            <div className="group relative flex h-40 w-40 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:bg-gray-800">
+            <div className="group relative flex h-40 w-40 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-muted transition-colors hover:bg-accent">
                 {value ? (
                     <>
                         <div className="relative h-full w-full overflow-hidden rounded-xl">
@@ -103,14 +103,14 @@ export default function ImageUpload({
                 ) : (
                     <div className="flex flex-col items-center justify-center p-4 text-center ">
                         {uploading ? (
-                            <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                         ) : (
-                            <ImagePlus className="h-8 w-8 text-gray-400" />
+                            <ImagePlus className="h-8 w-8 text-muted-foreground" />
                         )}
-                        <p className="mt-2 text-xs text-gray-500">
+                        <p className="mt-2 text-xs text-muted-foreground">
                             {uploading ? '上传中...' : '上传图片'}
                         </p>
-                        <p className="mt-1 text-[10px] text-gray-400">最大 5MB</p>
+                        <p className="mt-1 text-[10px] text-muted-foreground/70">最大 5MB</p>
                     </div>
                 )}
                 <input

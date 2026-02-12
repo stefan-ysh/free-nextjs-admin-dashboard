@@ -84,8 +84,8 @@ export default function InventoryTransfersPage() {
       <div className="surface-card p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="text-sm font-semibold text-gray-900 dark:text-white">调拨单</div>
-            <p className="text-xs text-gray-500">按调拨单号查看双向流水与仓库对账。</p>
+            <div className="text-sm font-semibold text-foreground">调拨单</div>
+            <p className="text-xs text-muted-foreground">按调拨单号查看双向流水与仓库对账。</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button onClick={fetchTransfers} variant="outline" size="sm" className="h-9 px-4">

@@ -7,7 +7,7 @@ interface InventorySpecSummaryProps {
 export default function InventorySpecSummary({ item }: InventorySpecSummaryProps) {
   const specFields = item.specFields ?? [];
   if (!specFields.length) {
-    return <span className="text-xs text-gray-400">无规格信息</span>;
+    return <span className="text-xs text-muted-foreground">无规格信息</span>;
   }
 
   return (
@@ -17,7 +17,7 @@ export default function InventorySpecSummary({ item }: InventorySpecSummaryProps
         return (
           <span
             key={field.key}
-            className="rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-700 dark:border-gray-700 dark:text-gray-200"
+            className="rounded-full border border-border px-2 py-0.5 text-xs text-foreground"
           >
             {field.label}: {value ?? '—'}
           </span>

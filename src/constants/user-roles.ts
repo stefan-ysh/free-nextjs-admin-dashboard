@@ -26,10 +26,17 @@ export const USER_ROLE_OPTIONS: UserRoleOption[] = [
     description: '可管理员工档案、入离职与流程',
     category: 'hr',
   },
+
   {
-    value: UserRole.FINANCE,
-    label: '财务',
-    description: '可查看财务总览并审批报销 / 采购',
+    value: UserRole.FINANCE_SCHOOL,
+    label: '学校财务',
+    description: '专职负责“学校”单位的采购审批',
+    category: 'finance',
+  },
+  {
+    value: UserRole.FINANCE_COMPANY,
+    label: '公司财务',
+    description: '专职负责“公司”单位的采购审批',
     category: 'finance',
   },
   {

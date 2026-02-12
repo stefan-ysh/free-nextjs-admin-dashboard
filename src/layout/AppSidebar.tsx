@@ -13,7 +13,6 @@ import {
   Building2 as OrgIcon,
   Calendar as CalenderIcon,
   ChevronDown,
-  Ellipsis as HorizontaLDots,
   FileStack as ContractIcon,
   LayoutGrid as DashboardIcon,
   LineChart as FinanceIcon,
@@ -73,7 +72,7 @@ const navItems: NavItem[] = [
         name: "付款任务",
         path: "/finance/payments",
         requiredPermission: "PURCHASE_PAY",
-        new: true,
+        // new: true,
       },
     ],
   },
@@ -112,11 +111,6 @@ const navItems: NavItem[] = [
         name: "流程监控",
         path: "/purchases/monitor",
         requiredAnyPermissions: ["PURCHASE_VIEW_ALL", "PURCHASE_APPROVE", "PURCHASE_REJECT", "PURCHASE_PAY"],
-      },
-      {
-        name: "流程列表",
-        path: "/purchases/workflow",
-        requiredPermission: "PURCHASE_APPROVE",
       },
       {
         name: "审计日志",
@@ -294,8 +288,8 @@ const AppSidebar: React.FC = () => {
       'w-full gap-3 text-sm transition-colors',
       navAlignment,
       active
-        ? 'bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-200'
-        : 'text-muted-foreground hover:bg-muted/60 dark:text-gray-300 dark:hover:bg-white/5'
+        ? 'bg-sidebar-primary/15 text-sidebar-primary'
+        : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
     );
 
   const navLinkClass = (active: boolean) =>
@@ -306,8 +300,8 @@ const AppSidebar: React.FC = () => {
       buttonVariants({ variant: 'ghost', size: 'sm' }),
       'w-full justify-between text-sm px-3',
       active
-        ? 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-200'
-        : 'text-muted-foreground hover:bg-muted/60 dark:text-gray-300 dark:hover:bg-white/5'
+        ? 'bg-sidebar-primary/15 text-sidebar-primary'
+        : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
     );
 
   const isActive = useCallback((path: string) => path === pathname, [pathname]);
@@ -356,13 +350,13 @@ const AppSidebar: React.FC = () => {
                 size="sm"
                 className={navButtonStyles(isOpen)}
               >
-                <span className={cn('text-lg', isOpen ? 'text-brand-500' : 'text-muted-foreground')}>
+                <span className={cn('text-lg', isOpen ? 'text-sidebar-primary' : 'text-sidebar-foreground/70')}>
                   {nav.icon}
                 </span>
                 {showLabels && <span className="text-sm font-medium">{nav.name}</span>}
                 {showLabels && (
                   <ChevronDown
-                    className={cn('h-4 w-4 text-muted-foreground transition-transform', isOpen && 'rotate-180 text-brand-500')}
+                    className={cn('h-4 w-4 text-sidebar-foreground/70 transition-transform', isOpen && 'rotate-180 text-sidebar-primary')}
                   />
                 )}
               </Button>
@@ -372,7 +366,7 @@ const AppSidebar: React.FC = () => {
                   href={nav.path}
                   className={cn(navLinkClass(isActiveRoot), 'no-underline')}
                 >
-                  <span className={cn('text-lg', isActiveRoot ? 'text-brand-500' : 'text-muted-foreground')}>
+                  <span className={cn('text-lg', isActiveRoot ? 'text-sidebar-primary' : 'text-sidebar-foreground/70')}>
                     {nav.icon}
                   </span>
                   {showLabels && <span className="text-sm font-medium">{nav.name}</span>}
@@ -399,8 +393,8 @@ const AppSidebar: React.FC = () => {
                       >
                         <span>{subItem.name}</span>
                         <span className="flex items-center gap-1">
-                          {subItem.new && <span className="text-xs uppercase text-brand-500">new</span>}
-                          {subItem.pro && <span className="text-xs uppercase text-brand-500">pro</span>}
+                          {subItem.new && <span className="text-xs uppercase text-sidebar-primary">new</span>}
+                          {subItem.pro && <span className="text-xs uppercase text-sidebar-primary">pro</span>}
                         </span>
                       </Link>
                     </li>
@@ -417,7 +411,7 @@ const AppSidebar: React.FC = () => {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-border bg-white text-gray-900 transition-all duration-300 dark:border-border dark:bg-gray-900',
+        'fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300',
         'mt-16 px-5 lg:mt-0',
         isExpanded || isMobileOpen || isHovered ? 'w-[260px]' : 'w-[72px]',
         isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
@@ -440,14 +434,6 @@ const AppSidebar: React.FC = () => {
           <nav className="mb-6 pr-2">
             <div className="flex flex-col gap-4">
               <div>
-                {/* <h2
-                  className={cn(
-                    'mb-4 flex text-xs uppercase leading-5 text-gray-400',
-                    showLabels ? 'justify-start' : 'justify-center'
-                  )}
-                >
-                  {showLabels ? 'Menu' : <HorizontaLDots />}
-                </h2> */}
                 {renderMenuItems(filteredNavItems)}
               </div>
             </div>

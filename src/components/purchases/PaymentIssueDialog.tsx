@@ -78,7 +78,7 @@ export function PaymentIssueDialog({
               placeholder="请填写发票不一致、收款账户异常等说明"
               disabled={submitting}
             />
-            {error ? <p className="text-sm text-rose-500">{error}</p> : null}
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
           </div>
         </ModalShell>
       </DialogContent>

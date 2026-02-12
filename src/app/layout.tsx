@@ -1,10 +1,32 @@
 import type { Metadata } from "next";
+import { Lora, Plus_Jakarta_Sans, Roboto_Mono } from "next/font/google";
 import './globals.css';
 
 import { SidebarProvider } from '@/context/SidebarContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import ToastProvider from '@/components/common/ToastProvider';
 import { AuthProvider } from './auth-context';
+
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-plus-jakarta-sans',
+});
+
+const lora = Lora({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-lora',
+});
+
+const robotoMono = Roboto_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-roboto-mono',
+});
 
 const themeInitScript = `(() => {
   try {
@@ -40,7 +62,10 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body suppressHydrationWarning className="font-sans antialiased transition-colors">
+      <body
+        suppressHydrationWarning
+        className={`${plusJakartaSans.variable} ${lora.variable} ${robotoMono.variable} font-sans antialiased transition-colors`}
+      >
         <ThemeProvider>
           <AuthProvider>
             <SidebarProvider>{children}</SidebarProvider>

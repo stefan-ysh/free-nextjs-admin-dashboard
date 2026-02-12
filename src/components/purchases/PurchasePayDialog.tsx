@@ -72,7 +72,7 @@ export default function PurchasePayDialog({
         </DialogHeader>
         <DialogBody>
           <div className="space-y-4">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+            <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
               待支付金额：{currencyFormatter.format(remainingAmount)}
             </div>
             <div className="grid gap-2">
@@ -96,7 +96,7 @@ export default function PurchasePayDialog({
                 disabled={busy}
               />
             </div>
-            {error && <p className="text-xs text-rose-500">{error}</p>}
+            {error && <p className="text-xs text-destructive">{error}</p>}
           </div>
         </DialogBody>
         <DialogFooter>

@@ -37,9 +37,9 @@ const warehouseTypeLabels: Record<Warehouse['type'], string> = {
 };
 
 const warehouseTypeBadges: Record<Warehouse['type'], string> = {
-  main: 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-100',
-  store: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-100',
-  virtual: 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-100',
+  main: 'bg-primary/10 text-primary',
+  store: 'bg-chart-5/10 text-chart-5',
+  virtual: 'bg-chart-3/10 text-chart-3',
 };
 
 export default function InventoryWarehousesPage() {
@@ -164,7 +164,7 @@ export default function InventoryWarehousesPage() {
   if (permissionLoading) {
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+        <div className="panel-frame p-6 text-sm text-muted-foreground">
           正在校验权限...
         </div>
       </div>
@@ -174,7 +174,7 @@ export default function InventoryWarehousesPage() {
   if (!canManageWarehouses) {
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl border border-rose-200 bg-white p-6 text-sm text-rose-600 shadow dark:border-rose-500/40 dark:bg-gray-900 dark:text-rose-300">
+        <div className="alert-box alert-danger">
           当前账户无权管理仓库。
         </div>
       </div>
@@ -203,16 +203,16 @@ export default function InventoryWarehousesPage() {
         </div>
       </div>
 
-      <Card className="border-none shadow-sm">
+      <Card className="border-none shadow-none">
         <CardContent className="p-0">
           <div className="md:hidden">
             <div className="space-y-3 p-4">
               {loading ? (
-                <div className="rounded-2xl border border-border/60 bg-background/70 p-6 text-center text-sm text-muted-foreground">
+                <div className="surface-panel p-6 text-center text-sm text-muted-foreground">
                   <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> 正在加载...
                 </div>
               ) : filteredWarehouses.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-6 text-center text-sm text-muted-foreground">
+                <div className="surface-panel border-dashed p-6 text-center text-sm text-muted-foreground">
                   {search ? '未找到匹配的仓库' : '暂无仓库数据'}
                 </div>
               ) : (
@@ -221,7 +221,7 @@ export default function InventoryWarehousesPage() {
                   const stockQuantity = warehouse.stockQuantity ?? 0;
                   const usagePercent = capacity > 0 ? Math.min((stockQuantity / capacity) * 100, 100) : 0;
                   return (
-                    <div key={warehouse.id} className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm">
+                    <div key={warehouse.id} className="surface-panel p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="text-sm font-semibold text-foreground">{warehouse.name}</div>
@@ -268,7 +268,7 @@ export default function InventoryWarehousesPage() {
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => handleDelete(warehouse)}
-                                className="text-rose-600 focus:text-rose-600"
+                                className="text-destructive focus:text-destructive"
                                 disabled={deletingId === warehouse.id}
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
@@ -367,7 +367,7 @@ export default function InventoryWarehousesPage() {
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => handleDelete(warehouse)}
-                                className="text-rose-600 focus:text-rose-600"
+                                className="text-destructive focus:text-destructive"
                                 disabled={deletingId === warehouse.id}
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />

@@ -142,7 +142,9 @@ export async function ensurePurchasesSchema() {
   await ensureColumn('purchases', 'payment_issue_open', 'TINYINT(1) NOT NULL DEFAULT 0');
   await ensureColumn('purchases', 'payment_issue_reason', 'TEXT NULL');
   await ensureColumn('purchases', 'payment_issue_at', 'DATETIME(3) NULL');
+  await ensureColumn('purchases', 'payment_issue_at', 'DATETIME(3) NULL');
   await ensureColumn('purchases', 'payment_issue_by', 'CHAR(36) NULL');
+  await ensureColumn('purchases', 'inventory_item_id', 'CHAR(36) NULL');
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS reimbursement_logs (

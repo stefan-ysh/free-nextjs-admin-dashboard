@@ -48,12 +48,8 @@ import { normalizeDateInput } from '@/lib/dates';
 import { InvoiceType as FinanceInvoiceType } from '@/types/finance';
 import type { SupplierStatus } from '@/types/supplier';
 import { createPurchaseExpense } from '@/lib/services/finance-automation';
-import type { PurchaseWorkflowNode } from '@/types/purchase-workflow';
-import {
-  buildWorkflowSnapshotForPurchase,
-  getPurchaseWorkflowConfig,
-  resolveWorkflowApproverForStep,
-} from '@/lib/db/purchase-workflow';
+import { createInboundRecord, getWarehouseByCode } from '@/lib/db/inventory';
+
 function sanitizeId(value: string | null | undefined): string | null {
   if (value == null) return null;
   const trimmed = value.trim();
@@ -74,7 +70,8 @@ const PURCHASE_SELECT_FIELDS = `
   p.*,
   s.name AS supplier_name,
   s.short_name AS supplier_short_name,
-  s.status AS supplier_status
+  s.status AS supplier_status,
+  p.inventory_item_id
 `;
 
 const PURCHASE_FROM_CLAUSE = `
@@ -105,6 +102,7 @@ type RawPurchaseRow = RowDataPacket & {
   purchase_date: string;
   organization_type: string;
   item_name: string;
+  inventory_item_id: string | null;
   specification: string | null;
   quantity: number;
   unit_price: number;
@@ -138,8 +136,7 @@ type RawPurchaseRow = RowDataPacket & {
   status: string;
   submitted_at: string | null;
   pending_approver_id: string | null;
-  workflow_step_index: number | null;
-  workflow_nodes: string | null;
+
   approved_at: string | null;
   approved_by: string | null;
   rejected_at: string | null;
@@ -262,19 +259,7 @@ function parseJsonArray(value: unknown): string[] {
   return [];
 }
 
-function parseWorkflowNodes(value: unknown): PurchaseWorkflowNode[] {
-  if (!value) return [];
-  if (Array.isArray(value)) return value as PurchaseWorkflowNode[];
-  if (typeof value === 'string') {
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? (parsed as PurchaseWorkflowNode[]) : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
+
 
 function serializeArray(value?: string[] | null): string {
   return JSON.stringify(value ?? []);
@@ -328,6 +313,7 @@ function mapPurchase(row: RawPurchaseRow | undefined): PurchaseRecord | null {
     purchaseDate: row.purchase_date,
     organizationType: isPurchaseOrganization(row.organization_type) ? row.organization_type : 'company',
     itemName: row.item_name,
+    inventoryItemId: row.inventory_item_id ?? null,
     specification: row.specification,
     quantity: Number(row.quantity ?? 0),
     unitPrice: Number(row.unit_price ?? 0),
@@ -363,8 +349,7 @@ function mapPurchase(row: RawPurchaseRow | undefined): PurchaseRecord | null {
     projectId: row.project_id,
     status: normalizePurchaseStatus(row.status),
     pendingApproverId: row.pending_approver_id ?? null,
-    workflowStepIndex: row.workflow_step_index ?? null,
-    workflowNodes: parseWorkflowNodes(row.workflow_nodes),
+
     paymentIssueOpen: Boolean(row.payment_issue_open),
     paymentIssueReason: row.payment_issue_reason ?? null,
     paymentIssueAt: row.payment_issue_at ?? null,
@@ -491,11 +476,20 @@ function buildPurchaseFilterClause(params: ListPurchasesParams = {}, tableAlias 
 
   if (params.pendingApproverId) {
     if (params.includeUnassignedApprovals) {
-      conditions.push(`(${column('pending_approver_id')} = ? OR ${column('pending_approver_id')} IS NULL)`);
+      if (params.financeOrgType) {
+        // For finance roles: see assigned tasks OR (unassigned tasks AND match org type)
+        // Note: financeOrgType 'school' should match 'school' org type, 'company' matches 'company'
+        conditions.push(`(${column('pending_approver_id')} = ? OR (${column('pending_approver_id')} IS NULL AND ${column('organization_type')} = ?))`);
+        values.push(params.pendingApproverId, params.financeOrgType);
+      } else {
+        // Standard behavior
+        conditions.push(`(${column('pending_approver_id')} = ? OR ${column('pending_approver_id')} IS NULL)`);
+        values.push(params.pendingApproverId);
+      }
     } else {
       conditions.push(`${column('pending_approver_id')} = ?`);
+      values.push(params.pendingApproverId);
     }
-    values.push(params.pendingApproverId);
   }
 
   if (params.purchaseChannel) {
@@ -734,6 +728,7 @@ export async function createPurchase(
       'purchase_date',
       'organization_type',
       'item_name',
+      'inventory_item_id',
       'specification',
       'quantity',
       'unit_price',
@@ -775,6 +770,7 @@ export async function createPurchase(
       purchaseDate,
       input.organizationType,
       input.itemName,
+      input.inventoryItemId ?? null,
       input.specification ?? null,
       input.quantity,
       input.unitPrice,
@@ -1259,6 +1255,7 @@ export async function updatePurchase(id: string, input: UpdatePurchaseInput): Pr
     push('organization_type', input.organizationType);
   }
   if (input.itemName !== undefined) push('item_name', input.itemName);
+  if (input.inventoryItemId !== undefined) push('inventory_item_id', input.inventoryItemId);
   if (input.specification !== undefined) push('specification', input.specification);
   if (input.quantity !== undefined) {
     if (input.quantity <= 0) throw new Error('INVALID_QUANTITY');
@@ -1282,9 +1279,7 @@ export async function updatePurchase(id: string, input: UpdatePurchaseInput): Pr
   if (input.purchaseLocation !== undefined) push('purchase_location', input.purchaseLocation);
   if (input.purchaseLink !== undefined) push('purchase_link', input.purchaseLink);
   if (input.purpose !== undefined) push('purpose', input.purpose);
-  let nextPaymentMethod = existing.paymentMethod;
   if (input.paymentMethod !== undefined) {
-    nextPaymentMethod = input.paymentMethod;
     push('payment_method', input.paymentMethod);
   }
   if (input.paymentType !== undefined) {
@@ -1410,29 +1405,20 @@ export async function submitPurchase(purchaseId: string, operatorId: string): Pr
   if (!existing) throw new Error('PURCHASE_NOT_FOUND');
   if (!(existing.status === 'draft' || existing.status === 'rejected')) throw new Error('NOT_SUBMITTABLE');
 
-  const workflowNodes = await buildWorkflowSnapshotForPurchase({
-    purchaserId: existing.purchaserId,
-    totalAmount: Number(existing.totalAmount) + Number(existing.feeAmount ?? 0),
-    organizationType: existing.organizationType,
-  });
-  const initialStepIndex = workflowNodes.length > 0 ? 0 : null;
-  const initialApproverId =
-    workflowNodes.length > 0
-      ? await resolveWorkflowApproverForStep(workflowNodes, 0, existing.purchaserId)
-      : null;
-
+  // Hardcoded: No dynamic workflow. Set pending_approver_id to null for now.
+  // This means any admin/manager can approve.
   await mysqlQuery`
     UPDATE purchases
-    SET status = 'pending_approval', 
-        submitted_at = NOW(), 
-        approved_at = NULL, 
-        approved_by = NULL, 
+    SET status = 'pending_approval',
+        submitted_at = NOW(),
+        approved_at = NULL,
+        approved_by = NULL,
         rejected_at = NULL,
         rejected_by = NULL,
         rejection_reason = NULL,
-        pending_approver_id = ${initialApproverId},
-        workflow_step_index = ${initialStepIndex},
-        workflow_nodes = ${JSON.stringify(workflowNodes)},
+        pending_approver_id = NULL,
+        workflow_step_index = NULL,
+        workflow_nodes = NULL,
         updated_at = NOW()
     WHERE id = ${purchaseId}
   `;
@@ -1451,52 +1437,43 @@ export async function approvePurchase(
   if (!existing) throw new Error('PURCHASE_NOT_FOUND');
   if (existing.status !== 'pending_approval') throw new Error('NOT_APPROVABLE');
 
-  const workflowNodes = existing.workflowNodes ?? [];
-  const currentStepIndex =
-    existing.workflowStepIndex != null
-      ? Number(existing.workflowStepIndex)
-      : workflowNodes.length > 0
-        ? 0
-        : null;
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
 
-  if (workflowNodes.length > 0 && currentStepIndex != null) {
-    const nextStepIndex = currentStepIndex + 1;
-    if (nextStepIndex < workflowNodes.length) {
-      const nextApproverId = await resolveWorkflowApproverForStep(
-        workflowNodes,
-        nextStepIndex,
-        existing.purchaserId
-      );
-      await mysqlQuery`
-        UPDATE purchases
-        SET status = 'pending_approval',
-            pending_approver_id = ${nextApproverId},
-            workflow_step_index = ${nextStepIndex},
-            updated_at = NOW()
-        WHERE id = ${purchaseId}
-      `;
-      await insertLog(purchaseId, 'approve', 'pending_approval', 'pending_approval', operatorId, comment ?? null);
-      return (await findPurchaseById(purchaseId))!;
-    }
+    const approvedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    // Hardcoded: Approval -> Approved
+    // No multi-step workflow anymore.
+
+    await connection.query(
+      `UPDATE purchases
+       SET status = 'approved',
+           reimbursement_status = 'invoice_pending',
+           reimbursement_submitted_at = NULL,
+           reimbursement_submitted_by = NULL,
+           reimbursement_rejected_at = NULL,
+           reimbursement_rejected_by = NULL,
+           reimbursement_rejected_reason = NULL,
+           approved_by = ?,
+           approved_at = ?,
+           pending_approver_id = NULL,
+           workflow_step_index = NULL,
+           workflow_nodes = NULL,
+           updated_at = NOW(3)
+       WHERE id = ?`,
+      [operatorId, approvedAt, purchaseId]
+    );
+
+    await insertLog(purchaseId, 'approve', existing.status, 'approved', operatorId, comment ?? null, connection);
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
   }
 
-  await mysqlQuery`
-    UPDATE purchases
-    SET status = 'approved',
-        reimbursement_status = 'invoice_pending',
-        reimbursement_submitted_at = NULL,
-        reimbursement_submitted_by = NULL,
-        reimbursement_rejected_at = NULL,
-        reimbursement_rejected_by = NULL,
-        reimbursement_rejected_reason = NULL,
-        approved_at = NOW(),
-        approved_by = ${operatorId},
-        pending_approver_id = NULL,
-        workflow_step_index = NULL,
-        updated_at = NOW()
-    WHERE id = ${purchaseId}
-  `;
-  await insertLog(purchaseId, 'approve', 'pending_approval', 'approved', operatorId, comment ?? null);
   return (await findPurchaseById(purchaseId))!;
 }
 
@@ -1682,6 +1659,32 @@ export async function markAsPaid(
 
     const updated = (await findPurchaseById(purchaseId))!;
     await createPurchaseExpense(updated, paymentId, normalizedAmount, operatorId, paidAt);
+
+    // Auto Inbound Logic
+    try {
+      if (updated.inventoryItemId && updated.quantity > 0) {
+        // Map purchase organization type to warehouse code
+        // School -> SCHOOL, Company -> COMPANY
+        const warehouseCode = (updated.organizationType === 'school' ? 'SCHOOL' : 'COMPANY');
+        const warehouse = await getWarehouseByCode(warehouseCode);
+        
+        if (warehouse) {
+          await createInboundRecord({
+            itemId: updated.inventoryItemId,
+            warehouseId: warehouse.id,
+            quantity: updated.quantity,
+            type: 'purchase',
+            unitCost: updated.unitPrice,
+            occurredAt: new Date().toISOString(),
+            notes: `自动入库：关联采购单 ${updated.purchaseNumber}`,
+            attributes: {}, // Uses defaults
+          }, operatorId);
+        }
+      }
+    } catch (inboundError) {
+      console.error(`[AutoInbound] Failed to create inbound record for purchase ${purchaseId}`, inboundError);
+      // We do not fail the payment if inbound fails, just log it.
+    }
   } catch (error) {
     await mysqlQuery`
       DELETE FROM purchase_payments WHERE id = ${paymentId}
@@ -1891,10 +1894,16 @@ export async function listPurchaseAuditLogs(params: {
 
 export async function getPurchaseLogs(purchaseId: string): Promise<ReimbursementLog[]> {
   await ensurePurchasesSchema();
-  const result = await mysqlQuery<RawLogRow>`
-    SELECT * FROM reimbursement_logs
-    WHERE purchase_id = ${purchaseId}
-    ORDER BY created_at ASC
+  // Join hr_employees to get operator name
+  const result = await mysqlQuery<RawLogRow & { operator_name: string | null }>`
+    SELECT rl.*, COALESCE(op.display_name, op.email) as operator_name
+    FROM reimbursement_logs rl
+    LEFT JOIN hr_employees op ON op.id = rl.operator_id
+    WHERE rl.purchase_id = ${purchaseId}
+    ORDER BY rl.created_at ASC
   `;
-  return result.rows.map((r) => mapLog(r)!).filter(Boolean) as ReimbursementLog[];
+  return result.rows.map((r) => ({
+    ...mapLog(r)!,
+    operatorName: r.operator_name || null,
+  })).filter(Boolean) as ReimbursementLog[];
 }

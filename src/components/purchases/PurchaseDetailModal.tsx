@@ -309,12 +309,12 @@ export default function PurchaseDetailModal({
 					}
 				>
 					{detailLoading ? (
-						<div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-200">
+						<div className="alert-box alert-info">
 							正在同步最新审批状态...
 						</div>
 					) : null}
 					{detailError ? (
-						<div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
+						<div className="alert-box alert-danger flex flex-wrap items-center justify-between gap-3">
 							<span>{detailError}</span>
 							{onReloadDetail ? (
 								<Button variant="outline" size="sm" onClick={onReloadDetail}>
@@ -374,7 +374,7 @@ export default function PurchaseDetailModal({
 											<div key={group.label} className="rounded-xl border bg-background/50 px-4 py-3">
 												<p className="text-xs text-muted-foreground">{group.label}</p>
 												{group.items.length ? (
-													<ul className="mt-2 space-y-1 text-xs text-blue-600 dark:text-blue-300">
+													<ul className="mt-2 space-y-1 text-xs text-primary">
 														{group.items.map((item, index) => (
 															<li key={`${group.label}-${index}`} className="truncate">
 																<a href={item} target="_blank" rel="noreferrer" className="hover:underline">

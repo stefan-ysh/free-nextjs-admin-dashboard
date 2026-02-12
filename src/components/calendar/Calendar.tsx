@@ -6,7 +6,7 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import FullCalendar from '@fullcalendar/react';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import type { DateSelectArg, DatesSetArg, EventClickArg, EventContentArg } from '@fullcalendar/core';
-import { CalendarPlus, Info, Loader2, Trash2 } from 'lucide-react';
+import { Info, Loader2, Trash2 } from 'lucide-react';
 
 import DatePicker from '@/components/ui/DatePicker';
 import { Button } from '@/components/ui/button';
@@ -39,26 +39,26 @@ type CalendarFormState = {
 const palette: Record<CalendarEventCategory, { label: string; card: string; dot: string; hint: string }> = {
   meeting: {
     label: '会议',
-    card: 'border-sky-200 bg-sky-50/80 dark:border-sky-500/30 dark:bg-sky-500/10',
-    dot: 'bg-sky-500',
+    card: 'border-chart-1/30 bg-chart-1/10',
+    dot: 'bg-chart-1',
     hint: '周会、项目讨论等团队协作事项',
   },
   deadline: {
     label: '截止',
-    card: 'border-rose-200 bg-rose-50/80 dark:border-rose-500/30 dark:bg-rose-500/10',
-    dot: 'bg-rose-500',
+    card: 'border-destructive/30 bg-destructive/10',
+    dot: 'bg-destructive',
     hint: '交付与审批等关键里程碑',
   },
   reminder: {
     label: '提醒',
-    card: 'border-amber-200 bg-amber-50/80 dark:border-amber-500/30 dark:bg-amber-500/10',
-    dot: 'bg-amber-500',
+    card: 'border-chart-3/30 bg-chart-3/10',
+    dot: 'bg-chart-3',
     hint: '轻量提醒、跟进和待办',
   },
   travel: {
     label: '出差',
-    card: 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-500/30 dark:bg-emerald-500/10',
-    dot: 'bg-emerald-500',
+    card: 'border-chart-5/30 bg-chart-5/10',
+    dot: 'bg-chart-5',
     hint: '差旅、外出拜访等安排',
   },
 };
@@ -145,13 +145,13 @@ function renderEventContent(arg: EventContentArg) {
     >
       <div className="flex items-center gap-2">
         <span className={cn('h-2 w-2 rounded-full', theme.dot)} />
-        <span className="text-xs font-semibold text-gray-900 dark:text-white">{arg.event.title}</span>
+        <span className="text-xs font-semibold text-foreground">{arg.event.title}</span>
       </div>
       {arg.timeText ? (
-        <span className="text-[10px] text-gray-500 dark:text-gray-400">{arg.timeText}</span>
+        <span className="text-[10px] text-muted-foreground">{arg.timeText}</span>
       ) : null}
       {arg.event.extendedProps.location ? (
-        <span className="text-[10px] text-gray-500 dark:text-gray-400">{String(arg.event.extendedProps.location)}</span>
+        <span className="text-[10px] text-muted-foreground">{String(arg.event.extendedProps.location)}</span>
       ) : null}
     </div>
   );
@@ -165,7 +165,7 @@ const Calendar = () => {
   const [formState, setFormState] = useState<CalendarFormState>(emptyFormState);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [quickCreating, setQuickCreating] = useState(false);
+
   const [removing, setRemoving] = useState(false);
 
   const fetchEvents = useCallback(
@@ -237,47 +237,7 @@ const Calendar = () => {
     setDialogOpen(true);
   }, [resetForm]);
 
-  const handleQuickCreate = useCallback(async () => {
-    if (quickCreating) return;
-    const todayIso = new Date().toISOString();
-    const today = formatDateInput(todayIso) || todayIso.slice(0, 10);
-    const payload: CalendarEventPayload = {
-      title: '新建日程',
-      calendar: 'meeting',
-      start: combineDateTime(today, '00:00'),
-      end: combineDateTime(today, '23:59'),
-      allDay: true,
-    };
 
-    setQuickCreating(true);
-    try {
-      const res = await fetch('/api/calendar/events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok || !data?.data) {
-        throw new Error(data.error || '快速创建失败');
-      }
-      const created: CalendarEventRecord = data.data as CalendarEventRecord;
-      toast.success('已创建占位日程', { description: '可立即补充或调整具体信息。' });
-      if (visibleRange) {
-        await fetchEvents(visibleRange);
-      } else {
-        setEvents((prev) => [created, ...prev]);
-      }
-      setFormState(toFormState(created));
-      setDialogOpen(true);
-    } catch (error) {
-      console.error(error);
-      toast.error('快速创建失败', {
-        description: error instanceof Error ? error.message : '请稍后重试',
-      });
-    } finally {
-      setQuickCreating(false);
-    }
-  }, [fetchEvents, quickCreating, toast, visibleRange]);
 
   const handleSelect = useCallback(
     (selectInfo: DateSelectArg) => {
@@ -407,10 +367,10 @@ const Calendar = () => {
       <div className="surface-card flex h-full flex-col p-5 md:p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">团队日程</h2>
+            <h2 className="text-lg font-semibold text-foreground">团队日程</h2>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button type="button" aria-label="使用说明" className="text-gray-400 transition hover:text-gray-600 dark:hover:text-gray-200">
+                <button type="button" aria-label="使用说明" className="text-muted-foreground transition hover:text-foreground">
                   <Info className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
@@ -424,22 +384,19 @@ const Calendar = () => {
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               刷新
             </Button>
-            <Button size="sm" onClick={handleQuickCreate} disabled={quickCreating}>
-              {quickCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarPlus className="mr-2 h-4 w-4" />}
-              {quickCreating ? '创建中…' : '新建日程'}
-            </Button>
+
           </div>
         </div>
 
         <div className="mt-4 flex flex-1 flex-col space-y-3 overflow-hidden">
-          <div className="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
             {Object.entries(palette).map(([value, meta]) => (
               <div key={value} className={cn('flex items-center gap-2 rounded-full border px-3 py-1', meta.card)}>
                 <span className={cn('h-2 w-2 rounded-full', meta.dot)} />
                 <span className="font-medium capitalize">{meta.label}</span>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button type="button" aria-label={`${meta.label} 说明`} className="text-gray-400 transition hover:text-gray-600 dark:hover:text-gray-200">
+                    <button type="button" aria-label={`${meta.label} 说明`} className="text-muted-foreground transition hover:text-foreground">
                       <Info className="h-3 w-3" />
                     </button>
                   </TooltipTrigger>
@@ -451,8 +408,8 @@ const Calendar = () => {
 
           <div className="relative custom-calendar flex-1 overflow-hidden rounded-xl">
             {loading ? (
-              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/60 backdrop-blur-sm dark:bg-gray-900/60">
-                <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/60 backdrop-blur-sm">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             ) : null}
             <FullCalendar
@@ -483,7 +440,7 @@ const Calendar = () => {
               headerActions={
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button type="button" aria-label="填写提示" className="text-gray-400 transition hover:text-gray-600 dark:hover:text-gray-200">
+                    <button type="button" aria-label="填写提示" className="text-muted-foreground transition hover:text-foreground">
                       <Info className="h-4 w-4" />
                     </button>
                   </TooltipTrigger>
@@ -521,7 +478,7 @@ const Calendar = () => {
                     <Label>类型</Label>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <button type="button" aria-label="类型说明" className="text-gray-400 transition hover:text-gray-600 dark:hover:text-gray-200">
+                        <button type="button" aria-label="类型说明" className="text-muted-foreground transition hover:text-foreground">
                           <Info className="h-3.5 w-3.5" />
                         </button>
                       </TooltipTrigger>
@@ -550,10 +507,10 @@ const Calendar = () => {
 
                 <div className="flex items-center justify-between rounded-lg border border-dashed border-border px-4 py-3 dark:border-border">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">全天日程</p>
+                    <p className="text-sm font-medium text-foreground">全天日程</p>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <button type="button" aria-label="全天日程说明" className="text-gray-400 transition hover:text-gray-600 dark:hover:text-gray-200">
+                        <button type="button" aria-label="全天日程说明" className="text-muted-foreground transition hover:text-foreground">
                           <Info className="h-3.5 w-3.5" />
                         </button>
                       </TooltipTrigger>

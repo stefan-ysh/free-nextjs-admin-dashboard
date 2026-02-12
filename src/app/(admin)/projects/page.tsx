@@ -56,7 +56,7 @@ export default function ProjectsPage() {
 				actions={
 					<>
 						<div className="flex items-center gap-2 text-sm text-muted-foreground mr-2">
-							<span className={canViewAll ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>
+							<span className={canViewAll ? 'text-chart-5' : 'text-chart-3'}>
 								{canViewAll ? '全部项目' : '仅个人/参与项目'}
 							</span>
 						</div>

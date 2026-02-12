@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { toPermissionUser } from '@/lib/auth/permission-user';
 import { listPurchases, createPurchase } from '@/lib/db/purchases';
-import { ensureDepartmentBudgetWithinLimit } from '@/lib/purchases/budget-guard';
+// import { ensureDepartmentBudgetWithinLimit } from '@/lib/purchases/budget-guard'; // Removed
 import { checkPermission, Permissions } from '@/lib/permissions';
 import { CreatePurchaseInput } from '@/types/purchase';
 import { parsePurchaseListParams } from './query-utils';
@@ -80,14 +80,10 @@ export async function POST(request: Request) {
       return badRequestResponse('缺少必填字段');
     }
 
-    const purchaserId = body.purchaserId ?? context.user.id;
-    const totalAmount = Number(body.quantity) * Number(body.unitPrice) + Number(body.feeAmount ?? 0);
-    await ensureDepartmentBudgetWithinLimit({
-      purchaserId,
-      purchaseDate: body.purchaseDate,
-      totalAmount,
-      actor: permissionUser,
-    });
+    // const purchaserId = body.purchaserId ?? context.user.id; // Unused after removing budget check
+    // const totalAmount = Number(body.quantity) * Number(body.unitPrice) + Number(body.feeAmount ?? 0);
+    // User requested to remove budget check
+    // await ensureDepartmentBudgetWithinLimit({ ... });
 
     const created = await createPurchase(body, context.user.id);
     return NextResponse.json({ success: true, data: created }, { status: 201 });

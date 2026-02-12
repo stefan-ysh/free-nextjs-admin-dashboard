@@ -32,7 +32,6 @@ const dateLabelFormatter = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric',
   month: '2-digit',
   day: '2-digit',
-  weekday: 'long',
 });
 
 function formatChinaDateLabel(date: Date): string {
@@ -46,8 +45,7 @@ function formatChinaDateLabel(date: Date): string {
   const year = resolved.year ?? '';
   const month = resolved.month ?? '';
   const day = resolved.day ?? '';
-  const weekday = resolved.weekday ?? '';
-  return `${year}年${month}月${day}日 ${weekday}`.trim();
+  return `${year}年${month}月${day}日`;
 }
 
 function parseValue(value?: string | null) {
@@ -60,7 +58,7 @@ function parseValue(value?: string | null) {
     }
     const parsed = parseISO(value);
     return isValid(parsed) ? parsed : undefined;
-  } catch (error) {
+  } catch {
     return undefined;
   }
 }
@@ -130,7 +128,7 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
               type="button"
               disabled={disabled}
               className={cn(
-                'w-full justify-start gap-2 rounded-xl border border-border/60 bg-background text-left font-normal shadow-sm hover:bg-muted/50',
+                'flex h-10 w-full items-center justify-start gap-2 rounded-xl border border-input bg-card px-3 py-2 text-left text-sm font-normal transition-colors placeholder:text-muted-foreground hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
                 !parsedDate && 'text-muted-foreground',
                 className
               )}
@@ -140,7 +138,7 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
               {displayLabel}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto rounded-3xl border border-border/50 p-0 shadow-2xl" align="start" sideOffset={8}>
+          <PopoverContent className="w-auto rounded-xl border border-border/50 p-0 shadow-lg" align="start" sideOffset={8}>
             <Calendar
               mode="single"
               selected={parsedDate}
@@ -149,7 +147,7 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
               disabled={disabled}
               locale={zhCN}
               weekStartsOn={1}
-              initialFocus
+              autoFocus
             />
             <div className="flex gap-2 border-t px-3 py-2">
               <Button type="button" variant="ghost" size="sm" className="flex-1" onClick={() => handleSelect(new Date())}>

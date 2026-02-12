@@ -24,6 +24,7 @@ export interface InventoryItem {
   barcode?: string;
   imageUrl?: string;
   specFields?: InventorySpecField[];
+  stockQuantity?: number;
   createdAt: string;
   updatedAt: string;
 }

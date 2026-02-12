@@ -113,7 +113,7 @@ export default function InventoryInboundPage() {
   if (permissionLoading) {
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+        <div className="panel-frame p-6 text-sm text-muted-foreground">
           正在校验权限...
         </div>
       </div>
@@ -123,7 +123,7 @@ export default function InventoryInboundPage() {
   if (!canOperate) {
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl border border-rose-200 bg-white p-6 text-sm text-rose-600 shadow dark:border-rose-500/40 dark:bg-gray-900 dark:text-rose-300">
+        <div className="alert-box alert-danger p-6 text-sm">
           当前账户无权创建入库单。
         </div>
       </div>
@@ -137,7 +137,7 @@ export default function InventoryInboundPage() {
         className="surface-card space-y-6 p-6"
       >
         <div className="space-y-2">
-          <Label htmlFor="inbound-item" className="text-sm font-medium text-gray-700 dark:text-gray-200">
+          <Label htmlFor="inbound-item" className="text-sm font-medium text-foreground">
             商品
           </Label>
           <Select
@@ -159,7 +159,7 @@ export default function InventoryInboundPage() {
         </div>
 
         {selectedItem && (
-          <div className="rounded-xl border border-dashed border-brand-200 bg-brand-50/40 p-4 text-sm text-brand-700 dark:border-brand-500/40 dark:bg-brand-500/10 dark:text-brand-100">
+          <div className="rounded-xl border border-dashed border-chart-1/40 bg-chart-1/10 p-4 text-sm text-chart-1">
             标准单价：¥{selectedItem.unitPrice.toLocaleString()} / {selectedItem.unit}
           </div>
         )}
@@ -170,7 +170,7 @@ export default function InventoryInboundPage() {
               const specValue = payload.attributes?.[field.key] ?? '';
               return (
                 <div key={field.key} className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-200">{field.label}</Label>
+                  <Label className="text-sm font-medium text-foreground">{field.label}</Label>
                   {field.options ? (
                     <Select
                       value={specValue || undefined}
@@ -204,7 +204,7 @@ export default function InventoryInboundPage() {
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="inbound-warehouse" className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <Label htmlFor="inbound-warehouse" className="text-sm font-medium text-foreground">
               仓库
             </Label>
             <Select
@@ -225,7 +225,7 @@ export default function InventoryInboundPage() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="inbound-type" className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <Label htmlFor="inbound-type" className="text-sm font-medium text-foreground">
               入库类型
             </Label>
             <Select
@@ -248,7 +248,7 @@ export default function InventoryInboundPage() {
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="inbound-quantity" className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <Label htmlFor="inbound-quantity" className="text-sm font-medium text-foreground">
               数量
             </Label>
             <Input
@@ -262,7 +262,7 @@ export default function InventoryInboundPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="inbound-unit-cost" className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <Label htmlFor="inbound-unit-cost" className="text-sm font-medium text-foreground">
               单价 (¥)
             </Label>
             <Input
@@ -280,7 +280,7 @@ export default function InventoryInboundPage() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="inbound-notes" className="text-sm font-medium text-gray-700 dark:text-gray-200">
+          <Label htmlFor="inbound-notes" className="text-sm font-medium text-foreground">
             备注
           </Label>
           <Textarea

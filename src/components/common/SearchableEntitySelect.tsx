@@ -198,7 +198,7 @@ export function SearchableEntitySelect<T>({
           <button
             type="button"
             className={cn(
-              'flex w-full items-center justify-between rounded-xl border border-border bg-white px-4 py-3 text-left shadow-sm transition hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-border dark:bg-gray-900',
+              'flex h-10 w-full items-center justify-between rounded-xl border border-input bg-card px-3 py-2 text-sm text-left transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
               !selectedOption && 'text-muted-foreground'
             )}
             disabled={disabled}
@@ -239,7 +239,7 @@ export function SearchableEntitySelect<T>({
                       key={option.id}
                       type="button"
                       onClick={() => handleSelect(option)}
-                      className={cn('flex w-full px-4 py-3 text-left text-sm transition hover:bg-muted/60', isSelected && 'bg-blue-50/80 dark:bg-blue-500/10')}
+                      className={cn('flex w-full px-4 py-3 text-left text-sm transition hover:bg-muted/60', isSelected && 'bg-primary/10')}
                     >
                       {renderOption ? (
                         renderOption({ option, isSelected })
@@ -259,12 +259,12 @@ export function SearchableEntitySelect<T>({
       {selectedOption && renderSummary && <div className="surface-panel p-4 text-sm">{renderSummary(selectedOption.data)}</div>}
 
       {value && resolvingSelection && (
-        <div className="surface-panel px-4 py-3 text-sm text-gray-500 dark:text-gray-300">
+        <div className="surface-panel px-4 py-3 text-sm text-muted-foreground">
           正在同步已选项...
         </div>
       )}
 
-      {helperText && <p className="text-xs text-gray-500 dark:text-gray-400">{helperText}</p>}
+      {helperText && <p className="text-xs text-muted-foreground">{helperText}</p>}
     </div>
   );
 }
@@ -273,7 +273,7 @@ function DefaultTrigger<T>({ selected, placeholder, loading, resolving }: { sele
   if (selected) {
     return (
       <div className="flex flex-col text-left">
-        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{selected.label}</span>
+        <span className="text-sm font-medium text-foreground">{selected.label}</span>
         {selected.description && <span className="text-xs text-muted-foreground">{selected.description}</span>}
       </div>
     );
@@ -287,9 +287,9 @@ function DefaultTrigger<T>({ selected, placeholder, loading, resolving }: { sele
 function DefaultOption<T>({ option, isSelected }: OptionRendererArgs<T>) {
   return (
     <div className="flex w-full items-start gap-3">
-      <span className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-500">{isSelected && <CheckmarkIcon />}</span>
+      <span className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary">{isSelected && <CheckmarkIcon />}</span>
       <div className="flex flex-1 flex-col">
-        <span className="font-medium text-gray-900 dark:text-gray-100">{option.label}</span>
+        <span className="font-medium text-foreground">{option.label}</span>
         {option.description && <span className="text-xs text-muted-foreground">{option.description}</span>}
       </div>
     </div>

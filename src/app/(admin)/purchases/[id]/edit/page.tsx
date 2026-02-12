@@ -98,7 +98,7 @@ export default function PurchaseEditPage() {
 	if (!purchaseId) {
 		return (
 			<section className="space-y-6">
-				<div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+				<div className="alert-box alert-warning">
 					未提供正确的采购 ID，无法定位记录。
 				</div>
 			</section>
@@ -108,7 +108,7 @@ export default function PurchaseEditPage() {
 	if (permissionLoading) {
 		return (
 			<section className="space-y-6">
-				<div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+				<div className="alert-box alert-info">
 					正在加载权限信息...
 				</div>
 			</section>
@@ -118,7 +118,7 @@ export default function PurchaseEditPage() {
 	if (!baseAccessGranted) {
 		return (
 			<section className="space-y-6">
-				<div className="rounded-lg border border-rose-200 bg-white p-6 text-sm text-rose-600 shadow-sm dark:border-rose-900/60 dark:bg-gray-900 dark:text-rose-200">
+				<div className="alert-box alert-danger">
 					当前账户无权编辑或审批采购记录。请联系管理员开通相应权限。
 				</div>
 			</section>
@@ -128,37 +128,37 @@ export default function PurchaseEditPage() {
 	return (
 		<section className="space-y-6">
 			{fetching && (
-				<div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+				<div className="alert-box alert-info">
 					正在加载采购详情...
 				</div>
 			)}
 			{fetchError && !fetching && (
-				<div className="rounded-lg border border-rose-200 bg-white p-6 text-sm text-rose-600 shadow-sm dark:border-rose-900/60 dark:bg-gray-900 dark:text-rose-200">
+				<div className="alert-box alert-danger">
 					{fetchError}
 				</div>
 			)}
 			{!fetching && !fetchError && purchase && (
 				<div className="space-y-6">
-					<div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+					<div className="panel-frame">
 						<div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 							<div>
-								<p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">采购单号</p>
-								<h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{purchase.purchaseNumber}</h2>
-								<div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-500 dark:text-gray-400">
+								<p className="text-xs uppercase tracking-wide text-muted-foreground">采购单号</p>
+								<h2 className="text-xl font-semibold text-foreground">{purchase.purchaseNumber}</h2>
+								<div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
 									<span>状态：<PurchaseStatusBadge status={purchase.status} /></span>
 									<span>金额：¥{purchase.totalAmount.toFixed(2)}</span>
 									<span>最近更新：{formatDateTimeLocal(purchase.updatedAt) ?? purchase.updatedAt}</span>
 								</div>
 							</div>
-							<div className="text-sm text-gray-500 dark:text-gray-400">
-								<span className="font-medium text-gray-700 dark:text-gray-200">当前阶段：</span>
+							<div className="text-sm text-muted-foreground">
+								<span className="font-medium text-foreground">当前阶段：</span>
 								{getPurchaseStatusText(purchase.status)}
 							</div>
 						</div>
 					</div>
 
 					{canEditRecord ? (
-						<div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+						<div className="panel-frame">
 							<PurchaseForm
 								mode="edit"
 								initialData={purchase}
@@ -168,7 +168,7 @@ export default function PurchaseEditPage() {
 							/>
 						</div>
 					) : (
-						<div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
+						<div className="alert-box alert-warning">
 							仅草稿或被驳回的采购单可编辑，且需由提交人操作。若需调整已审批中的记录，请联系管理员协助。
 						</div>
 					)}

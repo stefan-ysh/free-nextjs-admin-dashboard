@@ -291,7 +291,7 @@ export default function PurchaseApprovalsClient() {
   const getRowClassName = useCallback((purchase: PurchaseRecord) => {
     const threshold = Number(overdueHours) || 48;
     if (getPendingHours(purchase) >= threshold) {
-      return 'bg-rose-50/70 dark:bg-rose-900/15';
+      return 'bg-destructive/10';
     }
     return '';
   }, [getPendingHours, overdueHours]);
@@ -380,7 +380,7 @@ export default function PurchaseApprovalsClient() {
 
   if (permissionLoading) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+      <div className="panel-frame p-6 text-sm text-muted-foreground">
         正在加载权限信息...
       </div>
     );
@@ -388,7 +388,7 @@ export default function PurchaseApprovalsClient() {
 
   if (!canAccess) {
     return (
-      <div className="rounded-lg border border-rose-200 bg-white p-6 text-sm text-rose-600 shadow-sm dark:border-rose-900/60 dark:bg-gray-900 dark:text-rose-200">
+      <div className="alert-box alert-danger p-6 text-sm">
         当前账户无权审批采购。需要 PURCHASE_APPROVE / PURCHASE_REJECT / PURCHASE_PAY 权限，请联系管理员。
       </div>
     );
@@ -431,7 +431,7 @@ export default function PurchaseApprovalsClient() {
             <input type="checkbox" checked={overdueOnly} onChange={(event) => setOverdueOnly(event.target.checked)} />
             仅看超时
           </label>
-          {error && <p className="text-xs text-rose-500 dark:text-rose-300">{error}</p>}
+          {error && <p className="text-xs text-destructive">{error}</p>}
           <div className="flex flex-wrap gap-2">
             <Button
               onClick={handleManualRefresh}

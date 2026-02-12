@@ -42,17 +42,17 @@ export default function DataState({
   return (
     <div
       className={cn(
-        'surface-panel flex flex-col items-center justify-center border-dashed p-6 text-center text-sm text-gray-500 dark:text-gray-400',
+        'surface-panel flex flex-col items-center justify-center border-dashed p-6 text-center text-sm text-muted-foreground',
         className
       )}
     >
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
         {icon ?? (variant === 'loading' ? <Loader2 className="h-5 w-5 animate-spin" /> : '∅')}
       </div>
-      <p className="text-base font-semibold text-gray-900 dark:text-white">
+      <p className="text-base font-semibold text-foreground">
         {title ?? copy.title}
       </p>
-      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      <p className="mt-1 text-sm text-muted-foreground">
         {description ?? copy.description}
       </p>
       {action ? <div className="mt-4">{action}</div> : null}

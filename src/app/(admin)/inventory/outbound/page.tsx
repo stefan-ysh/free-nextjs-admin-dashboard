@@ -132,7 +132,7 @@ export default function InventoryOutboundPage() {
   if (permissionLoading) {
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+        <div className="panel-frame p-6 text-sm text-muted-foreground">
           正在校验权限...
         </div>
       </div>
@@ -142,7 +142,7 @@ export default function InventoryOutboundPage() {
   if (!canOperate) {
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl border border-rose-200 bg-white p-6 text-sm text-rose-600 shadow dark:border-rose-500/40 dark:bg-gray-900 dark:text-rose-300">
+        <div className="alert-box alert-danger p-6 text-sm">
           当前账户无权创建出库单。
         </div>
       </div>
@@ -156,7 +156,7 @@ export default function InventoryOutboundPage() {
         className="surface-card space-y-6 p-6"
       >
         <div className="space-y-2">
-          <Label htmlFor="outbound-item" className="text-sm font-medium text-gray-700 dark:text-gray-200">
+          <Label htmlFor="outbound-item" className="text-sm font-medium text-foreground">
             商品
           </Label>
           <Select
@@ -178,7 +178,7 @@ export default function InventoryOutboundPage() {
         </div>
 
         {selectedItem && (
-          <div className="space-y-1 rounded-xl border border-dashed border-rose-200 bg-rose-50/40 p-4 text-sm text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100">
+          <div className="space-y-1 rounded-xl border border-dashed border-chart-3/50 bg-chart-3/10 p-4 text-sm text-chart-3">
             <div>
               建议售价：¥{selectedItem.salePrice.toLocaleString()} / {selectedItem.unit}
             </div>
@@ -197,7 +197,7 @@ export default function InventoryOutboundPage() {
               const specValue = payload.attributes?.[field.key] ?? '';
               return (
                 <div key={field.key} className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-200">{field.label}</Label>
+                  <Label className="text-sm font-medium text-foreground">{field.label}</Label>
                   {field.options ? (
                     <Select
                       value={specValue || undefined}
@@ -231,7 +231,7 @@ export default function InventoryOutboundPage() {
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="outbound-warehouse" className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <Label htmlFor="outbound-warehouse" className="text-sm font-medium text-foreground">
               仓库
             </Label>
             <Select
@@ -252,7 +252,7 @@ export default function InventoryOutboundPage() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="outbound-type" className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <Label htmlFor="outbound-type" className="text-sm font-medium text-foreground">
               出库类型
             </Label>
             <Select
@@ -274,7 +274,7 @@ export default function InventoryOutboundPage() {
         </div>
 
         <div className="space-y-2">
-          <Label className="text-sm font-medium text-gray-700 dark:text-gray-200">出库客户</Label>
+          <Label className="text-sm font-medium text-foreground">出库客户</Label>
           <CustomerPicker
             value={payload.clientId}
             onChange={handleClientChange}
@@ -285,7 +285,7 @@ export default function InventoryOutboundPage() {
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label className="text-sm font-medium text-gray-700 dark:text-gray-200">收件人 / 联系人</Label>
+            <Label className="text-sm font-medium text-foreground">收件人 / 联系人</Label>
             <Input
               value={payload.clientContact ?? ''}
               onChange={(event) => handleChange('clientContact', event.target.value)}
@@ -294,7 +294,7 @@ export default function InventoryOutboundPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label className="text-sm font-medium text-gray-700 dark:text-gray-200">联系电话</Label>
+            <Label className="text-sm font-medium text-foreground">联系电话</Label>
             <Input
               value={payload.clientPhone ?? ''}
               onChange={(event) => handleChange('clientPhone', event.target.value)}
@@ -304,7 +304,7 @@ export default function InventoryOutboundPage() {
         </div>
 
         <div className="space-y-2">
-          <Label className="text-sm font-medium text-gray-700 dark:text-gray-200">收货地址</Label>
+          <Label className="text-sm font-medium text-foreground">收货地址</Label>
           <Textarea
             value={payload.clientAddress ?? ''}
             onChange={(event) => handleChange('clientAddress', event.target.value)}
@@ -316,7 +316,7 @@ export default function InventoryOutboundPage() {
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="outbound-quantity" className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <Label htmlFor="outbound-quantity" className="text-sm font-medium text-foreground">
               数量
             </Label>
             <Input
@@ -330,7 +330,7 @@ export default function InventoryOutboundPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="outbound-related" className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <Label htmlFor="outbound-related" className="text-sm font-medium text-foreground">
               关联单据号
             </Label>
             <Input
@@ -345,7 +345,7 @@ export default function InventoryOutboundPage() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="outbound-notes" className="text-sm font-medium text-gray-700 dark:text-gray-200">
+          <Label htmlFor="outbound-notes" className="text-sm font-medium text-foreground">
             备注
           </Label>
           <Textarea

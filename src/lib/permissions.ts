@@ -102,8 +102,15 @@ export const Permissions = {
   
   PROJECT_UPDATE: {
     customCheck: (user: UserProfile) => {
-      // 管理员和部门经理可以更新项目
-      return hasAnyRole(user, [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEPARTMENT_MANAGER]);
+      // 管理员、部门经理和财务相关角色可以更新项目
+      return hasAnyRole(user, [
+        UserRole.SUPER_ADMIN,
+        UserRole.ADMIN,
+        UserRole.DEPARTMENT_MANAGER,
+        UserRole.FINANCE,
+        UserRole.FINANCE_SCHOOL,
+        UserRole.FINANCE_COMPANY,
+      ]);
     },
   } as PermissionConfig,
   
@@ -113,7 +120,7 @@ export const Permissions = {
   
   // ============ 采购管理 ============
   PURCHASE_VIEW_ALL: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
   
   PURCHASE_VIEW_DEPARTMENT: {
@@ -141,24 +148,24 @@ export const Permissions = {
   } as PermissionConfig,
   
   PURCHASE_APPROVE: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.DEPARTMENT_MANAGER],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY, UserRole.DEPARTMENT_MANAGER],
   } as PermissionConfig,
   
   PURCHASE_REJECT: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.DEPARTMENT_MANAGER],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY, UserRole.DEPARTMENT_MANAGER],
   } as PermissionConfig,
   
   PURCHASE_PAY: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
   
   // ============ 财务管理 ============
   FINANCE_VIEW_ALL: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
   
   FINANCE_MANAGE: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
 
   // ============ 进销存管理 ============
@@ -207,6 +214,8 @@ export const Permissions = {
       UserRole.SUPER_ADMIN,
       UserRole.ADMIN,
       UserRole.FINANCE,
+      UserRole.FINANCE_SCHOOL,
+      UserRole.FINANCE_COMPANY,
       UserRole.INVENTORY_MANAGER,
       UserRole.INVENTORY_OPERATOR,
     ],
@@ -222,13 +231,15 @@ export const Permissions = {
       UserRole.SUPER_ADMIN,
       UserRole.ADMIN,
       UserRole.FINANCE,
+      UserRole.FINANCE_SCHOOL,
+      UserRole.FINANCE_COMPANY,
       UserRole.INVENTORY_MANAGER,
       UserRole.INVENTORY_OPERATOR,
     ],
   } as PermissionConfig,
 
   SUPPLIER_MANAGE: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
 
   // ============ 日程管理 ============
@@ -239,6 +250,8 @@ export const Permissions = {
       UserRole.HR,
       UserRole.DEPARTMENT_MANAGER,
       UserRole.FINANCE,
+      UserRole.FINANCE_SCHOOL,
+      UserRole.FINANCE_COMPANY,
       UserRole.EMPLOYEE,
     ],
   } as PermissionConfig,

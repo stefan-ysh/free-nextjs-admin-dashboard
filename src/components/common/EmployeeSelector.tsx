@@ -34,6 +34,8 @@ type EmployeeSelectorProps = {
 	onChange: (userId: string, employee?: EmployeeRecord | null) => void;
 	disabled?: boolean;
 	helperText?: string;
+	showSelectionSummary?: boolean;
+	showHelperText?: boolean;
 };
 
 const PAGE_SIZE = 20;
@@ -46,9 +48,9 @@ const statusLabels: Record<EmployeeRecord['employmentStatus'], string> = {
 };
 
 const statusClasses: Record<EmployeeRecord['employmentStatus'], string> = {
-	active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-100',
-	on_leave: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-100',
-	terminated: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-100',
+	active: 'bg-chart-5/15 text-chart-5',
+	on_leave: 'bg-chart-3/15 text-chart-3',
+	terminated: 'bg-destructive/15 text-destructive',
 };
 
 function getEmployeeName(employee: EmployeeRecord): string {
@@ -59,7 +61,14 @@ function getEmployeeName(employee: EmployeeRecord): string {
 	return employee.id;
 }
 
-export default function EmployeeSelector({ value, onChange, disabled = false, helperText }: EmployeeSelectorProps) {
+export default function EmployeeSelector({
+	value,
+	onChange,
+	disabled = false,
+	helperText,
+	showSelectionSummary = true,
+	showHelperText = true,
+}: EmployeeSelectorProps) {
 	const [search, setSearch] = useState('');
 	const [debouncedSearch, setDebouncedSearch] = useState('');
 	const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
@@ -314,7 +323,7 @@ useEffect(() => {
 																<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
 															) : (
 																!employee.userId && (
-																	<span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700 dark:bg-amber-500/20 dark:text-amber-100">未绑定账号</span>
+																	<span className="rounded-full bg-chart-3/15 px-2 py-0.5 text-chart-3">未绑定账号</span>
 																)
 															)}
 														</div>
@@ -335,7 +344,7 @@ useEffect(() => {
 				</div>
 			)}
 
-			{selectedEmployee && (
+			{showSelectionSummary && selectedEmployee && (
 				<div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 text-sm text-primary">
 					<div className="flex flex-wrap items-center justify-between gap-2">
 						<div>
@@ -352,7 +361,7 @@ useEffect(() => {
 				</div>
 			)}
 
-			<p className="text-xs text-muted-foreground">{helper}</p>
+			{showHelperText ? <p className="text-xs text-muted-foreground">{helper}</p> : null}
 		</div>
 	);
 }

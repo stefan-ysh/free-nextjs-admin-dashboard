@@ -17,19 +17,19 @@ export const projectPriorityLabels: Record<ProjectPriority, string> = {
 };
 
 export const projectStatusBadgeClasses: Record<ProjectStatus, string> = {
-	planning: 'bg-slate-100 text-slate-700 dark:bg-slate-800/60 dark:text-slate-200',
-	active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-100',
-	on_hold: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-100',
-	completed: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-100',
-	archived: 'bg-gray-100 text-gray-600 dark:bg-gray-800/60 dark:text-gray-300',
-	cancelled: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-100',
+	planning: 'bg-secondary/60 text-secondary-foreground',
+	active: 'bg-chart-5/15 text-chart-5',
+	on_hold: 'bg-chart-3/20 text-chart-3',
+	completed: 'bg-chart-1/15 text-chart-1',
+	archived: 'bg-muted text-muted-foreground',
+	cancelled: 'bg-destructive/15 text-destructive',
 };
 
 export const projectPriorityBadgeClasses: Record<ProjectPriority, string> = {
-	low: 'bg-gray-100 text-gray-600 dark:bg-gray-800/60 dark:text-gray-300',
-	medium: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-100',
-	high: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-100',
-	urgent: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-100',
+	low: 'bg-muted text-muted-foreground',
+	medium: 'bg-chart-4/15 text-chart-4',
+	high: 'bg-chart-2/15 text-chart-2',
+	urgent: 'bg-destructive/15 text-destructive',
 };
 
 export const projectStatusOptions = (Object.entries(projectStatusLabels) as Array<[ProjectStatus, string]>).map(([value, label]) => ({

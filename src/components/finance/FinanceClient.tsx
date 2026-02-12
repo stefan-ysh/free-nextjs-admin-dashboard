@@ -6,7 +6,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { FinanceRecord, FinanceStats } from '@/types/finance';
 import FinanceTable from './FinanceTable';
 import FinanceForm, { FinanceFormSubmitPayload } from './FinanceForm';
-import QuickEntryForm from './QuickEntryForm';
+
 import FinanceStatsCards from './FinanceStatsCards';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,7 +26,6 @@ import { getCategoryGroups, getPinnedCategoryLabels } from '@/constants/finance-
 import UserSelect from '@/components/common/UserSelect';
 import { formatDateOnly } from '@/lib/dates';
 import {
-    FORM_DRAWER_WIDTH_STANDARD,
     FORM_DRAWER_WIDTH_WIDE,
 } from '@/components/common/form-drawer-width';
 
@@ -60,7 +59,7 @@ export default function FinanceClient({
     const searchParams = useSearchParams();
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [editingRecord, setEditingRecord] = useState<FinanceRecord | null>(null);
-    const [isQuickDrawerOpen, setIsQuickDrawerOpen] = useState(false);
+
     const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
     const [keywordInput, setKeywordInput] = useState(searchParams.get('keyword') || '');
     const [minAmountInput, setMinAmountInput] = useState(searchParams.get('minAmount') || '');
@@ -83,15 +82,7 @@ export default function FinanceClient({
         setMinAmountInput(minAmountParam);
         setMaxAmountInput(maxAmountParam);
 
-        // Handle quick create action from URL
-        if (searchParams.get('action') === 'new') {
-            setIsDrawerOpen(true);
-            setEditingRecord(null);
-            // Optional: Clean up the URL after opening
-            const newParams = new URLSearchParams(searchParams.toString());
-            newParams.delete('action');
-            router.replace(`${pathname}?${newParams.toString()}`);
-        }
+
     }, [keywordParam, minAmountParam, maxAmountParam, searchParams, pathname, router]);
 
     const categoryGroups = useMemo(() => {
@@ -190,6 +181,7 @@ export default function FinanceClient({
             });
         }
         return chips;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         categoryValue,
         currentRange,
@@ -312,14 +304,7 @@ export default function FinanceClient({
         });
     };
 
-    const applyAmountRange = (min: number, max: number) => {
-        setMinAmountInput(String(min));
-        setMaxAmountInput(String(max));
-        updateFilters((params) => {
-            params.set('minAmount', String(min));
-            params.set('maxAmount', String(max));
-        });
-    };
+
 
     const handleResetFilters = () => {
         setKeywordInput('');
@@ -369,12 +354,7 @@ export default function FinanceClient({
         }
     };
 
-    const handleQuickSubmit = async (data: FinanceFormSubmitPayload) => {
-        const success = await submitRecord(data);
-        if (success) {
-            setIsQuickDrawerOpen(false);
-        }
-    };
+
 
     const handleDelete = async (id: string) => {
         try {
@@ -393,7 +373,7 @@ export default function FinanceClient({
 
     if (!permissions.canView) {
         return (
-            <div className="rounded-lg border border-red-200 bg-white p-6 text-red-600 shadow dark:border-red-800 dark:bg-gray-900 dark:text-red-300">
+            <div className="alert-box alert-danger">
                 当前账户无权访问财务模块，请联系管理员开通权限。
             </div>
         );
@@ -550,49 +530,11 @@ export default function FinanceClient({
                         <Button variant="ghost" size="sm" onClick={handleResetFilters} className="h-10 px-3 text-muted-foreground">
                             清空
                         </Button>
-                        {permissions.canManage && (
-                            <Drawer open={isQuickDrawerOpen} onOpenChange={setIsQuickDrawerOpen} direction="right">
-                                <DrawerTrigger asChild>
-                                    <Button size="sm" variant="outline" className="h-10" onClick={() => setIsQuickDrawerOpen(true)}>
-                                        快速记账
-                                    </Button>
-                                </DrawerTrigger>
-                                <DrawerContent side="right" className={FORM_DRAWER_WIDTH_STANDARD}>
-                                    <DrawerHeader>
-                                        <DrawerTitle>快速记账</DrawerTitle>
-                                    </DrawerHeader>
-                                    <DrawerBody>
-                                        <QuickEntryForm
-                                            onSubmit={handleQuickSubmit}
-                                            onCancel={() => setIsQuickDrawerOpen(false)}
-                                            incomeCategories={categories.income}
-                                            expenseCategories={categories.expense}
-                                            currentUserId={currentUserId}
-                                            formId="finance-quick-form"
-                                            hideActions
-                                        />
-                                    </DrawerBody>
-                                    <DrawerFooter>
-                                        <DrawerClose asChild>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                onClick={() => setIsQuickDrawerOpen(false)}
-                                            >
-                                                取消
-                                            </Button>
-                                        </DrawerClose>
-                                        <Button type="submit" form="finance-quick-form">
-                                            快速添加
-                                        </Button>
-                                    </DrawerFooter>
-                                </DrawerContent>
-                            </Drawer>
-                        )}
+
                         {permissions.canManage && (
                             <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen} direction="right">
                                 <DrawerTrigger asChild>
-                                    <Button size="sm" className="h-10" onClick={() => setEditingRecord(null)}>+ 记一笔</Button>
+                                    <span />
                                 </DrawerTrigger>
                                 <DrawerContent side="right" className={FORM_DRAWER_WIDTH_WIDE}>
                                     <DrawerHeader>

@@ -33,7 +33,7 @@ export default function PurchaseCreatePage() {
 	if (permissionLoading) {
 		return (
 			<section className="space-y-6">
-				<div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+				<div className="alert-box alert-info">
 					正在加载权限信息...
 				</div>
 			</section>
@@ -43,7 +43,7 @@ export default function PurchaseCreatePage() {
 	if (!canCreatePurchase) {
 		return (
 			<section className="space-y-6">
-				<div className="rounded-lg border border-rose-200 bg-white p-6 text-sm text-rose-600 shadow-sm dark:border-rose-900/60 dark:bg-gray-900 dark:text-rose-200">
+				<div className="alert-box alert-danger">
 					当前账户无权发起采购。请联系管理员开通 PURCHASE_CREATE 权限。
 				</div>
 			</section>
@@ -53,7 +53,7 @@ export default function PurchaseCreatePage() {
 	return (
 		<section className="space-y-6">
 			<div className="space-y-6">
-				<div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+				<div className="panel-frame">
 					<PurchaseForm
 						mode="create"
 						currentUserId={user?.id ?? ''}

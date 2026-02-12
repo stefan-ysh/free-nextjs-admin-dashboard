@@ -13,9 +13,9 @@ const STATUS_LABELS: Record<SupplierStatus, string> = {
 };
 
 const STATUS_BADGE_CLASS: Record<SupplierStatus, string> = {
-  active: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-100',
-  inactive: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-100',
-  blacklisted: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-100',
+  active: 'bg-chart-5/15 text-chart-5',
+  inactive: 'bg-chart-3/15 text-chart-3',
+  blacklisted: 'bg-destructive/15 text-destructive',
 };
 
 const PAGE_SIZE = 50;
@@ -50,7 +50,7 @@ export default function SupplierSelector({
   value,
   onChange,
   disabled = false,
-  helperText = '仅展示状态为正常的供应商，可搜索中文/简称快速过滤',
+  helperText = '',
   status = 'active',
   placeholder = '选择供应商',
 }: SupplierSelectorProps) {
@@ -81,8 +81,7 @@ export default function SupplierSelector({
   const mapOption = useCallback(
     (supplier: Supplier): SearchableEntityOption<Supplier> => ({
       id: supplier.id,
-      label: supplier.name,
-      description: supplier.shortName ?? undefined,
+      label: supplier.shortName ? `${supplier.name}（${supplier.shortName}）` : supplier.name,
       data: supplier,
     }),
     []
@@ -101,7 +100,6 @@ export default function SupplierSelector({
       searchPlaceholder="输入名称或简称"
       emptyText="暂无可用供应商，或您没有访问权限"
       renderOption={({ option, isSelected }) => <SupplierOption supplier={option.data} isSelected={isSelected} />}
-      renderSummary={(supplier) => <SupplierSummary supplier={supplier} />}
       renderFooter={({ items, clear, value: currentValue }) => (
         <div className="flex items-center justify-between border-t border-border px-3 py-2 text-xs text-muted-foreground">
           <Button type="button" variant="ghost" size="sm" onClick={clear} disabled={!currentValue}>
@@ -117,11 +115,11 @@ export default function SupplierSelector({
 function SupplierOption({ supplier, isSelected }: { supplier: Supplier; isSelected: boolean }) {
   return (
     <div className="flex w-full items-start gap-3">
-      <span className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-500">{isSelected && <Checkmark />}</span>
+      <span className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary">{isSelected && <Checkmark />}</span>
       <div className="flex flex-1 flex-col">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium text-gray-900 dark:text-gray-100">{supplier.name}</span>
-          {supplier.shortName && <span className="text-xs text-gray-500 dark:text-gray-400">{supplier.shortName}</span>}
+          <span className="font-medium text-foreground">{supplier.name}</span>
+          {supplier.shortName && <span className="text-xs text-muted-foreground">{supplier.shortName}</span>}
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_BADGE_CLASS[supplier.status]}`}>
             {STATUS_LABELS[supplier.status]}
           </span>
@@ -136,22 +134,7 @@ function SupplierOption({ supplier, isSelected }: { supplier: Supplier; isSelect
   );
 }
 
-function SupplierSummary({ supplier }: { supplier: Supplier }) {
-  return (
-    <div className="text-blue-900 dark:text-blue-100">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="font-semibold">{supplier.name}</div>
-        {supplier.shortName && <div className="text-xs">简称：{supplier.shortName}</div>}
-      </div>
-      <div className="mt-2 space-y-1 text-xs">
-        {supplier.category && <p>分类：{supplier.category}</p>}
-        {supplier.email && <p>邮箱：{supplier.email}</p>}
-        {supplier.phone && <p>电话：{supplier.phone}</p>}
-        {supplier.paymentTerm && <p>付款条件：{supplier.paymentTerm}</p>}
-      </div>
-    </div>
-  );
-}
+
 
 function Checkmark() {
   return (

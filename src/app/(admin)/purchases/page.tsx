@@ -51,13 +51,13 @@ export default function PurchasesPage() {
 
 	if (permissionLoading) {
 		bodyContent = (
-			<div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+			<div className="panel-frame p-6 text-sm text-muted-foreground">
 				正在加载权限信息...
 			</div>
 		);
 	} else if (!canViewPurchases) {
 		bodyContent = (
-			<div className="rounded-lg border border-rose-200 bg-white p-6 text-sm text-rose-600 shadow-sm dark:border-rose-900/60 dark:bg-gray-900 dark:text-rose-200">
+			<div className="alert-box alert-danger">
 				当前账户无权访问采购模块。需要 PURCHASE_CREATE、PURCHASE_VIEW_ALL 或 PURCHASE_VIEW_DEPARTMENT 权限，请联系管理员开通。
 			</div>
 		);

@@ -218,7 +218,7 @@ export default function PurchaseInboundDrawer({
                   onChange={(event) => handleChange('notes', event.target.value)}
                 />
               </div>
-              {error ? <p className="text-xs text-rose-500">{error}</p> : null}
+              {error ? <p className="text-xs text-destructive">{error}</p> : null}
             </div>
           )}
         </DrawerBody>

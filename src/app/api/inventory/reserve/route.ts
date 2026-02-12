@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '数量必须大于 0' }, { status: 400 });
     }
 
-    await reserveStock(payload, permissionUser.id);
+    await reserveStock(payload);
     return NextResponse.json({ success: true }, { status: 201 });
   } catch (error) {
     console.error('[inventory.reserve] failed to reserve stock', error);

@@ -26,10 +26,10 @@ export default function InventoryStatsCards({ stats, loading }: InventoryStatsCa
         const displayValue = value !== null && value !== undefined ? value.toLocaleString() : '--';
         const tone =
           metric.emphasis === 'positive'
-            ? 'text-green-600 dark:text-green-400'
+            ? 'text-chart-5'
             : metric.emphasis === 'negative'
-              ? 'text-rose-600 dark:text-rose-400'
-              : 'text-gray-900 dark:text-white';
+              ? 'text-destructive'
+              : 'text-foreground';
 
         return (
           <div
@@ -39,7 +39,7 @@ export default function InventoryStatsCards({ stats, loading }: InventoryStatsCa
             <span className="font-medium text-foreground">{metric.label}</span>
             <span className={`font-semibold ${tone}`}>
               {loading ? (
-                <span className="inline-block h-3 w-12 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                <span className="inline-block h-3 w-12 animate-pulse rounded bg-muted" />
               ) : (
                 displayValue
               )}

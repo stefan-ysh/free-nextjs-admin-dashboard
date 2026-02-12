@@ -232,7 +232,7 @@ export default function InventoryItemsPage() {
   if (permissionLoading) {
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+        <div className="panel-frame p-6 text-sm text-muted-foreground">
           正在校验权限...
         </div>
       </div>
@@ -242,7 +242,7 @@ export default function InventoryItemsPage() {
   if (!canManageItems) {
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl border border-rose-200 bg-white p-6 text-sm text-rose-600 shadow dark:border-rose-500/40 dark:bg-gray-900 dark:text-rose-300">
+        <div className="alert-box alert-danger p-6 text-sm">
           当前账户无权管理商品，请联系管理员。
         </div>
       </div>
@@ -255,18 +255,18 @@ export default function InventoryItemsPage() {
       <div className="surface-card p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <span>SKU 列表</span>
               <Badge variant="secondary" className="rounded-full px-2 py-0 text-[11px] font-medium">
                 {items.length} 条
               </Badge>
               {selectedIds.size > 0 && (
-                <Badge variant="outline" className="ml-2 text-blue-600 border-blue-200 bg-blue-50">
+                <Badge variant="outline" className="ml-2 border-primary/30 bg-primary/10 text-primary">
                   已选 {selectedIds.size} 项
                 </Badge>
               )}
             </div>
-            <p className="text-xs text-gray-500">当前使用中的商品信息，支持快速编辑</p>
+            <p className="text-xs text-muted-foreground">当前使用中的商品信息，支持快速编辑</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {selectedIds.size > 0 && (
@@ -299,7 +299,7 @@ export default function InventoryItemsPage() {
                 visibleItems.map((item) => {
                   const isSelected = selectedIds.has(item.id);
                   return (
-                    <div key={item.id} className={isSelected ? 'rounded-2xl border border-blue-200 bg-blue-50/40 p-4 dark:border-blue-900/40 dark:bg-blue-900/10' : 'rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm'}>
+                    <div key={item.id} className={isSelected ? 'rounded-2xl border border-primary/30 bg-primary/10 p-4' : 'rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm'}>
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="text-sm font-semibold text-foreground">{item.name}</div>
@@ -307,7 +307,7 @@ export default function InventoryItemsPage() {
                         </div>
                         <button
                           onClick={() => toggleSelect(item.id)}
-                          className={`flex h-8 w-8 items-center justify-center rounded-full border ${isSelected ? 'border-blue-400 text-blue-600' : 'border-border text-muted-foreground hover:text-foreground'}`}
+                          className={`flex h-8 w-8 items-center justify-center rounded-full border ${isSelected ? 'border-primary text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}
                         >
                           {isSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                         </button>
@@ -412,11 +412,11 @@ export default function InventoryItemsPage() {
                   visibleItems.map((item) => {
                     const isSelected = selectedIds.has(item.id);
                     return (
-                      <TableRow key={item.id} className={isSelected ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}>
+                      <TableRow key={item.id} className={isSelected ? 'bg-primary/10' : ''}>
                         <TableCell className="w-12">
                           <button
                             onClick={() => toggleSelect(item.id)}
-                            className={`flex items-center justify-center ${isSelected ? 'text-blue-600' : 'text-muted-foreground hover:text-foreground'}`}
+                            className={`flex items-center justify-center ${isSelected ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                           >
                             {isSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                           </button>

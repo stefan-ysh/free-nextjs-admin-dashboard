@@ -869,7 +869,7 @@ export default function PurchasesClient() {
 
   if (permissionLoading) {
     return (
-      <div className="rounded-lg border border-border bg-white p-6 text-sm text-gray-600 shadow-sm dark:border-border dark:bg-gray-900 dark:text-gray-300">
+      <div className="panel-frame p-6 text-sm text-muted-foreground">
         正在加载权限信息...
       </div>
     );
@@ -877,7 +877,7 @@ export default function PurchasesClient() {
 
   if (!canViewPurchases) {
     return (
-      <div className="rounded-lg border border-rose-200 bg-white p-6 text-sm text-rose-600 shadow-sm dark:border-rose-900/60 dark:bg-gray-900 dark:text-rose-200">
+      <div className="alert-box alert-danger p-6 text-sm">
         当前账户无权访问采购模块。需要 PURCHASE_CREATE、PURCHASE_VIEW_ALL 或 PURCHASE_VIEW_DEPARTMENT 权限，请联系管理员开通。
       </div>
     );
@@ -892,22 +892,22 @@ export default function PurchasesClient() {
             <>
               <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
                 <span className="font-medium text-foreground">总采购金额</span>
-                <span className="font-semibold text-gray-900 dark:text-white">{amountFormatter.format(stats.totalAmount)}</span>
+                <span className="font-semibold text-foreground">{amountFormatter.format(stats.totalAmount)}</span>
                 <span className="text-[10px] text-muted-foreground/80">共 {stats.totalPurchases} 条</span>
               </div>
               <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
                 <span className="font-medium text-foreground">待审批</span>
-                <span className="font-semibold text-amber-600 dark:text-amber-400">{amountFormatter.format(stats.pendingAmount)}</span>
+                <span className="font-semibold text-chart-3">{amountFormatter.format(stats.pendingAmount)}</span>
                 <span className="text-[10px] text-muted-foreground/80">{stats.pendingCount} 条</span>
               </div>
               <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
                 <span className="font-medium text-foreground">已批准</span>
-                <span className="font-semibold text-sky-600 dark:text-sky-400">{amountFormatter.format(stats.approvedAmount)}</span>
+                <span className="font-semibold text-chart-1">{amountFormatter.format(stats.approvedAmount)}</span>
                 <span className="text-[10px] text-muted-foreground/80">{stats.approvedCount} 条</span>
               </div>
               <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
                 <span className="font-medium text-foreground">已打款</span>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">{amountFormatter.format(stats.paidAmount)}</span>
+                <span className="font-semibold text-chart-5">{amountFormatter.format(stats.paidAmount)}</span>
                 <span className="text-[10px] text-muted-foreground/80">{stats.paidCount} 条</span>
               </div>
             </>
@@ -918,9 +918,9 @@ export default function PurchasesClient() {
           )}
         </div>
         <div>
-          {statsLoading && <span className="text-xs text-gray-500 dark:text-gray-400">加载中…</span>}
+          {statsLoading && <span className="text-xs text-muted-foreground">加载中…</span>}
           {statsError && !statsLoading && (
-            <span className="text-xs text-rose-600 dark:text-rose-300">{statsError}</span>
+            <span className="text-xs text-destructive">{statsError}</span>
           )}
         </div>
       </div>
@@ -970,7 +970,7 @@ export default function PurchasesClient() {
                 <DrawerBody>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">状态</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">状态</label>
                       <Select
                         value={filters.status}
                         onValueChange={(value) => handleFilterChange({ status: value as PurchaseFilters['status'] })}
@@ -989,7 +989,7 @@ export default function PurchasesClient() {
                       </Select>
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">渠道</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">渠道</label>
                       <Select
                         value={filters.purchaseChannel}
                         onValueChange={(value) => handleFilterChange({ purchaseChannel: value as PurchaseFilters['purchaseChannel'] })}
@@ -1008,7 +1008,7 @@ export default function PurchasesClient() {
                       </Select>
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">组织</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">组织</label>
                       <Select
                         value={filters.organizationType}
                         onValueChange={(value) => handleFilterChange({ organizationType: value as PurchaseFilters['organizationType'] })}
@@ -1027,7 +1027,7 @@ export default function PurchasesClient() {
                       </Select>
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">付款方式</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">付款方式</label>
                       <Select
                         value={filters.paymentMethod}
                         onValueChange={(value) => handleFilterChange({ paymentMethod: value as PurchaseFilters['paymentMethod'] })}
@@ -1046,7 +1046,7 @@ export default function PurchasesClient() {
                       </Select>
                     </div>
                     <div className="space-y-1">
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">排序字段</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">排序字段</label>
                       <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortField)}>
                         <SelectTrigger className="h-10">
                           <SelectValue placeholder="排序字段" />
@@ -1061,7 +1061,7 @@ export default function PurchasesClient() {
                       </Select>
                     </div>
                     <div className="space-y-1">
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">排序方式</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">排序方式</label>
                       <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrder)}>
                         <SelectTrigger className="h-10">
                           <SelectValue placeholder="排序方式" />
@@ -1098,11 +1098,11 @@ export default function PurchasesClient() {
                     <button
                       type="button"
                       onClick={() => setShowAdvancedFilters((prev) => !prev)}
-                      className="flex w-full items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-200"
+                      className="flex w-full items-center justify-between text-sm font-medium text-foreground"
                     >
                       <span>{showAdvancedFilters ? '隐藏高级筛选' : '展开高级筛选'}</span>
                       {advancedFilterCount > 0 && (
-                        <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-blue-600/10 px-1.5 text-xs font-semibold text-blue-600 dark:bg-blue-500/20 dark:text-blue-200">
+                        <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-primary/10 px-1.5 text-xs font-semibold text-primary">
                           {advancedFilterCount}
                         </span>
                       )}
@@ -1111,7 +1111,7 @@ export default function PurchasesClient() {
                       <div className="mt-3 space-y-4">
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div>
-                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">最低金额 (¥)</label>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">最低金额 (¥)</label>
                             <Input
                               type="number"
                               min={0}
@@ -1121,7 +1121,7 @@ export default function PurchasesClient() {
                             />
                           </div>
                           <div>
-                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">最高金额 (¥)</label>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">最高金额 (¥)</label>
                             <Input
                               type="number"
                               min={0}
@@ -1132,7 +1132,7 @@ export default function PurchasesClient() {
                           </div>
                         </div>
                         <div>
-                          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">关联项目（可选）</label>
+                          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">关联项目（可选）</label>
                           <ProjectSelector
                             value={filters.projectId ?? ''}
                             onChange={(projectId, project) => handleProjectFilterChange(projectId, project ?? undefined)}
@@ -1141,7 +1141,7 @@ export default function PurchasesClient() {
                           />
                         </div>
                         <div>
-                          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">关联供应商（可选）</label>
+                          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">关联供应商（可选）</label>
                           <SupplierSelector
                             value={filters.supplierId ?? ''}
                             onChange={(supplierId, supplier) => handleSupplierFilterChange(supplierId, supplier ?? undefined)}
@@ -1289,7 +1289,7 @@ export default function PurchasesClient() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/60 dark:text-rose-200">
+        <div className="alert-box alert-danger px-4 py-3 text-sm">
           {error}
         </div>
       )}

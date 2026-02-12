@@ -1,6 +1,6 @@
 import { PaymentType, InvoiceStatus, InvoiceType } from '@/types/finance';
 import type { Supplier, SupplierStatus } from '@/types/supplier';
-import type { PurchaseWorkflowNode } from '@/types/purchase-workflow';
+
 
 export { PaymentType, InvoiceStatus, InvoiceType } from '@/types/finance';
 
@@ -70,6 +70,7 @@ export interface PurchaseRecord {
   purchaseDate: string;
   organizationType: PurchaseOrganization;
   itemName: string;
+  inventoryItemId?: string | null;
   specification: string | null;
   quantity: number;
   unitPrice: number;
@@ -117,8 +118,7 @@ export interface PurchaseRecord {
   reimbursementRejectedBy: string | null;
   reimbursementRejectedReason: string | null;
   pendingApproverId?: string | null;
-  workflowStepIndex?: number | null;
-  workflowNodes?: PurchaseWorkflowNode[];
+
   paymentIssueOpen?: boolean;
   paymentIssueReason?: string | null;
   paymentIssueAt?: string | null;
@@ -153,6 +153,7 @@ export interface CreatePurchaseInput {
   purchaseDate: string;
   organizationType: PurchaseOrganization;
   itemName: string;
+  inventoryItemId?: string;
   specification?: string;
   quantity: number;
   unitPrice: number;
@@ -165,12 +166,13 @@ export interface CreatePurchaseInput {
   
   paymentMethod: PaymentMethod;
   paymentType: PaymentType;
-  paymentChannel?: string;
-  payerName?: string;
-  transactionNo?: string;
-  purchaserId?: string;  // 默认当前用户
+  paymentChannel?: string | null; // Deprecated in UI
+  payerName?: string | null; // Deprecated in UI
+  transactionNo?: string | null; // Deprecated in UI
+  purchaserId: string; // 默认当前用户
   supplierId?: string | null;
   
+  hasInvoice: boolean; // New field
   invoiceType: InvoiceType;
   invoiceStatus?: InvoiceStatus;
   invoiceNumber?: string;
@@ -178,8 +180,8 @@ export interface CreatePurchaseInput {
   invoiceImages?: string[];
   receiptImages?: string[];
   
-  hasProject: boolean;
-  projectId?: string;
+  hasProject?: boolean; // Deprecated in UI
+  projectId?: string; // Deprecated in UI
   
   notes?: string;
   attachments?: string[];
@@ -192,6 +194,7 @@ export interface UpdatePurchaseInput {
   purchaseDate?: string;
   organizationType?: PurchaseOrganization;
   itemName?: string;
+  inventoryItemId?: string | null;
   specification?: string | null;
   quantity?: number;
   unitPrice?: number;
@@ -235,6 +238,7 @@ export interface ListPurchasesParams {
   projectId?: string;
   supplierId?: string;
   organizationType?: PurchaseOrganization;
+  financeOrgType?: 'school' | 'company';
   pendingApproverId?: string;
   includeUnassignedApprovals?: boolean;
   purchaseChannel?: PurchaseChannel;
@@ -284,6 +288,7 @@ export interface ReimbursementLog {
   fromStatus: PurchaseStatus;
   toStatus: PurchaseStatus;
   operatorId: string;
+  operatorName?: string | null;
   comment: string | null;
   createdAt: string;
 }

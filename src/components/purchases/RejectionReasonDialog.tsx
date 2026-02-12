@@ -82,7 +82,7 @@ export function RejectionReasonDialog({
               placeholder="请详细说明驳回原因"
               disabled={submitting}
             />
-            {error ? <p className="text-sm text-rose-500">{error}</p> : null}
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
           </div>
         </ModalShell>
       </DialogContent>

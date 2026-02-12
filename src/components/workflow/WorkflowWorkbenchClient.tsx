@@ -262,7 +262,7 @@ export default function WorkflowWorkbenchClient({
               <h2 className="text-sm font-semibold">待财务确认</h2>
               <span className="text-xs text-muted-foreground">{todoPayments.length} 条</span>
             </div>
-            {paymentError ? <p className="mb-2 text-xs text-amber-500">{paymentError}</p> : null}
+            {paymentError ? <p className="mb-2 text-xs text-chart-3">{paymentError}</p> : null}
             {todoPayments.length === 0 ? (
               <DataState variant="empty" title="暂无待付款任务" className="min-h-[120px]" />
             ) : (

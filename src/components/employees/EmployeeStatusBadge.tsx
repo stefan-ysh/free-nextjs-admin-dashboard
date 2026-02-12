@@ -9,9 +9,9 @@ type EmployeeStatusBadgeProps = {
 };
 
 const STATUS_STYLES: Record<EmploymentStatus, string> = {
-	active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200',
-	on_leave: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200',
-	terminated: 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-200',
+	active: 'bg-chart-5/15 text-chart-5',
+	on_leave: 'bg-chart-3/15 text-chart-3',
+	terminated: 'bg-destructive/15 text-destructive',
 };
 
 export default function EmployeeStatusBadge({ status }: EmployeeStatusBadgeProps) {
