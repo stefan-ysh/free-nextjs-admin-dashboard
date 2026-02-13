@@ -61,15 +61,6 @@ function buildPurchaseMetadata(purchase: PurchaseRecord): FinanceRecordMetadata 
     approvedAt: purchase.approvedAt ?? undefined,
     paidBy: purchase.paidBy ?? undefined,
     paidAt: purchase.paidAt ?? undefined,
-    projectId: purchase.projectId ?? undefined,
-    supplier: purchase.supplierId
-      ? {
-          id: purchase.supplierId,
-          name: purchase.supplierName,
-          shortName: purchase.supplierShortName,
-          status: purchase.supplierStatus,
-        }
-      : undefined,
   };
 }
 
@@ -81,9 +72,6 @@ function buildPurchaseDescription(purchase: PurchaseRecord): string {
 
 function buildPurchaseTags(purchase: PurchaseRecord): string[] | undefined {
   const tags: string[] = [];
-  if (purchase.projectId) {
-    tags.push(`项目:${purchase.projectId}`);
-  }
   tags.push('来源:采购');
   return tags.length ? tags : undefined;
 }
@@ -436,8 +424,7 @@ export async function createPurchaseExpense(
     status: 'cleared' as const,
     purchaseId: purchase.id,
     purchasePaymentId: paymentId,
-    supplierId: purchase.supplierId ?? null,
-    projectId: purchase.projectId ?? undefined,
+    projectId: undefined,
     metadata: {
       ...buildPurchaseMetadata(purchase),
       paymentAmount,

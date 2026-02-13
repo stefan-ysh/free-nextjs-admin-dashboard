@@ -204,7 +204,7 @@ export default function PurchaseDetailModal({
 		{
 			label: '采购单号',
 			value: purchase.purchaseNumber,
-			hint: purchase.project ? `关联项目 · ${purchase.project.projectName}` : `申请人 · ${resolvePurchaser(purchase)}`,
+			hint: `申请人 · ${resolvePurchaser(purchase)}`,
 		},
 	];
 
@@ -232,9 +232,6 @@ export default function PurchaseDetailModal({
 					value: formatDateTime(purchase.paymentIssueAt),
 				}
 			: null,
-		purchase.paymentChannel ? { label: '支付通道', value: purchase.paymentChannel } : null,
-		purchase.payerName ? { label: '代付人', value: purchase.payerName } : null,
-		purchase.transactionNo ? { label: '支付流水号', value: purchase.transactionNo } : null,
 		purchase.paidAt ? { label: '打款时间', value: formatDateTime(purchase.paidAt) } : null,
 		purchase.payer ? { label: '打款人', value: resolveUserName(purchase.payer) } : null,
 	].filter(Boolean) as InfoRow[];
@@ -250,10 +247,6 @@ export default function PurchaseDetailModal({
 				{ label: '申请人', value: resolvePurchaser(purchase) },
 				{ label: '所属部门', value: purchase.purchaser.department ?? '—' },
 				{ label: '工号', value: purchase.purchaser.employeeCode ?? '—' },
-				{
-					label: '关联项目',
-					value: purchase.project ? `${purchase.project.projectName}（${purchase.project.projectCode}）` : '—',
-				},
 			],
 		},
 		{

@@ -105,7 +105,7 @@ const navItems: NavItem[] = [
         name: "采购审批",
         path: "/purchases/approvals",
         requiredAnyPermissions: ["PURCHASE_APPROVE", "PURCHASE_REJECT", "PURCHASE_PAY"],
-        new: true,
+        // new: true,
       },
       {
         name: "流程监控",
@@ -161,12 +161,6 @@ const navItems: NavItem[] = [
         ],
       },
     ],
-  },
-  {
-    icon: <UserCircleIcon />,
-    name: "供应商管理",
-    path: "/suppliers",
-    requiredAnyPermissions: ["SUPPLIER_VIEW", "SUPPLIER_MANAGE"],
   },
   {
     icon: <InventoryIcon />,

@@ -169,7 +169,6 @@ export async function POST(request: NextRequest) {
       createdBy: context.user.id,
       sourceType: body.sourceType,
       purchaseId: body.purchaseId,
-      supplierId: body.supplierId,
       projectId: body.projectId,
       status: body.status ?? 'draft',
       metadata: body.handlerId ? { handlerId: body.handlerId } : undefined,

@@ -1,5 +1,4 @@
 import { PaymentType, InvoiceStatus, InvoiceType } from '@/types/finance';
-import type { Supplier, SupplierStatus } from '@/types/supplier';
 
 
 export { PaymentType, InvoiceStatus, InvoiceType } from '@/types/finance';
@@ -7,7 +6,7 @@ export { PaymentType, InvoiceStatus, InvoiceType } from '@/types/finance';
 /**
  * 购买渠道
  */
-export type PurchaseChannel = 'online' | 'offline';
+export type PurchaseChannel = string;
 
 /**
  * 采购组织
@@ -36,7 +35,46 @@ export const INVOICE_STATUSES: readonly InvoiceStatus[] = [
   InvoiceStatus.PENDING,
   InvoiceStatus.ISSUED,
   InvoiceStatus.NOT_REQUIRED,
+  InvoiceStatus.NOT_REQUIRED,
 ] as const;
+
+export const PURCHASE_CHANNEL_LABELS: Record<PurchaseChannel, string> = {
+  online: '线上',
+  offline: '线下',
+};
+
+export const PURCHASE_ORGANIZATION_LABELS: Record<PurchaseOrganization, string> = {
+  school: '学校',
+  company: '单位',
+};
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  wechat: '微信',
+  alipay: '支付宝',
+  bank_transfer: '银行转账',
+  corporate_transfer: '对公转账',
+  cash: '现金',
+};
+
+export const PAYMENT_TYPE_LABELS: Record<PaymentType, string> = {
+  [PaymentType.DEPOSIT]: '定金',
+  [PaymentType.FULL_PAYMENT]: '全款',
+  [PaymentType.INSTALLMENT]: '分期',
+  [PaymentType.BALANCE]: '尾款',
+  [PaymentType.OTHER]: '其他',
+};
+
+export const INVOICE_TYPE_LABELS: Record<InvoiceType, string> = {
+  [InvoiceType.SPECIAL]: '增值税专票',
+  [InvoiceType.GENERAL]: '普通发票',
+  [InvoiceType.NONE]: '无需发票',
+};
+
+export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
+  [InvoiceStatus.PENDING]: '待开票',
+  [InvoiceStatus.ISSUED]: '已开票',
+  [InvoiceStatus.NOT_REQUIRED]: '无需开票',
+};
 
 /**
  * 采购状态
@@ -91,12 +129,6 @@ export interface PurchaseRecord {
   transactionNo: string | null;
   purchaserId: string;
 
-  // 供应商信息
-  supplierId: string | null;
-  supplierName?: string | null;
-  supplierShortName?: string | null;
-  supplierStatus?: SupplierStatus;
-  
   // 发票信息
   invoiceType: InvoiceType;
   invoiceStatus: InvoiceStatus;
@@ -104,10 +136,6 @@ export interface PurchaseRecord {
   invoiceIssueDate: string | null;
   invoiceImages: string[];
   receiptImages: string[];
-  
-  // 项目关联
-  hasProject: boolean;
-  projectId: string | null;
   
   // 状态流程
   status: PurchaseStatus;
@@ -170,8 +198,6 @@ export interface CreatePurchaseInput {
   payerName?: string | null; // Deprecated in UI
   transactionNo?: string | null; // Deprecated in UI
   purchaserId: string; // 默认当前用户
-  supplierId?: string | null;
-  
   hasInvoice: boolean; // New field
   invoiceType: InvoiceType;
   invoiceStatus?: InvoiceStatus;
@@ -179,9 +205,6 @@ export interface CreatePurchaseInput {
   invoiceIssueDate?: string;
   invoiceImages?: string[];
   receiptImages?: string[];
-  
-  hasProject?: boolean; // Deprecated in UI
-  projectId?: string; // Deprecated in UI
   
   notes?: string;
   attachments?: string[];
@@ -211,17 +234,12 @@ export interface UpdatePurchaseInput {
   payerName?: string | null;
   transactionNo?: string | null;
   purchaserId?: string;
-  supplierId?: string | null;
-  
   invoiceType?: InvoiceType;
   invoiceStatus?: InvoiceStatus;
   invoiceNumber?: string | null;
   invoiceIssueDate?: string | null;
   invoiceImages?: string[];
   receiptImages?: string[];
-  
-  hasProject?: boolean;
-  projectId?: string | null;
   
   notes?: string | null;
   attachments?: string[];
@@ -235,8 +253,6 @@ export interface ListPurchasesParams {
   status?: PurchaseStatus | 'all';
   purchaserId?: string;
   purchaserDepartment?: string;
-  projectId?: string;
-  supplierId?: string;
   organizationType?: PurchaseOrganization;
   financeOrgType?: 'school' | 'company';
   pendingApproverId?: string;
@@ -356,11 +372,6 @@ export interface PurchaseDetail extends PurchaseRecord {
     employeeCode: string | null;
     department: string | null;
   };
-  project: {
-    id: string;
-    projectCode: string;
-    projectName: string;
-  } | null;
   approver: {
     id: string;
     displayName: string;
@@ -382,11 +393,9 @@ export interface PurchaseDetail extends PurchaseRecord {
   remainingAmount: number;
   dueAmount: number;
   logs: ReimbursementLog[];
-  supplier: Supplier | null;
 }
 
 export type PurchasePaymentQueueItem = PurchaseRecord & {
-  supplierName?: string | null;
   paidAmount: number;
   remainingAmount: number;
   purchaserName?: string | null;
@@ -490,18 +499,6 @@ export interface DepartmentPurchaseStats {
   totalAmount: number;
   purchaseCount: number;
   employeeCount: number;
-}
-
-/**
- * 项目采购统计
- */
-export interface ProjectPurchaseStats {
-  projectId: string;
-  projectName: string;
-  totalAmount: number;
-  purchaseCount: number;
-  budget: number | null;
-  budgetUtilization: number | null; // 预算使用率 %
 }
 
 export const PURCHASE_STATUSES: readonly PurchaseStatus[] = ['draft', 'pending_approval', 'approved', 'rejected', 'paid', 'cancelled'] as const;

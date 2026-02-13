@@ -488,7 +488,7 @@ export default function PaymentQueueClient() {
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="搜索单号 / 物品 / 供应商"
+              placeholder="搜索单号 / 物品"
             />
           </div>
         </div>
@@ -549,7 +549,6 @@ export default function PaymentQueueClient() {
                       <div>
                         <div className="text-sm font-semibold text-foreground">{purchase.itemName}</div>
                         <div className="mt-1 text-xs text-muted-foreground">单号：{purchase.purchaseNumber}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">供应商：{purchase.supplierName ?? '—'}</div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Checkbox
@@ -609,7 +608,6 @@ export default function PaymentQueueClient() {
                       />
                     </TableHead>
                     <TableHead>采购信息</TableHead>
-                    <TableHead>供应商</TableHead>
                     <TableHead>金额</TableHead>
                     <TableHead>付款进度</TableHead>
                     <TableHead>状态</TableHead>
@@ -633,9 +631,6 @@ export default function PaymentQueueClient() {
                             <div className="text-xs text-muted-foreground">单号：{purchase.purchaseNumber}</div>
                             <div className="text-xs text-muted-foreground">采购日期：{formatDateOnly(purchase.purchaseDate) ?? purchase.purchaseDate}</div>
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm text-foreground">{purchase.supplierName ?? '—'}</div>
                         </TableCell>
                         <TableCell>
                           <div className="text-sm text-foreground">{currencyFormatter.format(purchase.totalAmount + (purchase.feeAmount ?? 0))}</div>

@@ -5,8 +5,30 @@ import { Plus } from 'lucide-react';
 
 import { SearchableEntitySelect, type SearchableEntityOption } from '@/components/common/SearchableEntitySelect';
 import { Button } from '@/components/ui/button';
+import { formatInventoryItemName } from '@/lib/format';
 import InventoryItemFormDialog from '@/components/inventory/InventoryItemFormDialog';
 import type { InventoryItem } from '@/types/inventory';
+
+const CATEGORY_MAP: Record<string, string> = {
+  Chemicals: '化学药品',
+  Equipment: '仪器设备',
+  Consumables: '实验耗材',
+  Glassware: '玻璃仪器',
+  Reagents: '生化试剂',
+  Biology: '生物制品',
+  Stationery: '办公用品',
+  Others: '其他',
+  Service: '服务',
+  Safety: '劳保用品',
+  Testing: '检测服务',
+  Pantry: '茶水间',
+  Tools: '工具',
+  Office: '办公用品',
+};
+
+function getCategoryLabel(category: string) {
+  return CATEGORY_MAP[category] || category;
+}
 
 const PAGE_SIZE = 50;
 
@@ -29,7 +51,7 @@ export default function InventoryItemSelector({
   onChange,
   disabled = false,
   helperText = '',
-  placeholder = '选择库存商品',
+  placeholder = '选择物品',
 }: InventoryItemSelectorProps) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
@@ -43,8 +65,19 @@ export default function InventoryItemSelector({
     if (!response.ok) {
       throw new Error(payload.error ?? '加载库存商品失败');
     }
-    // API returns { data: InventoryItem[] }
-    return payload.data ?? [];
+    const items = payload.data ?? [];
+    const normalizedKeyword = keyword.trim().toLowerCase();
+    if (!normalizedKeyword) return items;
+    return items.filter((item) => {
+      const name = item.name?.toLowerCase() ?? '';
+      const sku = item.sku?.toLowerCase() ?? '';
+      const category = item.category?.toLowerCase() ?? '';
+      return (
+        name.includes(normalizedKeyword) ||
+        sku.includes(normalizedKeyword) ||
+        category.includes(normalizedKeyword)
+      );
+    });
   }, []);
 
   const resolveItem = useCallback(async (id: string) => {
@@ -60,7 +93,7 @@ export default function InventoryItemSelector({
   const mapOption = useCallback(
     (item: InventoryItem): SearchableEntityOption<InventoryItem> => ({
       id: item.id,
-      label: `${item.name} (${item.sku})`,
+      label: formatInventoryItemName(item.name),
       description: '', // Clear description
       data: item,
     }),
@@ -72,13 +105,8 @@ export default function InventoryItemSelector({
       <InventoryItemFormDialog
         open={isCreateOpen}
         onOpenChange={setIsCreateOpen}
-        onSuccess={() => {
-          // We can't easily auto-select the new item without refactoring SearchableEntitySelect to expose control.
-          // For now, user will have to search for the new item. 
-          // Actually, we could potentially pass a callback to SearchableEntitySelect if we refactored it,
-          // but simply closing the dialog is a good first step.
-          // Ideally: onChange(newItem.id, newItem) if we had the newItem here.
-          // But Validation is easier: just let them search.
+        onSuccess={(newItem) => {
+          onChange(newItem.id, newItem);
         }}
       />
       <SearchableEntitySelect<InventoryItem>
@@ -91,7 +119,14 @@ export default function InventoryItemSelector({
         helperText={helperText}
         disabled={disabled}
         searchPlaceholder="输入名称或SKU搜索"
-        emptyText="暂无库存商品"
+        emptyText="暂无可选物品，可点击下方“新增物品”"
+        
+        groupBy={(option) => getCategoryLabel(option.data.category)}
+        renderGroupHeader={({ groupKey, count }) => (
+          <div className="sticky top-0 z-10 -mx-1 -mt-1 mb-1 bg-muted/95 px-3 py-1.5 text-xs font-medium text-foreground/80 backdrop-blur supports-[backdrop-filter]:bg-muted/75">
+            {groupKey} <span className="ml-1 text-[10px] text-muted-foreground font-normal">({count})</span>
+          </div>
+        )}
         renderOption={({ option, isSelected }) => <ItemOption item={option.data} isSelected={isSelected} />}
         renderFooter={({ items, clear, value: currentValue }) => (
           <div className="border-t border-border px-3 py-2">
@@ -109,7 +144,7 @@ export default function InventoryItemSelector({
               onClick={() => setIsCreateOpen(true)}
             >
               <Plus className="h-4 w-4" />
-              新建库存商品
+              新增物品
             </Button>
           </div>
         )}
@@ -121,24 +156,16 @@ export default function InventoryItemSelector({
 function ItemOption({ item, isSelected }: { item: InventoryItem; isSelected: boolean }) {
   return (
     <div className="flex w-full items-start gap-3">
-      <span className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary">{isSelected && <Checkmark />}</span>
+      <div className="mt-1 h-3 w-3 flex-shrink-0 rounded-full border border-primary/30 bg-primary/10">
+        {isSelected && <div className="h-full w-full rounded-full bg-primary" />}
+      </div>
       <div className="flex flex-1 flex-col">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium text-foreground">{item.name}</span>
-          <span className="text-xs text-muted-foreground">{item.sku}</span>
-          <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold text-secondary-foreground">
-            {item.category}
-          </span>
+          <span className="font-medium text-foreground">{formatInventoryItemName(item.name)}</span>
         </div>
       </div>
     </div>
   );
 }
 
-function Checkmark() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-7.25 7.25a1 1 0 01-1.414 0l-3.25-3.25a1 1 0 011.414-1.414L8.5 11.586l6.543-6.543a1 1 0 011.414 0z" clipRule="evenodd" />
-    </svg>
-  );
-}
+

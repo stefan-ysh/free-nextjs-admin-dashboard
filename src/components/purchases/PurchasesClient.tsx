@@ -6,9 +6,7 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-import ProjectSelector from '@/components/common/ProjectSelector';
 import { FORM_DRAWER_WIDTH_WIDE } from '@/components/common/form-drawer-width';
-import SupplierSelector from '@/components/common/SupplierSelector';
 import DatePicker from '@/components/ui/DatePicker';
 import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
@@ -34,8 +32,11 @@ import {
   type PurchaseStats,
   PURCHASE_STATUSES,
   PURCHASE_CHANNELS,
+  PURCHASE_CHANNEL_LABELS,
   PURCHASE_ORGANIZATIONS,
+  PURCHASE_ORGANIZATION_LABELS,
   PAYMENT_METHODS,
+  PAYMENT_METHOD_LABELS,
   isPurchaseSubmittable,
   isPurchaseWithdrawable,
   isPurchaseApprovable,
@@ -47,6 +48,7 @@ import { canDeletePurchase, canEditPurchase } from '@/lib/permissions';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useConfirm } from '@/hooks/useConfirm';
 import { formatDateOnly } from '@/lib/dates';
+import { formatCurrency } from '@/lib/format';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
@@ -73,11 +75,9 @@ type PurchaseFilters = {
   paymentMethod: 'all' | PaymentMethod;
   startDate: string | null;
   endDate: string | null;
-  projectId: string | null;
   minAmount: number | null;
   maxAmount: number | null;
   purchaserId: string | null;
-  supplierId: string | null;
 };
 
 const DEFAULT_FILTERS: PurchaseFilters = {
@@ -88,36 +88,12 @@ const DEFAULT_FILTERS: PurchaseFilters = {
   paymentMethod: 'all',
   startDate: null,
   endDate: null,
-  projectId: null,
   minAmount: null,
   maxAmount: null,
   purchaserId: null,
-  supplierId: null,
 };
 
-const CHANNEL_LABELS: Record<PurchaseChannel, string> = {
-  online: '线上',
-  offline: '线下',
-};
 
-const ORGANIZATION_LABELS: Record<PurchaseOrganization, string> = {
-  school: '学校',
-  company: '单位',
-};
-
-const PAYMENT_LABELS: Record<PaymentMethod, string> = {
-  wechat: '微信',
-  alipay: '支付宝',
-  bank_transfer: '银行转账',
-  corporate_transfer: '对公转账',
-  cash: '现金',
-};
-
-const amountFormatter = new Intl.NumberFormat('zh-CN', {
-  style: 'currency',
-  currency: 'CNY',
-  minimumFractionDigits: 2,
-});
 
 function createFallbackDetail(record: PurchaseRecord): PurchaseDetail {
   const dueAmount = record.totalAmount + (record.feeAmount ?? 0);
@@ -130,9 +106,6 @@ function createFallbackDetail(record: PurchaseRecord): PurchaseDetail {
       employeeCode: null,
       department: null,
     },
-    project: record.projectId
-      ? { id: record.projectId, projectCode: record.projectId, projectName: '—' }
-      : null,
     approver: record.approvedBy ? { id: record.approvedBy, displayName: record.approvedBy } : null,
     pendingApprover: record.pendingApproverId ? { id: record.pendingApproverId, displayName: record.pendingApproverId } : null,
     rejecter: record.rejectedBy ? { id: record.rejectedBy, displayName: record.rejectedBy } : null,
@@ -142,7 +115,6 @@ function createFallbackDetail(record: PurchaseRecord): PurchaseDetail {
     remainingAmount: dueAmount,
     dueAmount,
     logs: [],
-    supplier: null,
   };
 }
 
@@ -161,8 +133,6 @@ function buildQuery(
   if (filters.paymentMethod !== 'all') params.set('paymentMethod', filters.paymentMethod);
   if (filters.startDate) params.set('startDate', filters.startDate);
   if (filters.endDate) params.set('endDate', filters.endDate);
-  if (filters.projectId) params.set('projectId', filters.projectId);
-  if (filters.supplierId) params.set('supplierId', filters.supplierId);
   if (filters.minAmount != null) params.set('minAmount', String(filters.minAmount));
   if (filters.maxAmount != null) params.set('maxAmount', String(filters.maxAmount));
   if (filters.purchaserId) params.set('purchaserId', filters.purchaserId);
@@ -227,8 +197,6 @@ export default function PurchasesClient() {
   const [isPending, startTransition] = useTransition();
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
-  const [projectFilterSummary, setProjectFilterSummary] = useState<{ id: string; name: string; code?: string } | null>(null);
-  const [supplierFilterSummary, setSupplierFilterSummary] = useState<{ id: string; name: string; shortName?: string } | null>(null);
   const [exporting, setExporting] = useState(false);
   const [stats, setStats] = useState<PurchaseStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
@@ -400,30 +368,15 @@ export default function PurchasesClient() {
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
   const showPaginationNav = totalPages > 1;
 
-  const statusSummary = useMemo(() => {
-    const result: Record<PurchaseStatus, number> = {
-      draft: 0,
-      pending_approval: 0,
-      approved: 0,
-      rejected: 0,
-      paid: 0,
-      cancelled: 0,
-    };
-    records.forEach((record) => {
-      result[record.status] += 1;
-    });
-    return result;
-  }, [records]);
+
 
   const advancedFilterCount = useMemo(() => {
     let count = 0;
-    if (filters.projectId) count += 1;
-    if (filters.supplierId) count += 1;
     if (filters.minAmount != null) count += 1;
     if (filters.maxAmount != null) count += 1;
     if (filters.purchaserId) count += 1;
     return count;
-  }, [filters.projectId, filters.supplierId, filters.minAmount, filters.maxAmount, filters.purchaserId]);
+  }, [filters.minAmount, filters.maxAmount, filters.purchaserId]);
 
   const handleView = useCallback(
     (purchase: PurchaseRecord) => {
@@ -439,8 +392,6 @@ export default function PurchasesClient() {
       setPage(1);
       setSortBy('updatedAt');
       setSortOrder('desc');
-      setProjectFilterSummary(null);
-      setSupplierFilterSummary(null);
       setShowAdvancedFilters(false);
     });
   };
@@ -512,30 +463,6 @@ export default function PurchasesClient() {
     [handleFilterChange]
   );
 
-  const handleProjectFilterChange = useCallback(
-    (projectId: string, project?: { projectName: string; projectCode: string } | null) => {
-      handleFilterChange({ projectId: projectId || null });
-      if (project && projectId) {
-        setProjectFilterSummary({ id: projectId, name: project.projectName, code: project.projectCode });
-      } else {
-        setProjectFilterSummary(null);
-      }
-    },
-    [handleFilterChange]
-  );
-
-  const handleSupplierFilterChange = useCallback(
-    (supplierId: string, supplier?: { name: string; shortName?: string | null } | null) => {
-      handleFilterChange({ supplierId: supplierId || null });
-      if (supplier && supplierId) {
-        setSupplierFilterSummary({ id: supplierId, name: supplier.name, shortName: supplier.shortName ?? undefined });
-      } else {
-        setSupplierFilterSummary(null);
-      }
-    },
-    [handleFilterChange]
-  );
-
   const activeFilterChips = useMemo(() => {
     const chips: Array<{ key: string; label: string; onRemove: () => void }> = [];
     if (filters.search.trim()) {
@@ -547,21 +474,21 @@ export default function PurchasesClient() {
     if (filters.purchaseChannel !== 'all') {
       chips.push({
         key: 'channel',
-        label: `渠道：${CHANNEL_LABELS[filters.purchaseChannel]}`,
+        label: `渠道：${PURCHASE_CHANNEL_LABELS[filters.purchaseChannel]}`,
         onRemove: () => handleFilterChange({ purchaseChannel: 'all' }),
       });
     }
     if (filters.organizationType !== 'all') {
       chips.push({
         key: 'organization',
-        label: `组织：${ORGANIZATION_LABELS[filters.organizationType]}`,
+        label: `组织：${PURCHASE_ORGANIZATION_LABELS[filters.organizationType]}`,
         onRemove: () => handleFilterChange({ organizationType: 'all' }),
       });
     }
     if (filters.paymentMethod !== 'all') {
       chips.push({
         key: 'payment',
-        label: `付款：${PAYMENT_LABELS[filters.paymentMethod]}`,
+        label: `付款：${PAYMENT_METHOD_LABELS[filters.paymentMethod]}`,
         onRemove: () => handleFilterChange({ paymentMethod: 'all' }),
       });
     }
@@ -570,18 +497,6 @@ export default function PurchasesClient() {
     }
     if (filters.endDate) {
       chips.push({ key: 'endDate', label: `止：${filters.endDate}`, onRemove: () => handleFilterChange({ endDate: null }) });
-    }
-    if (filters.projectId) {
-      const label = projectFilterSummary
-        ? `项目：${projectFilterSummary.name}${projectFilterSummary.code ? `（${projectFilterSummary.code}）` : ''}`
-        : `项目：${filters.projectId}`;
-      chips.push({ key: 'project', label, onRemove: () => handleProjectFilterChange('', null) });
-    }
-    if (filters.supplierId) {
-      const label = supplierFilterSummary
-        ? `供应商：${supplierFilterSummary.name}${supplierFilterSummary.shortName ? `（${supplierFilterSummary.shortName}）` : ''}`
-        : `供应商：${filters.supplierId}`;
-      chips.push({ key: 'supplier', label, onRemove: () => handleSupplierFilterChange('', null) });
     }
     if (filters.minAmount != null) {
       chips.push({ key: 'minAmount', label: `金额≥¥${filters.minAmount}`, onRemove: () => handleFilterChange({ minAmount: null }) });
@@ -593,7 +508,7 @@ export default function PurchasesClient() {
       chips.push({ key: 'purchaserId', label: '指定员工', onRemove: () => handleFilterChange({ purchaserId: null }) });
     }
     return chips;
-  }, [filters, handleFilterChange, handleProjectFilterChange, handleSupplierFilterChange, projectFilterSummary, supplierFilterSummary]);
+  }, [filters, handleFilterChange]);
 
 
 
@@ -892,22 +807,22 @@ export default function PurchasesClient() {
             <>
               <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
                 <span className="font-medium text-foreground">总采购金额</span>
-                <span className="font-semibold text-foreground">{amountFormatter.format(stats.totalAmount)}</span>
+                <span className="font-semibold text-foreground">{formatCurrency(stats.totalAmount)}</span>
                 <span className="text-[10px] text-muted-foreground/80">共 {stats.totalPurchases} 条</span>
               </div>
               <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
                 <span className="font-medium text-foreground">待审批</span>
-                <span className="font-semibold text-chart-3">{amountFormatter.format(stats.pendingAmount)}</span>
+                <span className="font-semibold text-chart-3">{formatCurrency(stats.pendingAmount)}</span>
                 <span className="text-[10px] text-muted-foreground/80">{stats.pendingCount} 条</span>
               </div>
               <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
                 <span className="font-medium text-foreground">已批准</span>
-                <span className="font-semibold text-chart-1">{amountFormatter.format(stats.approvedAmount)}</span>
+                <span className="font-semibold text-chart-1">{formatCurrency(stats.approvedAmount)}</span>
                 <span className="text-[10px] text-muted-foreground/80">{stats.approvedCount} 条</span>
               </div>
               <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
                 <span className="font-medium text-foreground">已打款</span>
-                <span className="font-semibold text-chart-5">{amountFormatter.format(stats.paidAmount)}</span>
+                <span className="font-semibold text-chart-5">{formatCurrency(stats.paidAmount)}</span>
                 <span className="text-[10px] text-muted-foreground/80">{stats.paidCount} 条</span>
               </div>
             </>
@@ -1001,7 +916,7 @@ export default function PurchasesClient() {
                           <SelectItem value="all">全部渠道</SelectItem>
                           {PURCHASE_CHANNELS.map((channel) => (
                             <SelectItem key={channel} value={channel}>
-                              {CHANNEL_LABELS[channel]}
+                              {PURCHASE_CHANNEL_LABELS[channel]}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1020,7 +935,7 @@ export default function PurchasesClient() {
                           <SelectItem value="all">全部组织</SelectItem>
                           {PURCHASE_ORGANIZATIONS.map((org) => (
                             <SelectItem key={org} value={org}>
-                              {ORGANIZATION_LABELS[org]}
+                              {PURCHASE_ORGANIZATION_LABELS[org]}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1039,7 +954,7 @@ export default function PurchasesClient() {
                           <SelectItem value="all">全部付款方式</SelectItem>
                           {PAYMENT_METHODS.map((method) => (
                             <SelectItem key={method} value={method}>
-                              {PAYMENT_LABELS[method]}
+                              {PAYMENT_METHOD_LABELS[method]}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1130,25 +1045,6 @@ export default function PurchasesClient() {
                               className="h-10"
                             />
                           </div>
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">关联项目（可选）</label>
-                          <ProjectSelector
-                            value={filters.projectId ?? ''}
-                            onChange={(projectId, project) => handleProjectFilterChange(projectId, project ?? undefined)}
-                            disabled={loading}
-                            helperText="快速定位对应项目的采购记录"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">关联供应商（可选）</label>
-                          <SupplierSelector
-                            value={filters.supplierId ?? ''}
-                            onChange={(supplierId, supplier) => handleSupplierFilterChange(supplierId, supplier ?? undefined)}
-                            disabled={loading}
-                            helperText="默认展示状态为正常的供应商，可输入关键字搜索"
-                            status="all"
-                          />
                         </div>
                       </div>
                     )}

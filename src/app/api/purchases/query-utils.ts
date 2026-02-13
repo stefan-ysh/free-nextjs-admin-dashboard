@@ -30,12 +30,6 @@ export function parsePurchaseListParams(searchParams: URLSearchParams): ListPurc
     params.status = statusParam;
   }
 
-  const projectId = searchParams.get('projectId');
-  if (projectId) params.projectId = projectId;
-
-  const supplierId = searchParams.get('supplierId');
-  if (supplierId) params.supplierId = supplierId;
-
   const organizationTypeParam = searchParams.get('organizationType');
   if (isPurchaseOrganization(organizationTypeParam)) {
     params.organizationType = organizationTypeParam;

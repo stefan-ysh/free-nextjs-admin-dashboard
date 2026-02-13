@@ -26,13 +26,14 @@ export const purchaseFormSchema = z
   .object({
     purchaseDate: z.string().min(1, '请选择采购日期'),
     organizationType: purchaseOrganizationEnum,
-    itemName: z.string().min(1, '请填写物品名称'),
+    itemName: z.string().optional().nullable(),
     inventoryItemId: z.string().optional().nullable(),
     specification: z.string().optional().nullable(),
     quantity: z.coerce.number().min(0.01, '数量必须大于 0'),
     unitPrice: z.coerce.number().min(0.01, '单价必须大于 0'),
     feeAmount: z.coerce.number().min(0, '手续费不能为负数').default(0),
     purchaseChannel: purchaseChannelEnum,
+    onlinePlatform: z.string().optional().nullable(),
     purchaseLocation: z.string().optional().nullable(),
     purchaseLink: z.string().optional().nullable(),
     purpose: z.string().min(1, '请填写采购用途'),
@@ -43,7 +44,6 @@ export const purchaseFormSchema = z
     payerName: z.string().optional().nullable(),
     transactionNo: z.string().optional().nullable(),
     purchaserId: z.string().min(1, '请选择申请人'),
-    supplierId: z.string().optional().nullable(),
     hasInvoice: z.boolean().default(false),
     invoiceType: invoiceTypeEnum,
     invoiceStatus: invoiceStatusEnum,
@@ -51,17 +51,30 @@ export const purchaseFormSchema = z
     invoiceIssueDate: z.string().optional().nullable(),
     invoiceImages: z.array(z.string()).default([]),
     receiptImages: z.array(z.string()).default([]),
-    hasProject: z.boolean().default(false).optional(),
-    projectId: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
     attachments: z.array(z.string()).default([]),
   })
   .superRefine((values, ctx) => {
+    if (!values.inventoryItemId?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '请选择物品；若不存在请先新增物品',
+        path: ['inventoryItemId'],
+      });
+    }
+
     if (values.purchaseChannel === 'online' && !values.purchaseLink?.trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: '线上采购需要填写商品链接',
         path: ['purchaseLink'],
+      });
+    }
+    if (values.purchaseChannel === 'online' && !values.onlinePlatform?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '线上采购需要选择网购平台',
+        path: ['onlinePlatform'],
       });
     }
 

@@ -1,16 +1,64 @@
 import { schemaPool, safeCreateIndex, ensureColumn } from '@/lib/schema/mysql-utils';
 import { ensureUsersSchema } from '@/lib/schema/users';
-import { ensureProjectsSchema } from '@/lib/schema/projects';
-import { ensureSuppliersSchema } from '@/lib/schema/suppliers';
 
 let initialized = false;
+
+async function dropForeignKeyIfExists(table: string, constraint: string) {
+  const pool = schemaPool();
+  const [rows] = (await pool.query(
+    `
+      SELECT COUNT(*) AS exists_count
+      FROM information_schema.TABLE_CONSTRAINTS
+      WHERE CONSTRAINT_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND CONSTRAINT_NAME = ?
+        AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+    `,
+    [table, constraint]
+  )) as [Array<{ exists_count: number }>, unknown];
+  if (Number(rows?.[0]?.exists_count ?? 0) > 0) {
+    await pool.query(`ALTER TABLE \`${table}\` DROP FOREIGN KEY \`${constraint}\``);
+  }
+}
+
+async function dropIndexIfExists(table: string, index: string) {
+  const pool = schemaPool();
+  const [rows] = (await pool.query(
+    `
+      SELECT COUNT(*) AS exists_count
+      FROM information_schema.STATISTICS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND INDEX_NAME = ?
+    `,
+    [table, index]
+  )) as [Array<{ exists_count: number }>, unknown];
+  if (Number(rows?.[0]?.exists_count ?? 0) > 0) {
+    await pool.query(`ALTER TABLE \`${table}\` DROP INDEX \`${index}\``);
+  }
+}
+
+async function dropColumnIfExists(table: string, column: string) {
+  const pool = schemaPool();
+  const [rows] = (await pool.query(
+    `
+      SELECT COUNT(*) AS exists_count
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND COLUMN_NAME = ?
+    `,
+    [table, column]
+  )) as [Array<{ exists_count: number }>, unknown];
+  if (Number(rows?.[0]?.exists_count ?? 0) > 0) {
+    await pool.query(`ALTER TABLE \`${table}\` DROP COLUMN \`${column}\``);
+  }
+}
 
 export async function ensurePurchasesSchema() {
   if (initialized) return;
 
   await ensureUsersSchema();
-  await ensureProjectsSchema();
-  await ensureSuppliersSchema();
 
   const pool = schemaPool();
 
@@ -36,15 +84,12 @@ export async function ensurePurchasesSchema() {
       payer_name VARCHAR(120),
       transaction_no VARCHAR(160),
       purchaser_id CHAR(36) NOT NULL,
-      supplier_id CHAR(36),
       invoice_type ENUM('special','general','none') NOT NULL,
       invoice_status ENUM('pending','issued','not_required') NOT NULL DEFAULT 'not_required',
       invoice_number VARCHAR(120),
       invoice_issue_date DATE,
       invoice_images JSON NOT NULL DEFAULT (JSON_ARRAY()),
       receipt_images JSON NOT NULL DEFAULT (JSON_ARRAY()),
-      has_project TINYINT(1) NOT NULL DEFAULT 0,
-      project_id CHAR(36),
       status ENUM('draft','pending_approval','approved','rejected','paid','cancelled') NOT NULL DEFAULT 'draft',
       reimbursement_status ENUM('none','invoice_pending','reimbursement_pending','reimbursement_rejected','reimbursed') NOT NULL DEFAULT 'none',
       reimbursement_submitted_at DATETIME(3),
@@ -81,15 +126,13 @@ export async function ensurePurchasesSchema() {
       CONSTRAINT chk_purchases_total_consistency CHECK (ABS(total_amount - (quantity * unit_price)) <= 0.01),
       CONSTRAINT fk_purchases_purchaser FOREIGN KEY (purchaser_id) REFERENCES hr_employees(id) ON DELETE RESTRICT,
       CONSTRAINT fk_purchases_created_by FOREIGN KEY (created_by) REFERENCES hr_employees(id) ON DELETE RESTRICT,
-      CONSTRAINT fk_purchases_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
       CONSTRAINT fk_purchases_pending_approver FOREIGN KEY (pending_approver_id) REFERENCES hr_employees(id) ON DELETE SET NULL,
       CONSTRAINT fk_purchases_reimbursement_submitted_by FOREIGN KEY (reimbursement_submitted_by) REFERENCES hr_employees(id) ON DELETE SET NULL,
       CONSTRAINT fk_purchases_reimbursement_rejected_by FOREIGN KEY (reimbursement_rejected_by) REFERENCES hr_employees(id) ON DELETE SET NULL,
       CONSTRAINT fk_purchases_approved_by FOREIGN KEY (approved_by) REFERENCES hr_employees(id) ON DELETE SET NULL,
       CONSTRAINT fk_purchases_rejected_by FOREIGN KEY (rejected_by) REFERENCES hr_employees(id) ON DELETE SET NULL,
       CONSTRAINT fk_purchases_payment_issue_by FOREIGN KEY (payment_issue_by) REFERENCES hr_employees(id) ON DELETE SET NULL,
-      CONSTRAINT fk_purchases_paid_by FOREIGN KEY (paid_by) REFERENCES hr_employees(id) ON DELETE SET NULL,
-      CONSTRAINT fk_purchases_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL
+      CONSTRAINT fk_purchases_paid_by FOREIGN KEY (paid_by) REFERENCES hr_employees(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
@@ -108,7 +151,6 @@ export async function ensurePurchasesSchema() {
   await ensureColumn('purchases', 'payment_channel', 'VARCHAR(120)');
   await ensureColumn('purchases', 'payer_name', 'VARCHAR(120)');
   await ensureColumn('purchases', 'transaction_no', 'VARCHAR(160)');
-  await ensureColumn('purchases', 'supplier_id', 'CHAR(36) NULL');
   await ensureColumn(
     'purchases',
     'invoice_status',
@@ -145,6 +187,16 @@ export async function ensurePurchasesSchema() {
   await ensureColumn('purchases', 'payment_issue_at', 'DATETIME(3) NULL');
   await ensureColumn('purchases', 'payment_issue_by', 'CHAR(36) NULL');
   await ensureColumn('purchases', 'inventory_item_id', 'CHAR(36) NULL');
+  await dropForeignKeyIfExists('purchases', 'fk_purchases_supplier');
+  await dropIndexIfExists('purchases', 'idx_purchases_supplier');
+  await dropColumnIfExists('purchases', 'supplier_id');
+  await dropForeignKeyIfExists('purchases', 'fk_purchases_project');
+  await dropIndexIfExists('purchases', 'idx_purchases_project');
+  await dropColumnIfExists('purchases', 'has_project');
+  await dropColumnIfExists('purchases', 'project_id');
+  await dropForeignKeyIfExists('finance_records', 'fk_finance_supplier');
+  await dropIndexIfExists('finance_records', 'idx_finance_supplier');
+  await dropColumnIfExists('finance_records', 'supplier_id');
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS reimbursement_logs (
@@ -197,15 +249,18 @@ export async function ensurePurchasesSchema() {
   await safeCreateIndex('CREATE INDEX idx_purchases_purchaser ON purchases(purchaser_id)');
   await safeCreateIndex('CREATE INDEX idx_purchases_status ON purchases(status)');
   await safeCreateIndex('CREATE INDEX idx_purchases_reimbursement_status ON purchases(reimbursement_status)');
-  await safeCreateIndex('CREATE INDEX idx_purchases_project ON purchases(project_id)');
   await safeCreateIndex('CREATE INDEX idx_purchases_date ON purchases(purchase_date)');
   await safeCreateIndex('CREATE INDEX idx_purchases_created_by ON purchases(created_by)');
-  await safeCreateIndex('CREATE INDEX idx_purchases_supplier ON purchases(supplier_id)');
   await safeCreateIndex('CREATE INDEX idx_reimbursement_logs_purchase ON reimbursement_logs(purchase_id)');
   await safeCreateIndex('CREATE INDEX idx_reimbursement_logs_created ON reimbursement_logs(created_at)');
   await safeCreateIndex('CREATE INDEX idx_purchase_payments_purchase ON purchase_payments(purchase_id)');
   await safeCreateIndex('CREATE INDEX idx_purchase_payments_paid_at ON purchase_payments(paid_at)');
   await safeCreateIndex('CREATE INDEX idx_purchase_workflow_enabled ON purchase_workflow_configs(enabled)');
+
+  // Hard-delete deprecated supplier module tables.
+  await pool.query('DROP TABLE IF EXISTS supplier_bank_accounts');
+  await pool.query('DROP TABLE IF EXISTS supplier_contacts');
+  await pool.query('DROP TABLE IF EXISTS suppliers');
 
   initialized = true;
 }

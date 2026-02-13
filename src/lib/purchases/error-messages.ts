@@ -8,14 +8,10 @@ const PURCHASE_VALIDATION_MESSAGES: Record<string, string> = {
   INVALID_FEE_AMOUNT: '手续费金额不正确，请填写大于等于 0 的数字',
   INVALID_PAYMENT_TYPE: '请选择正确的付款方式',
   INVALID_ORGANIZATION_TYPE: '请选择正确的采购组织',
-  PROJECT_REQUIRED: '请选择需要关联的项目',
-  PROJECT_NOT_ALLOWED: '当前采购不需要关联项目，请取消选择',
-  PROJECT_NOT_FOUND: '选择的项目不存在或已被删除',
   PURCHASER_REQUIRED: '请选择采购人',
   CREATED_BY_REQUIRED: '当前登录信息异常，请重新登录后再试',
   CREATED_BY_NOT_FOUND: '创建人不存在或已被禁用，请重新登录后再试',
   PURCHASER_NOT_FOUND: '采购人不存在或已被禁用，请重新选择',
-  SUPPLIER_NOT_FOUND: '供应商不存在或已被停用，请重新选择',
   INVALID_INVOICE_STATUS: '发票状态填写有误，请重新选择',
   APPROVER_REQUIRED: '请选择审批人',
   NOT_EDITABLE: '当前状态下不能修改采购信息',
@@ -45,7 +41,6 @@ export function mapPurchaseValidationError(error: unknown): string | null {
   if (
     code.startsWith('PURCHASE_') ||
     code.startsWith('INVALID_') ||
-    code.startsWith('PROJECT_') ||
     code.startsWith('MISSING_') ||
     code.startsWith('NOT_')
   ) {

@@ -34,6 +34,11 @@ type FooterRendererArgs<T> = {
   value: string;
 };
 
+type GroupHeaderRendererArgs = {
+  groupKey: string;
+  count: number;
+};
+
 type SearchableEntitySelectProps<T> = {
   value: string;
   onChange: (id: string, entity?: T | null) => void;
@@ -51,6 +56,8 @@ type SearchableEntitySelectProps<T> = {
   renderOption?: (args: OptionRendererArgs<T>) => React.ReactNode;
   renderSummary?: (entity: T) => React.ReactNode;
   renderFooter?: (args: FooterRendererArgs<T>) => React.ReactNode;
+  groupBy?: (option: SearchableEntityOption<T>) => string;
+  renderGroupHeader?: (args: GroupHeaderRendererArgs) => React.ReactNode;
 };
 
 const DEFAULT_DEBOUNCE = 350;
@@ -72,6 +79,8 @@ export function SearchableEntitySelect<T>({
   renderOption,
   renderSummary,
   renderFooter,
+  groupBy,
+  renderGroupHeader,
 }: SearchableEntitySelectProps<T>) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -164,6 +173,22 @@ export function SearchableEntitySelect<T>({
     return emptyText;
   }, [debouncedSearch, emptyText, error]);
 
+  const groupedOptions = useMemo(() => {
+    if (!groupBy) return null;
+    const groups: Array<{ key: string; items: SearchableEntityOption<T>[] }> = [];
+    const groupMap = new Map<string, SearchableEntityOption<T>[]>();
+    options.forEach((option) => {
+      const key = groupBy(option) || '未分类';
+      if (!groupMap.has(key)) {
+        const items: SearchableEntityOption<T>[] = [];
+        groupMap.set(key, items);
+        groups.push({ key, items });
+      }
+      groupMap.get(key)!.push(option);
+    });
+    return groups;
+  }, [groupBy, options]);
+
   const handleSelect = (option: SearchableEntityOption<T>) => {
     onChange(option.id, option.data);
     setOpen(false);
@@ -231,6 +256,35 @@ export function SearchableEntitySelect<T>({
                 </div>
               ) : options.length === 0 ? (
                 <div className="px-4 py-6 text-center text-sm text-muted-foreground">{emptyStateText}</div>
+              ) : groupedOptions ? (
+                groupedOptions.map((group) => (
+                  <div key={group.key}>
+                    {renderGroupHeader ? (
+                      renderGroupHeader({ groupKey: group.key, count: group.items.length })
+                    ) : (
+                      <div className="bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">
+                        {group.key}（{group.items.length}）
+                      </div>
+                    )}
+                    {group.items.map((option) => {
+                      const isSelected = option.id === value;
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => handleSelect(option)}
+                          className={cn('flex w-full px-4 py-3 text-left text-sm transition hover:bg-muted/60', isSelected && 'bg-primary/10')}
+                        >
+                          {renderOption ? (
+                            renderOption({ option, isSelected })
+                          ) : (
+                            <DefaultOption option={option} isSelected={isSelected} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))
               ) : (
                 options.map((option) => {
                   const isSelected = option.id === value;

@@ -55,7 +55,7 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   item?: InventoryItem | null;
-  onSuccess?: () => void;
+  onSuccess?: (item: InventoryItem) => void;
 };
 
 export default function InventoryItemFormDialog({ open, onOpenChange, item, onSuccess }: Props) {
@@ -150,13 +150,15 @@ export default function InventoryItemFormDialog({ open, onOpenChange, item, onSu
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const body = await response.json();
+      const body = (await response.json()) as { data?: InventoryItem; error?: string };
       if (!response.ok) {
         throw new Error(body.error ?? '保存失败');
       }
 
       toast.success(isEditMode ? '商品已更新' : '商品已创建');
-      onSuccess?.();
+      if (body.data) {
+        onSuccess?.(body.data);
+      }
       onOpenChange(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '提交失败');

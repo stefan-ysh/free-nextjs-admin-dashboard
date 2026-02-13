@@ -4,8 +4,17 @@ import { requireCurrentUser } from '@/lib/auth/current-user';
 import { toPermissionUser } from '@/lib/auth/permission-user';
 import { listPurchases } from '@/lib/db/purchases';
 import { checkPermission, Permissions } from '@/lib/permissions';
-import type { PurchaseRecord } from '@/types/purchase';
-import { getPurchaseStatusText } from '@/types/purchase';
+import {
+  getPurchaseStatusText,
+  INVOICE_STATUS_LABELS,
+  INVOICE_TYPE_LABELS,
+  PAYMENT_METHOD_LABELS,
+  PAYMENT_TYPE_LABELS,
+  PURCHASE_CHANNEL_LABELS,
+  PURCHASE_ORGANIZATION_LABELS,
+  type PurchaseRecord,
+} from '@/types/purchase';
+import { formatCurrency } from '@/lib/format';
 import { parsePurchaseListParams } from '../query-utils';
 
 const MAX_EXPORT_ROWS = 5000;
@@ -20,9 +29,7 @@ function escapeCsvValue(value: unknown): string {
   return stringValue;
 }
 
-function formatCurrency(value: number): string {
-  return value.toFixed(2);
-}
+
 
 function buildCsv(records: PurchaseRecord[]): string {
   const header = [
@@ -40,11 +47,7 @@ function buildCsv(records: PurchaseRecord[]): string {
     '采购渠道',
     '付款方式',
     '款项类型',
-    '支付通道',
-    '代付人',
-    '支付流水号',
     '申请人',
-    '关联项目',
     '发票类型',
     '开票状态',
     '发票号码',
@@ -56,49 +59,13 @@ function buildCsv(records: PurchaseRecord[]): string {
     '打款时间',
   ];
 
-  const channelLabels: Record<PurchaseRecord['purchaseChannel'], string> = {
-    online: '线上',
-    offline: '线下',
-  };
 
-  const organizationLabels: Record<PurchaseRecord['organizationType'], string> = {
-    school: '学校',
-    company: '单位',
-  };
-
-  const paymentLabels: Record<PurchaseRecord['paymentMethod'], string> = {
-    wechat: '微信',
-    alipay: '支付宝',
-    bank_transfer: '银行转账',
-    corporate_transfer: '对公转账',
-    cash: '现金',
-  };
-
-  const paymentTypeLabels: Record<PurchaseRecord['paymentType'], string> = {
-    deposit: '定金',
-    full: '全款',
-    installment: '分期',
-    balance: '尾款',
-    other: '其他',
-  };
-
-  const invoiceTypeLabels: Record<PurchaseRecord['invoiceType'], string> = {
-    special: '增值税专票',
-    general: '普通发票',
-    none: '无需发票',
-  };
-
-  const invoiceStatusLabels: Record<PurchaseRecord['invoiceStatus'], string> = {
-    issued: '已开票',
-    pending: '待开票',
-    not_required: '无需开票',
-  };
 
   const rows = records.map((purchase) => [
     purchase.purchaseNumber,
     getPurchaseStatusText(purchase.status),
     purchase.purchaseDate,
-    organizationLabels[purchase.organizationType] ?? purchase.organizationType,
+    PURCHASE_ORGANIZATION_LABELS[purchase.organizationType] ?? purchase.organizationType,
     purchase.itemName,
     purchase.specification ?? '',
     purchase.quantity,
@@ -106,16 +73,12 @@ function buildCsv(records: PurchaseRecord[]): string {
     formatCurrency(purchase.totalAmount),
     formatCurrency(purchase.feeAmount ?? 0),
     formatCurrency(purchase.totalAmount + (purchase.feeAmount ?? 0)),
-    channelLabels[purchase.purchaseChannel],
-    paymentLabels[purchase.paymentMethod],
-    paymentTypeLabels[purchase.paymentType],
-    purchase.paymentChannel ?? '',
-    purchase.payerName ?? '',
-    purchase.transactionNo ?? '',
+    PURCHASE_CHANNEL_LABELS[purchase.purchaseChannel],
+    PAYMENT_METHOD_LABELS[purchase.paymentMethod],
+    PAYMENT_TYPE_LABELS[purchase.paymentType],
     purchase.purchaserId,
-    purchase.projectId ?? '',
-    invoiceTypeLabels[purchase.invoiceType],
-    invoiceStatusLabels[purchase.invoiceStatus],
+    INVOICE_TYPE_LABELS[purchase.invoiceType],
+    INVOICE_STATUS_LABELS[purchase.invoiceStatus],
     purchase.invoiceNumber ?? '',
     purchase.invoiceIssueDate ?? '',
     purchase.purpose,

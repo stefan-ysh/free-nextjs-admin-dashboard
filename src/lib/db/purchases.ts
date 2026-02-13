@@ -4,7 +4,6 @@ import type { PoolConnection } from 'mysql2/promise';
 
 import { mysqlPool, mysqlQuery } from '@/lib/mysql';
 import { ensurePurchasesSchema } from '@/lib/schema/purchases';
-import { getSupplierById } from '@/lib/db/suppliers';
 import {
   PurchaseRecord,
   PurchaseDetail,
@@ -43,10 +42,8 @@ import {
   PaymentQueueStatus,
 } from '@/types/purchase';
 import { findUserById, ensureBusinessUserRecord } from '@/lib/users';
-import { findProjectById } from '@/lib/db/projects';
 import { normalizeDateInput } from '@/lib/dates';
 import { InvoiceType as FinanceInvoiceType } from '@/types/finance';
-import type { SupplierStatus } from '@/types/supplier';
 import { createPurchaseExpense } from '@/lib/services/finance-automation';
 import { createInboundRecord, getWarehouseByCode } from '@/lib/db/inventory';
 
@@ -68,33 +65,15 @@ const pool = mysqlPool();
 
 const PURCHASE_SELECT_FIELDS = `
   p.*,
-  s.name AS supplier_name,
-  s.short_name AS supplier_short_name,
-  s.status AS supplier_status,
   p.inventory_item_id
 `;
 
 const PURCHASE_FROM_CLAUSE = `
   FROM purchases p
-  LEFT JOIN suppliers s ON s.id = p.supplier_id AND s.is_deleted = 0
 `;
 
 const hasOwn = <T extends object>(obj: T, key: PropertyKey): boolean =>
   Object.prototype.hasOwnProperty.call(obj, key);
-
-async function resolveSupplierId(rawId?: string | null): Promise<string | null> {
-  const sanitized = sanitizeId(rawId);
-  if (!sanitized) {
-    return null;
-  }
-  const result = await mysqlQuery<RowDataPacket & { id: string }>`
-    SELECT id FROM suppliers WHERE id = ${sanitized} AND is_deleted = 0 LIMIT 1
-  `;
-  if (!result.rows.length) {
-    throw new Error('SUPPLIER_NOT_FOUND');
-  }
-  return sanitized;
-}
 
 type RawPurchaseRow = RowDataPacket & {
   id: string;
@@ -118,7 +97,6 @@ type RawPurchaseRow = RowDataPacket & {
   payer_name: string | null;
   transaction_no: string | null;
   purchaser_id: string;
-  supplier_id: string | null;
   invoice_type: string;
   invoice_status: string;
   reimbursement_status: string;
@@ -131,8 +109,6 @@ type RawPurchaseRow = RowDataPacket & {
   invoice_issue_date: string | null;
   invoice_images: string | null;
   receipt_images: string | null;
-  has_project: number;
-  project_id: string | null;
   status: string;
   submitted_at: string | null;
   pending_approver_id: string | null;
@@ -155,9 +131,6 @@ type RawPurchaseRow = RowDataPacket & {
   created_by: string;
   is_deleted: number;
   deleted_at: string | null;
-  supplier_name?: string | null;
-  supplier_short_name?: string | null;
-  supplier_status?: SupplierStatus | null;
 };
 
 type RawPaymentQueueRow = RawPurchaseRow & {
@@ -329,10 +302,6 @@ function mapPurchase(row: RawPurchaseRow | undefined): PurchaseRecord | null {
     payerName: row.payer_name,
     transactionNo: row.transaction_no,
     purchaserId: row.purchaser_id,
-    supplierId: row.supplier_id ?? null,
-    supplierName: row.supplier_name ?? undefined,
-    supplierShortName: row.supplier_short_name ?? undefined,
-    supplierStatus: row.supplier_status ?? undefined,
     invoiceType: normalizeInvoiceType(row.invoice_type),
     invoiceStatus: normalizeInvoiceStatus(row.invoice_status),
     reimbursementStatus: normalizeReimbursementStatus(row.reimbursement_status),
@@ -345,8 +314,6 @@ function mapPurchase(row: RawPurchaseRow | undefined): PurchaseRecord | null {
     invoiceIssueDate: row.invoice_issue_date,
     invoiceImages: parseJsonArray(row.invoice_images),
     receiptImages: parseJsonArray(row.receipt_images),
-    hasProject: row.has_project === 1,
-    projectId: row.project_id,
     status: normalizePurchaseStatus(row.status),
     pendingApproverId: row.pending_approver_id ?? null,
 
@@ -379,7 +346,6 @@ function mapPaymentQueueItem(row: RawPaymentQueueRow): PurchasePaymentQueueItem 
   const remainingAmount = Math.max(0, Number((dueAmount - paidAmount).toFixed(2)));
   return {
     ...base,
-    supplierName: row.supplier_name ?? null,
     paidAmount,
     remainingAmount,
     purchaserName: row.purchaser_display_name ?? null,
@@ -457,16 +423,6 @@ function buildPurchaseFilterClause(params: ListPurchasesParams = {}, tableAlias 
       `EXISTS (SELECT 1 FROM hr_employees he_scope WHERE he_scope.id = ${column('purchaser_id')} AND he_scope.department = ?)`
     );
     values.push(params.purchaserDepartment);
-  }
-
-  if (params.projectId) {
-    conditions.push(`${column('project_id')} = ?`);
-    values.push(params.projectId);
-  }
-
-  if (params.supplierId) {
-    conditions.push(`${column('supplier_id')} = ?`);
-    values.push(params.supplierId);
   }
 
   if (params.organizationType) {
@@ -668,24 +624,6 @@ export async function createPurchase(
     throw new Error('INVALID_PAYMENT_TYPE');
   }
 
-  const hasProject = Boolean(input.hasProject);
-  const trimmedProjectId = input.projectId?.trim();
-  if (hasProject && !trimmedProjectId) {
-    throw new Error('PROJECT_REQUIRED');
-  }
-  if (!hasProject && trimmedProjectId) {
-    throw new Error('PROJECT_NOT_ALLOWED');
-  }
-
-  let resolvedProjectId: string | null = null;
-  if (hasProject && trimmedProjectId) {
-    const project = await findProjectById(trimmedProjectId);
-    if (!project || project.isDeleted) {
-      throw new Error('PROJECT_NOT_FOUND');
-    }
-    resolvedProjectId = project.id;
-  }
-
   const id = randomUUID();
   const purchaseNumber = await generatePurchaseNumber();
   const totalAmount = +(input.quantity * input.unitPrice).toFixed(2);
@@ -698,7 +636,6 @@ export async function createPurchase(
   const paymentChannel = input.paymentChannel?.trim() || null;
   const payerName = input.payerName?.trim() || null;
   const transactionNo = input.transactionNo?.trim() || null;
-  const supplierId = await resolveSupplierId(input.supplierId);
 
   const invoiceType = input.invoiceType;
   if (input.invoiceStatus !== undefined && !isInvoiceStatus(input.invoiceStatus)) {
@@ -744,15 +681,12 @@ export async function createPurchase(
       'payer_name',
       'transaction_no',
       'purchaser_id',
-      'supplier_id',
       'invoice_type',
       'invoice_status',
       'invoice_number',
       'invoice_issue_date',
       'invoice_images',
       'receipt_images',
-      'has_project',
-      'project_id',
       'notes',
       'attachments',
       'created_by',
@@ -786,15 +720,12 @@ export async function createPurchase(
       payerName,
       transactionNo,
       purchaserId,
-      supplierId,
       input.invoiceType,
       invoiceStatus,
       invoiceNumber,
       invoiceIssueDate,
       serializeArray(invoiceImages),
       serializeArray(input.receiptImages),
-      hasProject ? 1 : 0,
-      resolvedProjectId,
       input.notes ?? null,
       serializeArray(input.attachments),
       creatorId,
@@ -835,27 +766,20 @@ export async function getPurchaseDetail(id: string): Promise<PurchaseDetail | nu
   if (!purchase) return null;
 
   const purchaserPromise = findUserById(purchase.purchaserId);
-  const projectPromise = purchase.projectId ? findProjectById(purchase.projectId) : Promise.resolve(null);
   const approverPromise = purchase.approvedBy ? findUserById(purchase.approvedBy) : Promise.resolve(null);
   const pendingApproverPromise = purchase.pendingApproverId ? findUserById(purchase.pendingApproverId) : Promise.resolve(null);
   const rejecterPromise = purchase.rejectedBy ? findUserById(purchase.rejectedBy) : Promise.resolve(null);
   const payerPromise = purchase.paidBy ? findUserById(purchase.paidBy) : Promise.resolve(null);
   const logsPromise = getPurchaseLogs(purchase.id);
   const paymentsPromise = listPurchasePayments(purchase.id);
-  const supplierPromise = purchase.supplierId
-    ? getSupplierById(purchase.supplierId).catch(() => null)
-    : Promise.resolve(null);
-
-  const [purchaserUser, project, approverUser, pendingApproverUser, rejecterUser, payerUser, logs, payments, supplier] = await Promise.all([
+  const [purchaserUser, approverUser, pendingApproverUser, rejecterUser, payerUser, logs, payments] = await Promise.all([
     purchaserPromise,
-    projectPromise,
     approverPromise,
     pendingApproverPromise,
     rejecterPromise,
     payerPromise,
     logsPromise,
     paymentsPromise,
-    supplierPromise,
   ]);
 
   const dueAmount = Number(purchase.totalAmount ?? 0) + Number(purchase.feeAmount ?? 0);
@@ -865,13 +789,6 @@ export async function getPurchaseDetail(id: string): Promise<PurchaseDetail | nu
   return {
     ...purchase,
     purchaser: buildPurchaserProfile(purchaserUser, purchase.purchaserId),
-    project: project
-      ? {
-        id: project.id,
-        projectCode: project.projectCode,
-        projectName: project.projectName,
-      }
-      : null,
     approver: buildBasicUserProfile(approverUser),
     pendingApprover: buildBasicUserProfile(pendingApproverUser),
     rejecter: buildBasicUserProfile(rejecterUser),
@@ -881,7 +798,6 @@ export async function getPurchaseDetail(id: string): Promise<PurchaseDetail | nu
     remainingAmount,
     dueAmount,
     logs,
-    supplier: supplier ?? null,
   };
 }
 
@@ -960,9 +876,9 @@ function buildPaymentQueueFilterClause(params: PaymentQueueFilters = {}) {
   if (params.search) {
     const search = `%${params.search.trim().toLowerCase()}%`;
     conditions.push(
-      '(LOWER(p.purchase_number) LIKE ? OR LOWER(p.item_name) LIKE ? OR LOWER(p.purpose) LIKE ? OR LOWER(s.name) LIKE ?)'
+      '(LOWER(p.purchase_number) LIKE ? OR LOWER(p.item_name) LIKE ? OR LOWER(p.purpose) LIKE ?)'
     );
-    values.push(search, search, search, search);
+    values.push(search, search, search);
   }
 
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -1297,10 +1213,6 @@ export async function updatePurchase(id: string, input: UpdatePurchaseInput): Pr
     await ensureUserExists(nextPurchaserId, 'PURCHASER_NOT_FOUND');
     push('purchaser_id', nextPurchaserId);
   }
-  if (input.supplierId !== undefined) {
-    const nextSupplierId = await resolveSupplierId(input.supplierId);
-    push('supplier_id', nextSupplierId);
-  }
   if (input.invoiceStatus !== undefined && !isInvoiceStatus(input.invoiceStatus)) {
     throw new Error('INVALID_INVOICE_STATUS');
   }
@@ -1354,31 +1266,6 @@ export async function updatePurchase(id: string, input: UpdatePurchaseInput): Pr
     push('invoice_images', serializeArray(sanitized));
   }
   if (input.receiptImages !== undefined) push('receipt_images', serializeArray(input.receiptImages));
-  if (input.hasProject !== undefined || input.projectId !== undefined) {
-    const nextHasProject = input.hasProject !== undefined ? input.hasProject : existing.hasProject;
-    const pendingProjectId =
-      input.projectId !== undefined ? input.projectId : existing.projectId ?? null;
-    const trimmedProjectId = pendingProjectId ? pendingProjectId.trim() : null;
-
-    if (nextHasProject && !trimmedProjectId) {
-      throw new Error('PROJECT_REQUIRED');
-    }
-    if (!nextHasProject && trimmedProjectId) {
-      throw new Error('PROJECT_NOT_ALLOWED');
-    }
-
-    let resolvedProjectId: string | null = trimmedProjectId ?? null;
-    if (nextHasProject && trimmedProjectId) {
-      const project = await findProjectById(trimmedProjectId);
-      if (!project || project.isDeleted) {
-        throw new Error('PROJECT_NOT_FOUND');
-      }
-      resolvedProjectId = project.id;
-    }
-
-    push('has_project', nextHasProject ? 1 : 0);
-    push('project_id', nextHasProject ? resolvedProjectId : null);
-  }
   if (input.notes !== undefined) push('notes', input.notes);
   if (input.attachments !== undefined) push('attachments', serializeArray(input.attachments));
 
@@ -1757,15 +1644,13 @@ export async function duplicatePurchase(
     payerName: existing.payerName ?? undefined,
     transactionNo: undefined,
     purchaserId: existing.purchaserId,
-    supplierId: existing.supplierId ?? null,
+    hasInvoice: existing.invoiceType !== FinanceInvoiceType.NONE,
     invoiceType: existing.invoiceType,
     invoiceStatus: existing.invoiceStatus,
     invoiceNumber: existing.invoiceNumber ?? undefined,
     invoiceIssueDate: existing.invoiceIssueDate ?? undefined,
     invoiceImages: existing.invoiceImages,
     receiptImages: existing.receiptImages,
-    hasProject: existing.hasProject,
-    projectId: existing.projectId ?? undefined,
     notes: existing.notes ?? undefined,
     attachments: existing.attachments,
   };

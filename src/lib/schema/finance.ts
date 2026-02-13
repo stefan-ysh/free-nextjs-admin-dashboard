@@ -6,7 +6,6 @@ import { ensureProjectsSchema } from '@/lib/schema/projects';
 import { ensurePurchasesSchema } from '@/lib/schema/purchases';
 import { ensureProjectPaymentsSchema } from '@/lib/schema/project-payments';
 import { ensureInventorySchema } from '@/lib/schema/inventory';
-import { ensureSuppliersSchema } from '@/lib/schema/suppliers';
 import { getDefaultCategoryLabels } from '@/constants/finance-categories';
 import { TransactionType } from '@/types/finance';
 
@@ -25,6 +24,55 @@ async function createIndex(pool: Pool, sql: string) {
     if (code !== 'ER_DUP_KEYNAME') {
       throw error;
     }
+  }
+}
+
+async function dropForeignKeyIfExists(pool: Pool, table: string, constraint: string) {
+  const [rows] = (await pool.query(
+    `
+      SELECT COUNT(*) AS exists_count
+      FROM information_schema.TABLE_CONSTRAINTS
+      WHERE CONSTRAINT_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND CONSTRAINT_NAME = ?
+        AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+    `,
+    [table, constraint]
+  )) as [Array<{ exists_count: number }>, unknown];
+  if (Number(rows?.[0]?.exists_count ?? 0) > 0) {
+    await pool.query(`ALTER TABLE \`${table}\` DROP FOREIGN KEY \`${constraint}\``);
+  }
+}
+
+async function dropIndexIfExists(pool: Pool, table: string, index: string) {
+  const [rows] = (await pool.query(
+    `
+      SELECT COUNT(*) AS exists_count
+      FROM information_schema.STATISTICS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND INDEX_NAME = ?
+    `,
+    [table, index]
+  )) as [Array<{ exists_count: number }>, unknown];
+  if (Number(rows?.[0]?.exists_count ?? 0) > 0) {
+    await pool.query(`ALTER TABLE \`${table}\` DROP INDEX \`${index}\``);
+  }
+}
+
+async function dropColumnIfExists(pool: Pool, table: string, column: string) {
+  const [rows] = (await pool.query(
+    `
+      SELECT COUNT(*) AS exists_count
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND COLUMN_NAME = ?
+    `,
+    [table, column]
+  )) as [Array<{ exists_count: number }>, unknown];
+  if (Number(rows?.[0]?.exists_count ?? 0) > 0) {
+    await pool.query(`ALTER TABLE \`${table}\` DROP COLUMN \`${column}\``);
   }
 }
 
@@ -50,7 +98,6 @@ export async function ensureFinanceSchema() {
   await ensurePurchasesSchema();
   await ensureProjectPaymentsSchema();
   await ensureInventorySchema();
-  await ensureSuppliersSchema();
   const pool = mysqlPool();
 
   await pool.query(`
@@ -76,7 +123,6 @@ export async function ensureFinanceSchema() {
       status ENUM('draft','cleared') NOT NULL DEFAULT 'draft',
       purchase_id CHAR(36) NULL,
       purchase_payment_id CHAR(36) NULL,
-      supplier_id CHAR(36) NULL,
       project_id CHAR(36) NULL,
       inventory_movement_id VARCHAR(64) NULL,
       metadata_json JSON NULL,
@@ -96,7 +142,6 @@ export async function ensureFinanceSchema() {
   );
   await ensureColumn('finance_records', 'purchase_id', 'CHAR(36) NULL');
   await ensureColumn('finance_records', 'purchase_payment_id', 'CHAR(36) NULL');
-  await ensureColumn('finance_records', 'supplier_id', 'CHAR(36) NULL');
   await ensureColumn('finance_records', 'project_id', 'CHAR(36) NULL');
   await ensureColumn('finance_records', 'inventory_movement_id', 'VARCHAR(64) NULL');
   await ensureColumn('finance_records', 'project_payment_id', 'CHAR(36) NULL');
@@ -106,6 +151,9 @@ export async function ensureFinanceSchema() {
   await ensureColumn('finance_records', 'transaction_no', 'VARCHAR(160) NULL');
   await ensureColumn('finance_records', 'status', "ENUM('draft','cleared') NOT NULL DEFAULT 'draft'");
   await ensureColumn('finance_records', 'metadata_json', 'JSON NULL');
+  await dropForeignKeyIfExists(pool, 'finance_records', 'fk_finance_supplier');
+  await dropIndexIfExists(pool, 'finance_records', 'idx_finance_supplier');
+  await dropColumnIfExists(pool, 'finance_records', 'supplier_id');
   await pool.query(`
     CREATE TABLE IF NOT EXISTS finance_categories (
       id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -122,7 +170,6 @@ export async function ensureFinanceSchema() {
   await createIndex(pool, 'CREATE INDEX idx_finance_category ON finance_records(category)');
   await createIndex(pool, 'CREATE INDEX idx_finance_purchase ON finance_records(purchase_id)');
   await createIndex(pool, 'CREATE INDEX idx_finance_purchase_payment ON finance_records(purchase_payment_id)');
-  await createIndex(pool, 'CREATE INDEX idx_finance_supplier ON finance_records(supplier_id)');
   await createIndex(pool, 'CREATE INDEX idx_finance_project ON finance_records(project_id)');
   await createIndex(pool, 'CREATE INDEX idx_finance_inventory_movement ON finance_records(inventory_movement_id)');
   await createIndex(pool, 'CREATE INDEX idx_finance_project_payment ON finance_records(project_payment_id)');
@@ -135,11 +182,6 @@ export async function ensureFinanceSchema() {
     'finance_records',
     'fk_finance_purchase_payment',
     'FOREIGN KEY (purchase_payment_id) REFERENCES purchase_payments(id) ON DELETE SET NULL'
-  );
-  await ensureForeignKey(
-    'finance_records',
-    'fk_finance_supplier',
-    'FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL'
   );
   await ensureForeignKey(
     'finance_records',

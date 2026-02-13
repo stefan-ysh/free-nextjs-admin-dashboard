@@ -59,7 +59,6 @@ type FinanceRecordRow = RowDataPacket & {
   status: FinanceRecordStatus;
   purchase_id: string | null;
   purchase_payment_id: string | null;
-  supplier_id: string | null;
   project_id: string | null;
   inventory_movement_id: string | null;
   project_payment_id: string | null;
@@ -130,7 +129,6 @@ function mapFinanceRecord(row: FinanceRecordRow): FinanceRecord {
     sourceType: row.source_type ?? 'manual',
     purchaseId: row.purchase_id ?? undefined,
     purchasePaymentId: row.purchase_payment_id ?? undefined,
-    supplierId: row.supplier_id ?? undefined,
     projectId: row.project_id ?? undefined,
     inventoryMovementId: row.inventory_movement_id ?? undefined,
     projectPaymentId: row.project_payment_id ?? undefined,
@@ -300,7 +298,6 @@ export async function createRecord(
   const projectId = record.projectId ?? null;
   const purchaseId = record.purchaseId ?? null;
   const purchasePaymentId = record.purchasePaymentId ?? null;
-  const supplierId = record.supplierId ?? null;
   const inventoryMovementId = record.inventoryMovementId ?? null;
   const projectPaymentId = record.projectPaymentId ?? null;
   const quantity = record.quantity ?? 1;
@@ -318,9 +315,9 @@ export async function createRecord(
       contract_amount, fee, total_amount, payment_type,
       quantity, payment_channel, payer, transaction_no,
       invoice_json, description, tags_json, created_by,
-      source_type, status, purchase_id, purchase_payment_id, supplier_id, project_id,
+      source_type, status, purchase_id, purchase_payment_id, project_id,
       inventory_movement_id, project_payment_id, metadata_json
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id,
       record.name,
@@ -343,7 +340,6 @@ export async function createRecord(
       status,
       purchaseId,
       purchasePaymentId,
-      supplierId,
       projectId,
       inventoryMovementId,
       projectPaymentId,
@@ -472,7 +468,6 @@ export async function updateRecord(
   merged.sourceType = updates.sourceType ?? existing.sourceType;
   merged.purchaseId = updates.purchaseId ?? existing.purchaseId;
   merged.purchasePaymentId = updates.purchasePaymentId ?? existing.purchasePaymentId;
-  merged.supplierId = updates.supplierId ?? existing.supplierId ?? null;
   merged.projectId = updates.projectId ?? existing.projectId;
   merged.inventoryMovementId = updates.inventoryMovementId ?? existing.inventoryMovementId;
   merged.projectPaymentId = updates.projectPaymentId ?? existing.projectPaymentId;
@@ -503,7 +498,6 @@ export async function updateRecord(
       source_type = ?,
       purchase_id = ?,
       purchase_payment_id = ?,
-      supplier_id = ?,
       project_id = ?,
       inventory_movement_id = ?,
       project_payment_id = ?,
@@ -530,7 +524,6 @@ export async function updateRecord(
       merged.sourceType ?? 'manual',
       merged.purchaseId ?? null,
       merged.purchasePaymentId ?? null,
-      merged.supplierId ?? null,
       merged.projectId ?? null,
       merged.inventoryMovementId ?? null,
       merged.projectPaymentId ?? null,

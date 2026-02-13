@@ -311,9 +311,6 @@ export default function PurchaseApprovalsClient() {
           employeeCode: null,
           department: null,
         },
-        project: purchase.projectId
-          ? { id: purchase.projectId, projectCode: purchase.projectId, projectName: '—' }
-          : null,
         approver: null,
         pendingApprover: purchase.pendingApproverId
           ? { id: purchase.pendingApproverId, displayName: purchase.pendingApproverId }
@@ -321,7 +318,6 @@ export default function PurchaseApprovalsClient() {
         rejecter: null,
         payer: null,
         logs: [],
-        supplier: null,
       });
       void loadPurchaseDetail(purchase.id);
     },

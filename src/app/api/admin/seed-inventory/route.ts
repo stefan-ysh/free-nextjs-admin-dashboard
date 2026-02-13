@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { mysqlPool } from '@/lib/mysql';
 import { randomUUID } from 'crypto';
-import type { RowDataPacket } from 'mysql2/promise';
+
 
 export const dynamic = 'force-dynamic';
 
@@ -157,19 +157,27 @@ export async function GET() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
+    // Force clear table as requested
+    await pool.query('SET FOREIGN_KEY_CHECKS = 0');
+    await pool.query('TRUNCATE TABLE inventory_items');
+    await pool.query('SET FOREIGN_KEY_CHECKS = 1');
+
     for (const item of INVENTORY_ITEMS) {
       // Determine SKU first
       const itemSku = (item as { sku?: string }).sku || '';
-
-      // Check if name or sku exists
-      const [existing] = await pool.query<RowDataPacket[]>(
-        'SELECT id FROM inventory_items WHERE name = ? OR (sku = ? AND sku != "") LIMIT 1',
-        [item.name, itemSku]
-      );
       
-      if (existing.length > 0) {
-        results.push({ name: item.name, status: 'skipped' });
-        continue;
+      // Clean name: extract Chinese if mixed, or just use as is
+      let cleanName = item.name;
+      const chineseMatch = item.name.match(/[\u4e00-\u9fa5]+/);
+      if (chineseMatch) {
+         // If there are parentheses, try to extract Chinese from inside or outside
+         const parensMatch = item.name.match(/\(([^)]*[\u4e00-\u9fa5]+[^)]*)\)/);
+         if (parensMatch) {
+           cleanName = parensMatch[1];
+         } else {
+           // If just mixed text, take the Chinese part
+           cleanName = item.name.replace(/[a-zA-Z\s\d\-\,\.]+/g, '').trim() || item.name;
+         }
       }
 
       // Generate a simple SKU if not provided
@@ -182,10 +190,10 @@ export async function GET() {
           is_deleted, 
           created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, 0, 0, 10, 0, NOW(), NOW())`,
-        [randomUUID(), sku, item.name, item.unit, item.category]
+        [randomUUID(), sku, cleanName, item.unit, item.category]
       );
       
-      results.push({ name: item.name, status: 'created' });
+      results.push({ name: cleanName, status: 'created' });
     }
 
     return NextResponse.json({ success: true, results });
