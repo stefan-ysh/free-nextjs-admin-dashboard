@@ -315,11 +315,11 @@ export default function DepartmentManager() {
       return <div className="py-10 text-center text-sm text-muted-foreground">暂无部门，点击「新建部门」开始配置</div>;
     }
     return (
-      <div className="space-y-4">
-        <div className="surface-table">
+      <div className="flex flex-1 min-h-0 flex-col gap-4">
+        <div className="surface-table flex-1 min-h-0">
           <Table
             stickyHeader
-            scrollAreaClassName="max-h-[calc(100vh-350px)] custom-scrollbar"
+            scrollAreaClassName="max-h-[calc(100vh-280px)] custom-scrollbar"
             className="text-sm text-muted-foreground"
           >
             <TableHeader>
@@ -424,7 +424,7 @@ export default function DepartmentManager() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full flex-col gap-4 overflow-hidden">
       <div className="surface-card flex justify-end p-3">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={fetchDepartments} disabled={loading || !canView} className="h-9">

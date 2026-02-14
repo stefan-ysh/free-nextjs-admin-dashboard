@@ -105,7 +105,7 @@ export default function FinanceTable({
 	}
 
 	return (
-		<div className="surface-table">
+		<div className="surface-table flex-1 min-h-0 flex flex-col">
 			<div className="md:hidden">
 				<div className="space-y-3 p-4">
 					{records.map((record) => {
@@ -169,7 +169,7 @@ export default function FinanceTable({
 					})}
 				</div>
 			</div>
-			<div className="hidden md:block">
+			<div className="hidden md:flex md:flex-col flex-1 min-h-0">
 				<Table
 					stickyHeader
 					scrollAreaClassName="max-h-[calc(100vh-350px)] custom-scrollbar"

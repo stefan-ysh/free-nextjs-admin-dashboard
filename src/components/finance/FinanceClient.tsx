@@ -380,7 +380,7 @@ export default function FinanceClient({
     }
 
     return (
-        <div className="space-y-6 p-0">
+        <div className="flex h-full flex-col gap-4 overflow-hidden">
             <FinanceStatsCards stats={stats} />
 
             {/* Filters */}

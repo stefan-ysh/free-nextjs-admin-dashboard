@@ -36,7 +36,6 @@ type InventoryItemRow = RowDataPacket & {
   name: string;
   unit: string;
   unit_price: number;
-  sale_price: number;
   category: string;
   safety_stock: number;
   barcode: string | null;
@@ -212,7 +211,6 @@ function mapInventoryItem(row: InventoryItemRow): InventoryItem {
     name: row.name,
     unit: row.unit,
     unitPrice: Number(row.unit_price ?? 0),
-    salePrice: Number(row.sale_price ?? 0),
     category: row.category,
     safetyStock: Number(row.safety_stock ?? 0),
     barcode: row.barcode ?? undefined,
@@ -472,16 +470,15 @@ export async function createInventoryItem(payload: InventoryItemPayload): Promis
 
   await pool.query(
     `INSERT INTO inventory_items (
-      id, sku, name, unit, unit_price, sale_price, category, safety_stock, barcode, image_url,
+      id, sku, name, unit, unit_price, category, safety_stock, barcode, image_url,
       spec_fields_json, default_attributes_json, attributes_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       payload.sku,
       payload.name,
       payload.unit,
       payload.unitPrice,
-      payload.salePrice,
       payload.category,
       payload.safetyStock,
       payload.barcode ?? null,
@@ -523,10 +520,6 @@ export async function updateInventoryItem(
   if (payload.unitPrice !== undefined) {
     updates.push('unit_price = ?');
     values.push(payload.unitPrice);
-  }
-  if (payload.salePrice !== undefined) {
-    updates.push('sale_price = ?');
-    values.push(payload.salePrice);
   }
   if (payload.category !== undefined) {
     updates.push('category = ?');
@@ -956,17 +949,6 @@ export async function createInboundRecord(
   });
 }
 
-function resolveSaleUnitCost(
-  type: InventoryMovement['type'],
-  salePrice: number,
-  unitPrice: number
-): number | null {
-  if (type !== 'sale') {
-    return null;
-  }
-  const candidate = salePrice || unitPrice;
-  return candidate > 0 ? candidate : null;
-}
 
 function calculateAmount(unitCost: number | null, quantity: number): number | null {
   if (!unitCost || unitCost <= 0) {
@@ -1013,10 +995,7 @@ export async function createOutboundRecord(
       payload.attributes ??
       specFieldsToDefaultRecord(specFields) ??
       readLegacyDefaults(itemRow);
-    const unitCost =
-      payload.type === 'transfer'
-        ? Number(itemRow.unit_price ?? 0)
-        : resolveSaleUnitCost(payload.type, Number(itemRow.sale_price ?? 0), Number(itemRow.unit_price ?? 0));
+    const unitCost = Number(itemRow.unit_price ?? 0) || null;
     const amount = calculateAmount(unitCost, payload.quantity);
     const occurredAt = payload.occurredAt ? new Date(payload.occurredAt) : new Date();
     const transferId = payload.type === 'transfer' ? payload.relatedOrderId ?? randomUUID() : null;
@@ -1025,9 +1004,8 @@ export async function createOutboundRecord(
       `INSERT INTO inventory_movements (
         id, direction, type, item_id, warehouse_id, related_order_id,
         quantity, unit_cost, amount, operator_id, occurred_at, attributes_json,
-        notes, client_id, client_type, client_name, client_contact, client_phone,
-        client_address
-      ) VALUES (?, 'outbound', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        notes
+      ) VALUES (?, 'outbound', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         movementId,
         payload.type,
@@ -1041,12 +1019,6 @@ export async function createOutboundRecord(
         occurredAt,
         attributes ? JSON.stringify(attributes) : null,
         payload.notes ?? null,
-        payload.clientId ?? null,
-        payload.clientType ?? null,
-        payload.clientName ?? null,
-        payload.clientContact ?? null,
-        payload.clientPhone ?? null,
-        payload.clientAddress ?? null,
       ]
     );
 
@@ -1088,28 +1060,14 @@ export async function createOutboundRecord(
   });
 }
 
-export async function revertOutboundMovement(
-  movement: Pick<InventoryMovement, 'id' | 'itemId' | 'warehouseId' | 'quantity'>
-): Promise<void> {
-  await ensureInventorySchema();
 
-  await withTransaction(async (connection) => {
-    await connection.query(
-      `INSERT INTO inventory_stock_snapshots (item_id, warehouse_id, quantity, reserved)
-       VALUES (?, ?, ?, 0)
-       ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity), updated_at = CURRENT_TIMESTAMP`,
-      [movement.itemId, movement.warehouseId, movement.quantity]
-    );
 
-    await connection.query('DELETE FROM inventory_movements WHERE id = ?', [movement.id]);
-  });
-}
 
 const STOCK_PLACEHOLDER = 0;
 
 export async function getWarehouseByCode(code: string): Promise<Warehouse | null> {
   const rows = await mysqlQuery<WarehouseRow>`
-    SELECT * FROM warehouses WHERE code = ${code} AND is_deleted = 0 LIMIT 1
+    SELECT * FROM inventory_warehouses WHERE code = ${code} AND is_deleted = 0 LIMIT 1
   `;
   const row = rows.rows[0];
   if (!row) return null;

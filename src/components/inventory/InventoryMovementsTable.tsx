@@ -102,7 +102,7 @@ export default function InventoryMovementsTable({ movements, loading, emptyHint 
   };
 
   return (
-    <div className="space-y-4">
+    <div className="flex-1 min-h-0 flex flex-col gap-4">
       {/* 工具栏 */}
       {selectedIds.size > 0 && (
         <div className="flex items-center justify-between rounded-lg border border-primary/30 bg-primary/10 px-4 py-2 text-primary">
@@ -117,7 +117,7 @@ export default function InventoryMovementsTable({ movements, loading, emptyHint 
         </div>
       )}
 
-      <div className="surface-table">
+      <div className="surface-table flex-1 min-h-0 flex flex-col">
         <div className="max-h-[calc(100vh-350px)] overflow-auto custom-scrollbar">
           <table className="min-w-full divide-y divide-border text-sm whitespace-nowrap">
             <thead className="sticky top-0 z-10 bg-muted/60 text-xs uppercase text-muted-foreground">

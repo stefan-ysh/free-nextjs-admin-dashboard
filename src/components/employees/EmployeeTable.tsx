@@ -98,7 +98,7 @@ export default function EmployeeTable({
 	}
 
 	return (
-		<div className="surface-table">
+		<div className="surface-table flex-1 min-h-0 flex flex-col">
 			<div className="md:hidden">
 				<div className="space-y-3 p-4">
 					{employees.map((employee) => {
@@ -208,10 +208,10 @@ export default function EmployeeTable({
 					})}
 				</div>
 			</div>
-			<div className="hidden md:block">
+			<div className="hidden md:flex md:flex-col flex-1 min-h-0">
 				<Table
 					stickyHeader
-					scrollAreaClassName="max-h-[calc(100vh-350px)] custom-scrollbar"
+					scrollAreaClassName="max-h-[calc(100vh-280px)] custom-scrollbar"
 					className="w-full text-muted-foreground"
 				>
 					<TableHeader>

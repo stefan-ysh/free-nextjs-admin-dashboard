@@ -24,7 +24,7 @@ export function AdminLayoutClient({ children }: { children: React.ReactNode }) {
 
   return (
     <ConfirmProvider>
-      <div className="min-h-screen bg-background text-foreground transition-colors">
+      <div className="h-screen bg-background text-foreground transition-colors">
         <div className="flex h-full overflow-hidden">
           <AppSidebar />
           <Backdrop />

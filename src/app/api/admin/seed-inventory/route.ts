@@ -24,9 +24,6 @@ const INVENTORY_ITEMS = [
   { name: 'General Chemical Reagents (通用化学试剂)', category: 'Chemicals', unit: 'bottle' },
 
   // Raw Materials
-  { name: 'Luminous Paint (发光漆)', category: 'Raw Materials', unit: 'kg', sku: 'MAT-PAINT' },
-  { name: 'Luminous Fiber (发光纤维)', category: 'Raw Materials', unit: 'm', sku: 'MAT-FIBER' },
-  { name: 'Luminous Film (发光膜)', category: 'Raw Materials', unit: 'roll', sku: 'MAT-FILM' },
   { name: 'Electroluminescent Wire (电致发光丝)', category: 'Raw Materials', unit: 'm', sku: 'MAT-ELWIRE' },
 
   // Lab Consumables (Genericizing names)
@@ -141,7 +138,6 @@ export async function GET() {
         name VARCHAR(255) NOT NULL,
         unit VARCHAR(50),
         unit_price DECIMAL(10, 2) DEFAULT 0,
-        sale_price DECIMAL(10, 2) DEFAULT 0,
         category VARCHAR(100),
         safety_stock INT DEFAULT 0,
         description TEXT,
@@ -186,10 +182,10 @@ export async function GET() {
       await pool.query(
         `INSERT INTO inventory_items (
           id, sku, name, unit, category, 
-          unit_price, sale_price, safety_stock, 
+          unit_price, safety_stock, 
           is_deleted, 
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, 0, 0, 10, 0, NOW(), NOW())`,
+        ) VALUES (?, ?, ?, ?, ?, 0, 10, 0, NOW(), NOW())`,
         [randomUUID(), sku, cleanName, item.unit, item.category]
       );
       

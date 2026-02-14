@@ -1187,7 +1187,7 @@ export default function EmployeeClient({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full flex-col gap-4 overflow-hidden">
       {/* Stats Chips */}
       <div className="flex flex-wrap gap-2">
         {renderSummaryChip('active', activeCount)}

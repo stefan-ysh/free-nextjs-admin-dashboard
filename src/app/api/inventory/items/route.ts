@@ -54,9 +54,6 @@ export async function POST(request: NextRequest) {
       name: String(payload.name ?? '').trim(),
       unit: String(payload.unit ?? '').trim(),
       unitPrice: Number(payload.unitPrice ?? 0),
-      salePrice: Number(
-        payload.salePrice ?? (payload.unitPrice != null ? Number(payload.unitPrice) * 1.2 : 0)
-      ),
       category: String(payload.category ?? '未分类').trim() || '未分类',
       safetyStock: Number(payload.safetyStock ?? 0),
       barcode: payload.barcode?.trim() || undefined,

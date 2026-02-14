@@ -11,16 +11,12 @@ import { cn } from "@/lib/utils";
 import {
   Boxes as InventoryIcon,
   Building2 as OrgIcon,
-  Calendar as CalenderIcon,
   ChevronDown,
-  FileStack as ContractIcon,
   LayoutGrid as DashboardIcon,
   LineChart as FinanceIcon,
   ShoppingCart as PurchaseIcon,
-  UserCircle as UserCircleIcon,
   CircleGauge as PerformanceIcon,
 } from "lucide-react";
-// import SidebarWidget from "./SidebarWidget";
 
 import type { PermissionName } from "@/hooks/usePermissions";
 
@@ -48,16 +44,7 @@ const navItems: NavItem[] = [
     name: "仪表盘",
     path: "/",
   },
-  // {
-  //   icon: <CalenderIcon />,
-  //   name: "日历",
-  //   path: "/calendar",
-  // },
-  // {
-  //   icon: <UserCircleIcon />,
-  //   name: "个人中心",
-  //   path: "/profile",
-  // },
+
   {
     icon: <FinanceIcon />,
     name: "财务管理",
@@ -76,14 +63,7 @@ const navItems: NavItem[] = [
       },
     ],
   },
-  // {
-  //   icon: <ContractIcon />,
-  //   name: "合同 / 项目",
-  //   subItems: [
-  //     { name: "项目工作台", path: "/projects" },
-  //     { name: "合同台账", path: "/contracts" },
-  //   ],
-  // },
+
   {
     icon: <PurchaseIcon />,
     name: "采购管理",
@@ -172,14 +152,9 @@ const navItems: NavItem[] = [
         requiredPermission: "INVENTORY_VIEW_DASHBOARD",
       },
       {
-        name: "入库单",
-        path: "/inventory/inbound",
-        requiredPermission: "INVENTORY_OPERATE_INBOUND",
-      },
-      {
-        name: "出库单",
-        path: "/inventory/outbound",
-        requiredPermission: "INVENTORY_OPERATE_OUTBOUND",
+        name: "商品目录",
+        path: "/inventory/items",
+        requiredPermission: "INVENTORY_MANAGE_ITEMS",
       },
       {
         name: "库存流水",

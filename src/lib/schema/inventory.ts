@@ -38,10 +38,10 @@ const defaultWarehouses = [
 async function seedDefaultItems(pool: Pool) {
   const items = buildInventoryItemsFromTemplates();
   const insertSql = `INSERT INTO inventory_items (
-    id, sku, name, unit, unit_price, sale_price, category, safety_stock,
+    id, sku, name, unit, unit_price, category, safety_stock,
     barcode, spec_fields_json, default_attributes_json, attributes_json,
     created_at, updated_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
   for (const item of items) {
     const [existing] = await pool.query<RowDataPacket[]>(
@@ -59,7 +59,6 @@ async function seedDefaultItems(pool: Pool) {
       item.name,
       item.unit,
       item.unitPrice,
-      item.salePrice,
       item.category,
       item.safetyStock,
       null,
@@ -139,6 +138,13 @@ async function seedInitialSnapshotsAndMovements(pool: Pool) {
     const transferTime = new Date(inboundTime.getTime() + 2 * 60 * 60 * 1000);
     const outboundTime = new Date(inboundTime.getTime() + 6 * 60 * 60 * 1000);
 
+    // 查找数据库中实际的 item_id (防止因旧数据 ID 不一致导致 FK 错误)
+    const [itemRows] = await pool.query<RowDataPacket[]>(
+      'SELECT id FROM inventory_items WHERE sku = ? LIMIT 1',
+      [item.sku]
+    );
+    const itemId = itemRows[0]?.id ?? item.id;
+
     // 初始化采购入库（主仓）
     await pool.query(
       `INSERT INTO inventory_movements (
@@ -147,7 +153,7 @@ async function seedInitialSnapshotsAndMovements(pool: Pool) {
       ) VALUES (?, 'inbound', 'purchase', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         randomUUID(),
-        item.id,
+        itemId,
         mainWarehouseId,
         `PO-SEED-${String(index + 1).padStart(3, '0')}`,
         baseQuantity,
@@ -170,7 +176,7 @@ async function seedInitialSnapshotsAndMovements(pool: Pool) {
         ) VALUES (?, 'outbound', 'transfer', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           randomUUID(),
-          item.id,
+          itemId,
           mainWarehouseId,
           transferOrderId,
           plannedTransfer,
@@ -191,7 +197,7 @@ async function seedInitialSnapshotsAndMovements(pool: Pool) {
         ) VALUES (?, 'inbound', 'transfer', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           randomUUID(),
-          item.id,
+          itemId,
           secondaryWarehouseId,
           transferOrderId,
           plannedTransfer,
@@ -210,10 +216,10 @@ async function seedInitialSnapshotsAndMovements(pool: Pool) {
         `INSERT INTO inventory_movements (
           id, direction, type, item_id, warehouse_id, related_order_id,
           quantity, unit_cost, amount, operator_id, occurred_at, attributes_json, notes
-        ) VALUES (?, 'outbound', 'sale', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, 'outbound', 'use', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           randomUUID(),
-          item.id,
+          itemId,
           mainWarehouseId,
           `SO-SEED-${String(index + 1).padStart(3, '0')}`,
           plannedOutbound,
@@ -222,7 +228,7 @@ async function seedInitialSnapshotsAndMovements(pool: Pool) {
           'system-seed',
           outboundTime,
           attributesJson,
-          '初始化销售出库',
+          '初始化领用出库',
         ]
       );
     }
@@ -232,7 +238,7 @@ async function seedInitialSnapshotsAndMovements(pool: Pool) {
       `INSERT INTO inventory_stock_snapshots (item_id, warehouse_id, quantity, reserved)
        VALUES (?, ?, ?, 0)
        ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), reserved = VALUES(reserved)`,
-      [item.id, mainWarehouseId, mainQuantity]
+      [itemId, mainWarehouseId, mainQuantity]
     );
 
     if (secondaryWarehouseId && plannedTransfer > 0) {
@@ -240,32 +246,12 @@ async function seedInitialSnapshotsAndMovements(pool: Pool) {
         `INSERT INTO inventory_stock_snapshots (item_id, warehouse_id, quantity, reserved)
          VALUES (?, ?, ?, 0)
          ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), reserved = VALUES(reserved)`,
-        [item.id, secondaryWarehouseId, plannedTransfer]
+        [itemId, secondaryWarehouseId, plannedTransfer]
       );
     }
   }
 }
 
-async function ensureSalePriceColumn(pool: Pool) {
-  const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
-     WHERE TABLE_SCHEMA = DATABASE()
-       AND TABLE_NAME = 'inventory_items'
-       AND COLUMN_NAME = 'sale_price'
-     LIMIT 1`
-  );
-  if (!rows.length) {
-    await pool.query(`
-      ALTER TABLE inventory_items
-      ADD COLUMN sale_price DECIMAL(16,2) NOT NULL DEFAULT 0 AFTER unit_price
-    `);
-  }
-  await pool.query(`
-    UPDATE inventory_items
-    SET sale_price = ROUND(unit_price * 1.2, 2)
-    WHERE (sale_price IS NULL OR sale_price = 0) AND unit_price > 0
-  `);
-}
 
 export async function ensureInventorySchema() {
   if (initialized) return;
@@ -279,7 +265,6 @@ export async function ensureInventorySchema() {
       name VARCHAR(255) NOT NULL,
       unit VARCHAR(32) NOT NULL,
       unit_price DECIMAL(16,2) NOT NULL DEFAULT 0,
-      sale_price DECIMAL(16,2) NOT NULL DEFAULT 0,
       category VARCHAR(120) NOT NULL,
       safety_stock INT NOT NULL DEFAULT 0,
       barcode VARCHAR(120) NULL,
@@ -326,7 +311,7 @@ export async function ensureInventorySchema() {
     CREATE TABLE IF NOT EXISTS inventory_movements (
       id VARCHAR(64) NOT NULL PRIMARY KEY,
       direction ENUM('inbound','outbound') NOT NULL,
-      type ENUM('purchase','transfer','sale','adjust','return') NOT NULL,
+      type ENUM('purchase','transfer','adjust','return','use') NOT NULL,
       item_id VARCHAR(64) NOT NULL,
       warehouse_id VARCHAR(64) NOT NULL,
       related_order_id VARCHAR(120) NULL,
@@ -347,6 +332,43 @@ export async function ensureInventorySchema() {
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT fk_movement_item FOREIGN KEY (item_id) REFERENCES inventory_items(id) ON DELETE CASCADE,
       CONSTRAINT fk_movement_warehouse FOREIGN KEY (warehouse_id) REFERENCES inventory_warehouses(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS inventory_applications (
+      id VARCHAR(64) NOT NULL PRIMARY KEY,
+      number VARCHAR(64) NOT NULL UNIQUE,
+      applicant_id VARCHAR(64) NOT NULL,
+      applicant_name VARCHAR(120) NOT NULL,
+      department VARCHAR(120) NULL,
+      status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+      type ENUM('use','transfer') NOT NULL DEFAULT 'use',
+      reason TEXT NULL,
+      warehouse_id VARCHAR(64) NOT NULL,
+      warehouse_name VARCHAR(120) NOT NULL,
+      approver_id VARCHAR(64) NULL,
+      approver_name VARCHAR(120) NULL,
+      approved_at DATETIME NULL,
+      rejected_at DATETIME NULL,
+      rejection_reason TEXT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT fk_application_warehouse FOREIGN KEY (warehouse_id) REFERENCES inventory_warehouses(id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS inventory_application_items (
+      id VARCHAR(64) NOT NULL PRIMARY KEY,
+      application_id VARCHAR(64) NOT NULL,
+      item_id VARCHAR(64) NOT NULL,
+      item_name VARCHAR(255) NOT NULL,
+      item_sku VARCHAR(64) NULL,
+      quantity DECIMAL(16,3) NOT NULL,
+      unit VARCHAR(32) NOT NULL,
+      CONSTRAINT fk_app_item_app FOREIGN KEY (application_id) REFERENCES inventory_applications(id) ON DELETE CASCADE,
+      CONSTRAINT fk_app_item_main FOREIGN KEY (item_id) REFERENCES inventory_items(id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
@@ -387,7 +409,7 @@ export async function ensureInventorySchema() {
   await ensureColumn('inventory_warehouses', 'deleted_at', 'DATETIME NULL');
   await ensureColumn('inventory_items', 'image_url', 'VARCHAR(512) NULL');
 
-  await ensureSalePriceColumn(pool);
+
 
   await seedDefaultItems(pool);
   // await seedDefaultWarehouses(pool);

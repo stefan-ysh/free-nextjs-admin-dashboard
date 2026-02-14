@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { ArrowDownRight, ArrowUpRight, ClipboardList, TrendingUp } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, ClipboardList, TrendingUp, AlertTriangle, Clock, Package } from 'lucide-react';
 
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { toPermissionUser } from '@/lib/auth/permission-user';
@@ -11,7 +11,8 @@ import { formatDateOnly, formatDateTimeLocal } from '@/lib/dates';
 import { getInventoryStats } from '@/lib/db/inventory';
 import { getRecords, getStats as getFinanceStats } from '@/lib/db/finance';
 import { getEmployeeDashboardStats } from '@/lib/hr/employees';
-import { getPurchaseStats } from '@/lib/db/purchases';
+import { getPurchaseStats, listPurchases } from '@/lib/db/purchases';
+import { listApplications } from '@/lib/db/inventory-applications';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -34,7 +35,7 @@ const EMPLOYMENT_STATUS_META = {
 
 export const metadata: Metadata = {
   title: '宇元新材管理后台 - 运营概览',
-  description: '根据权限展示库存、财务、合同、人事与客户关键指标。',
+  description: '根据权限展示采购、库存、财务与人事关键指标。',
 };
 
 function formatCurrency(value?: number | null) {
@@ -122,7 +123,7 @@ export default async function AdminDashboardPage() {
     purchaseViewDepartmentPermission.allowed ||
     purchaseApprovePermission.allowed;
 
-  const [inventoryStats, financeStats, recentFinanceRecords, hrStats, purchaseStats] = await Promise.all([
+  const [inventoryStats, financeStats, recentFinanceRecords, hrStats, purchaseStats, pendingPurchases, pendingApplications] = await Promise.all([
     inventoryPermission.allowed ? getInventoryStats() : null,
     financePermission.allowed ? getFinanceStats({ startDate: monthStartText, endDate: todayText }) : null,
     financePermission.allowed ? getRecords({ startDate: monthStartText, endDate: todayText, limit: 6, offset: 0 }) : [],
@@ -133,6 +134,19 @@ export default async function AdminDashboardPage() {
             ? {}
             : { purchaserId: user.id }
         )
+      : null,
+    // Pending purchase approvals for current user
+    purchaseApprovePermission.allowed
+      ? listPurchases({
+          status: 'pending_approval',
+          pendingApproverId: user.id,
+          includeUnassignedApprovals: true,
+          pageSize: 5,
+        })
+      : null,
+    // Pending inventory applications (admins see all pending)
+    inventoryPermission.allowed
+      ? listApplications({ status: 'pending', pageSize: 5 })
       : null,
   ]);
 
@@ -297,18 +311,105 @@ export default async function AdminDashboardPage() {
             </DashboardSection>
           )}
 
+          {/* My Approvals Section */}
+          {((pendingPurchases && pendingPurchases.items.length > 0) || (pendingApplications && pendingApplications.items.length > 0)) && (
+            <DashboardSection title="我的待办" description="需要您处理的审批事项">
+              <div className="grid gap-4 md:grid-cols-2">
+                {/* Pending Purchase Approvals */}
+                {pendingPurchases && pendingPurchases.items.length > 0 && (
+                  <Card className="border-none shadow-sm">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <div>
+                        <CardTitle className="text-base">采购审批</CardTitle>
+                        <CardDescription>共 {pendingPurchases.total} 条待审批</CardDescription>
+                      </div>
+                      <Clock className="h-5 w-5 text-chart-3" />
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {pendingPurchases.items.map((p) => (
+                        <Link key={p.id} href={`/purchases/${p.id}`} className="flex items-center justify-between rounded-lg border border-transparent px-2 py-1.5 text-sm transition-colors hover:border-border hover:bg-muted/50">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-medium text-foreground">{p.itemName}</p>
+                            <p className="text-xs text-muted-foreground">{p.purchaseNumber} · {p.purchaseDate?.slice(0, 10)}</p>
+                          </div>
+                          <span className="ml-3 shrink-0 text-sm font-semibold text-chart-3">{formatCurrency(p.totalAmount)}</span>
+                        </Link>
+                      ))}
+                      {pendingPurchases.total > 5 && (
+                        <Button asChild variant="ghost" size="sm" className="w-full text-xs">
+                          <Link href="/workflow/todo">查看全部 {pendingPurchases.total} 条 →</Link>
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Pending Inventory Applications */}
+                {pendingApplications && pendingApplications.items.length > 0 && (
+                  <Card className="border-none shadow-sm">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <div>
+                        <CardTitle className="text-base">领用审批</CardTitle>
+                        <CardDescription>共 {pendingApplications.total} 条待审批</CardDescription>
+                      </div>
+                      <Package className="h-5 w-5 text-chart-2" />
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {pendingApplications.items.map((app) => (
+                        <Link key={app.id} href="/inventory/approvals" className="flex items-center justify-between rounded-lg border border-transparent px-2 py-1.5 text-sm transition-colors hover:border-border hover:bg-muted/50">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-medium text-foreground">{app.applicantName} · {app.items.map(i => i.itemName).join(', ')}</p>
+                            <p className="text-xs text-muted-foreground">{app.number} · {app.warehouseName}</p>
+                          </div>
+                          <Badge variant="secondary" className="ml-3 shrink-0">待审批</Badge>
+                        </Link>
+                      ))}
+                      {pendingApplications.total > 5 && (
+                        <Button asChild variant="ghost" size="sm" className="w-full text-xs">
+                          <Link href="/inventory/approvals">查看全部 {pendingApplications.total} 条 →</Link>
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </DashboardSection>
+          )}
+
           {(inventoryPermission.allowed || hrPermission.allowed) && (
             <DashboardSection title="其他概览" description="模块精简展示，避免干扰">
               <div className="grid gap-4 md:grid-cols-2">
                 {inventoryPermission.allowed && (
                   <Card className="border-none shadow-sm">
-                    <CardHeader>
-                      <CardTitle className="text-base">库存提醒</CardTitle>
-                      <CardDescription>低库存 SKU</CardDescription>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <div>
+                        <CardTitle className="text-base">库存预警</CardTitle>
+                        <CardDescription>低于安全库存的物品</CardDescription>
+                      </div>
+                      <AlertTriangle className="h-5 w-5 text-destructive" />
                     </CardHeader>
-                    <CardContent className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">待补货</span>
-                      <span className="text-lg font-semibold text-foreground">{formatNumber(inventoryStats?.lowStockItems?.length ?? 0)}</span>
+                    <CardContent>
+                      {inventoryStats?.lowStockItems?.length ? (
+                        <div className="space-y-2">
+                          {inventoryStats.lowStockItems.slice(0, 5).map((item) => (
+                            <div key={item.itemId} className="flex items-center justify-between text-sm">
+                              <span className="truncate text-foreground">{item.name}</span>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="text-destructive font-semibold">{formatNumber(item.available)}</span>
+                                <span className="text-muted-foreground">/</span>
+                                <span className="text-muted-foreground">{formatNumber(item.safetyStock)}</span>
+                              </div>
+                            </div>
+                          ))}
+                          {inventoryStats.lowStockItems.length > 5 && (
+                            <Button asChild variant="ghost" size="sm" className="w-full text-xs">
+                              <Link href="/inventory">查看全部 {inventoryStats.lowStockItems.length} 个预警 →</Link>
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">所有物品库存充足 ✓</p>
+                      )}
                     </CardContent>
                   </Card>
                 )}

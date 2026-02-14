@@ -444,7 +444,7 @@ export default function PaymentQueueClient() {
   };
 
   return (
-    <section className="space-y-6">
+    <section className="flex h-full flex-col gap-4 overflow-hidden">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-wide text-muted-foreground">财务中心</p>
@@ -469,7 +469,7 @@ export default function PaymentQueueClient() {
         </div>
       </div>
 
-      <div className="surface-panel">
+      <div className="surface-panel flex-1 min-h-0 flex flex-col">
         <div className="flex flex-wrap items-center gap-3 border-b px-5 py-4">
           <div className="flex flex-wrap gap-2">
             {STATUS_OPTIONS.map((option) => (
@@ -538,7 +538,7 @@ export default function PaymentQueueClient() {
             <DataState variant="empty" title="暂无付款任务" description="当前筛选条件下没有需要处理的付款记录" />
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="flex-1 min-h-0 flex flex-col">
             <div className="md:hidden space-y-3 px-4 py-4">
               {records.map((purchase) => {
                 const statusBadge = getPaymentStatusLabel(purchase);
@@ -597,8 +597,8 @@ export default function PaymentQueueClient() {
               })}
             </div>
 
-            <div className="hidden md:block">
-              <Table>
+            <div className="hidden md:flex md:flex-col flex-1 min-h-0">
+              <Table stickyHeader scrollAreaClassName="max-h-[calc(100vh-330px)] custom-scrollbar">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[48px]">

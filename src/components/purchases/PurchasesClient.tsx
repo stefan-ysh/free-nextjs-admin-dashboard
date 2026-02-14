@@ -799,7 +799,7 @@ export default function PurchasesClient() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full flex-col gap-4 overflow-hidden">
       {/* Stats Section */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
@@ -1121,7 +1121,7 @@ export default function PurchasesClient() {
 
       {/* Status summary grid removed to avoid duplicating the metrics shown in the real-time stats card above */}
 
-      <div className="surface-table">
+      <div className="surface-table flex-1 min-h-0 flex flex-col">
         <PurchaseTable
           purchases={records}
           loading={loading || isPending}

@@ -1,587 +1,355 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import Image from 'next/image';
-import { CheckSquare, ChevronLeft, ChevronRight, Square, ImageIcon } from 'lucide-react';
-
-import InventorySpecSummary from '@/components/inventory/InventorySpecSummary';
-import InventoryItemFormDialog from '@/components/inventory/InventoryItemFormDialog';
-import InventoryReserveDialog from '@/components/inventory/InventoryReserveDialog';
-import QuoteGeneratorDialog from '@/components/inventory/QuoteGeneratorDialog';
-import DataState from '@/components/common/DataState';
-import FilePreviewDialog from '@/components/common/FilePreviewDialog';
+import { Plus, Pencil, Trash2, RefreshCw, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from '@/components/ui/sonner';
-import type { InventoryItem, Warehouse } from '@/types/inventory';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useConfirm } from '@/hooks/useConfirm';
-import { formatDateTimeLocal } from '@/lib/dates';
+import type { InventoryItem, InventoryItemPayload, InventorySpecField } from '@/types/inventory';
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50];
+/* ─── helpers ─── */
+const fmt = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: 2 });
 
+function emptyPayload(): InventoryItemPayload {
+  return { sku: '', name: '', unit: '', unitPrice: 0, category: '原材料', safetyStock: 0, specFields: [] };
+}
+
+function emptySpecField(): InventorySpecField {
+  return { key: '', label: '', options: [], defaultValue: '' };
+}
+
+/* ─── Main Component ─── */
 export default function InventoryItemsPage() {
-  const { hasPermission, loading: permissionLoading } = usePermissions();
-  const canManageItems = useMemo(
-    () => hasPermission('INVENTORY_MANAGE_ITEMS'),
-    [hasPermission]
-  );
-  const canOperateStock = useMemo(
-    () => hasPermission('INVENTORY_OPERATE_OUTBOUND'),
-    [hasPermission]
-  );
-
-  const [items, setItems] = useState<InventoryItem[]>([]);
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [previewFile, setPreviewFile] = useState<{ url: string; name: string } | null>(null);
-  const [reserveDialog, setReserveDialog] = useState<{
-    open: boolean;
-    mode: 'reserve' | 'release';
-    item: InventoryItem | null;
-  }>({ open: false, mode: 'reserve', item: null });
-  const [reserveSubmitting, setReserveSubmitting] = useState(false);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const { hasPermission, loading: permLoading } = usePermissions();
+  const canManage = useMemo(() => hasPermission('INVENTORY_MANAGE_ITEMS'), [hasPermission]);
   const confirm = useConfirm();
 
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+
+  // Dialog state
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [form, setForm] = useState<InventoryItemPayload>(emptyPayload());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
   const fetchItems = useCallback(async () => {
-    if (!canManageItems) return;
     setLoading(true);
     try {
-      const response = await fetch('/api/inventory/items');
-      const payload = await response.json();
-      setItems(payload.data ?? []);
-    } catch (error) {
-      console.error('Failed to load items', error);
-      toast.error('加载商品失败', { description: error instanceof Error ? error.message : undefined });
+      const res = await fetch('/api/inventory/items');
+      const json = await res.json();
+      setItems(json.data ?? []);
+    } catch {
+      console.error('Failed to load items');
     } finally {
       setLoading(false);
     }
-  }, [canManageItems]);
+  }, []);
 
-  const fetchWarehouses = useCallback(async () => {
-    if (!canOperateStock) return;
+  useEffect(() => { fetchItems(); }, [fetchItems]);
+
+  const filteredItems = useMemo(() => {
+    if (!search.trim()) return items;
+    const q = search.toLowerCase();
+    return items.filter(
+      (i) => i.name.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q) || i.category.toLowerCase().includes(q)
+    );
+  }, [items, search]);
+
+  /* ─── Dialog handlers ─── */
+  const openCreate = () => {
+    setEditingItem(null);
+    setForm(emptyPayload());
+    setError('');
+    setDialogOpen(true);
+  };
+
+  const openEdit = (item: InventoryItem) => {
+    setEditingItem(item);
+    setForm({
+      sku: item.sku,
+      name: item.name,
+      unit: item.unit,
+      unitPrice: item.unitPrice,
+      category: item.category,
+      safetyStock: item.safetyStock,
+      barcode: item.barcode,
+      specFields: item.specFields ?? [],
+    });
+    setError('');
+    setDialogOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.name.trim()) { setError('商品名称不能为空'); return; }
+    if (!form.unit.trim()) { setError('计量单位不能为空'); return; }
+    setSaving(true);
+    setError('');
     try {
-      const response = await fetch('/api/inventory/warehouses');
-      const payload = await response.json();
-      setWarehouses(payload.data ?? []);
-    } catch (error) {
-      console.error('Failed to load warehouses', error);
+      const url = editingItem ? `/api/inventory/items/${editingItem.id}` : '/api/inventory/items';
+      const method = editingItem ? 'PATCH' : 'POST';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+      const json = await res.json();
+      if (!res.ok) { setError(json.error || '操作失败'); return; }
+      setDialogOpen(false);
+      fetchItems();
+    } catch {
+      setError('网络错误');
+    } finally {
+      setSaving(false);
     }
-  }, [canOperateStock]);
-
-  useEffect(() => {
-    fetchItems();
-    fetchWarehouses();
-  }, [fetchItems, fetchWarehouses]);
+  };
 
   const handleDelete = async (item: InventoryItem) => {
-    const confirmed = await confirm({
-      title: `确定要删除「${item.name}」吗？`,
-      description: "此操作无法撤销。",
-      confirmText: "删除",
-      cancelText: "取消",
+    const ok = await confirm({
+      title: '删除商品',
+      description: `确定要删除「${item.name}」(${item.sku})？该操作不可撤销。`,
+      confirmText: '删除',
     });
-    if (!confirmed) return;
-
-    setDeletingId(item.id);
+    if (!ok) return;
     try {
-      const response = await fetch(`/api/inventory/items/${item.id}`, { method: 'DELETE' });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error ?? '删除失败');
-      }
-      toast.success('商品已删除');
-      await fetchItems();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : '删除失败');
-    } finally {
-      setDeletingId(null);
+      const res = await fetch(`/api/inventory/items/${item.id}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!res.ok) { alert(json.error || '删除失败'); return; }
+      fetchItems();
+    } catch {
+      alert('网络错误');
     }
   };
 
-  const openCreateDialog = () => {
-    setEditingItem(null);
-    setDialogOpen(true);
+  /* ─── Spec fields editor ─── */
+  const specFields = form.specFields ?? [];
+  const updateSpecField = (idx: number, patch: Partial<InventorySpecField>) => {
+    const next = [...specFields];
+    next[idx] = { ...next[idx], ...patch };
+    setForm((f) => ({ ...f, specFields: next }));
+  };
+  const addSpecField = () => {
+    setForm((f) => ({ ...f, specFields: [...(f.specFields ?? []), emptySpecField()] }));
+  };
+  const removeSpecField = (idx: number) => {
+    setForm((f) => ({ ...f, specFields: (f.specFields ?? []).filter((_, i) => i !== idx) }));
   };
 
-  const openEditDialog = (item: InventoryItem) => {
-    setEditingItem(item);
-    setDialogOpen(true);
-  };
-
-  const openReserveDialog = (mode: 'reserve' | 'release', item: InventoryItem) => {
-    setReserveDialog({ open: true, mode, item });
-  };
-
-  const handleReserveSubmit = async (payload: { warehouseId: string; quantity: number }) => {
-    if (!reserveDialog.item) return;
-    setReserveSubmitting(true);
-    try {
-      const endpoint = reserveDialog.mode === 'reserve' ? '/api/inventory/reserve' : '/api/inventory/release';
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          itemId: reserveDialog.item.id,
-          warehouseId: payload.warehouseId,
-          quantity: payload.quantity,
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.error ?? '操作失败');
-      }
-      toast.success(reserveDialog.mode === 'reserve' ? '已预留库存' : '已释放预留库存');
-      setReserveDialog({ open: false, mode: 'reserve', item: null });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : '操作失败');
-    } finally {
-      setReserveSubmitting(false);
-    }
-  };
-
-  const totalPages = useMemo(() => Math.max(1, Math.ceil(items.length / pageSize)), [items.length, pageSize]);
-
-  const visibleItems = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return items.slice(start, start + pageSize);
-  }, [items, page, pageSize]);
-
-  useEffect(() => {
-    setPage((prev) => {
-      if (prev > totalPages) {
-        return totalPages;
-      }
-      return prev;
-    });
-  }, [totalPages]);
-
-  const isAllSelected = visibleItems.length > 0 && visibleItems.every((item) => selectedIds.has(item.id));
-
-  const toggleSelectAll = () => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (isAllSelected) {
-        visibleItems.forEach((item) => next.delete(item.id));
-      } else {
-        visibleItems.forEach((item) => next.add(item.id));
-      }
-      return next;
-    });
-  };
-
-  const toggleSelect = (id: string) => {
-    const newSelected = new Set(selectedIds);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
-    }
-    setSelectedIds(newSelected);
-  };
-
-  const selectedItems = items.filter(i => selectedIds.has(i.id));
-
-  const handlePageChange = (direction: 'prev' | 'next') => {
-    setPage((prev) => {
-      if (direction === 'prev') {
-        return Math.max(1, prev - 1);
-      }
-      return Math.min(totalPages, prev + 1);
-    });
-  };
-
-  const handlePageSizeChange = (size: number) => {
-    setPageSize(size);
-    setPage(1);
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="surface-card p-6 text-sm text-muted-foreground">
-        <div className="text-base font-semibold text-foreground">商品管理暂时隐藏</div>
-        <p className="mt-2">当前阶段仅保留“入库 / 出库”流程。商品主数据由采购入库流程维护，后续再恢复独立商品管理页。</p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button asChild size="sm">
-            <Link href="/inventory/inbound">去入库单</Link>
-          </Button>
-          <Button asChild size="sm" variant="outline">
-            <Link href="/inventory/outbound">去出库单</Link>
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-
-  if (permissionLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="panel-frame p-6 text-sm text-muted-foreground">
-          正在校验权限...
-        </div>
-      </div>
-    );
+  /* ─── Permission gate ─── */
+  if (permLoading) {
+    return <div className="p-6 text-sm text-muted-foreground">正在校验权限...</div>;
   }
-
-  if (!canManageItems) {
+  if (!canManage) {
     return (
-      <div className="space-y-6">
-        <div className="alert-box alert-danger p-6 text-sm">
-          当前账户无权管理商品，请联系管理员。
-        </div>
+      <div className="p-6">
+        <div className="alert-box alert-danger">当前账户无权管理商品目录，请联系管理员。</div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-5">
-
-      <div className="surface-card p-4 sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <span>SKU 列表</span>
-              <Badge variant="secondary" className="rounded-full px-2 py-0 text-[11px] font-medium">
-                {items.length} 条
-              </Badge>
-              {selectedIds.size > 0 && (
-                <Badge variant="outline" className="ml-2 border-primary/30 bg-primary/10 text-primary">
-                  已选 {selectedIds.size} 项
-                </Badge>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">当前使用中的商品信息，支持快速编辑</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {selectedIds.size > 0 && (
-              <QuoteGeneratorDialog
-                selectedItems={selectedItems}
-                onOpenChange={(open) => !open && setSelectedIds(new Set())}
-              />
-            )}
-            <Button onClick={fetchItems} variant="outline" size="sm" className="h-9 px-4">
-              刷新
-            </Button>
-            <Button onClick={openCreateDialog} size="sm" className="h-9 min-w-[110px] px-4">
-              新建商品
-            </Button>
-          </div>
+    <div className="flex h-full flex-col gap-4 overflow-hidden">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">商品目录</h1>
+          <p className="text-xs text-muted-foreground">管理库存商品的基本信息与规格参数</p>
         </div>
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="搜索名称 / SKU / 分类..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-48 sm:w-64"
+          />
+          <Button variant="outline" size="sm" onClick={fetchItems} disabled={loading}>
+            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />刷新
+          </Button>
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" />新增商品
+          </Button>
+        </div>
+      </div>
 
-        <div className="surface-table">
-          <div className="md:hidden">
-            <div className="space-y-3 p-4">
+      {/* Table */}
+      <div className="surface-card flex-1 min-h-0 overflow-hidden flex flex-col border border-border">
+        <div className="max-h-[calc(100vh-280px)] overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-border bg-muted text-left text-xs font-medium text-muted-foreground">
+                <th className="px-4 py-3">商品名称</th>
+                <th className="px-4 py-3">SKU</th>
+                <th className="px-4 py-3">分类</th>
+                <th className="px-4 py-3">单位</th>
+                <th className="px-4 py-3 text-right">单价</th>
+                <th className="px-4 py-3 text-right">安全库存</th>
+                <th className="px-4 py-3 text-right">当前库存</th>
+                <th className="px-4 py-3">规格</th>
+                <th className="px-4 py-3 text-center">操作</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
               {loading ? (
-                Array.from({ length: 4 }).map((_, idx) => (
-                  <div key={`mobile-sku-loading-${idx}`} className="rounded-2xl border border-border/60 bg-background/70 p-4">
-                    <div className="h-4 w-1/2 rounded bg-muted/70" />
-                    <div className="mt-3 h-3 w-2/3 rounded bg-muted/60" />
-                    <div className="mt-3 h-3 w-full rounded bg-muted/60" />
-                  </div>
+                Array.from({ length: 4 }).map((_, i) => (
+                  <tr key={i}>
+                    <td colSpan={9} className="px-4 py-3">
+                      <div className="h-5 w-full animate-pulse rounded bg-muted" />
+                    </td>
+                  </tr>
                 ))
-              ) : items.length ? (
-                visibleItems.map((item) => {
-                  const isSelected = selectedIds.has(item.id);
-                  return (
-                    <div key={item.id} className={isSelected ? 'rounded-2xl border border-primary/30 bg-primary/10 p-4' : 'rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm'}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold text-foreground">{item.name}</div>
-                          <div className="mt-1 text-xs text-muted-foreground">SKU：{item.sku}</div>
-                        </div>
-                        <button
-                          onClick={() => toggleSelect(item.id)}
-                          className={`flex h-8 w-8 items-center justify-center rounded-full border ${isSelected ? 'border-primary text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}
-                        >
-                          {isSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-                        </button>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        {item.category ? <Badge variant="secondary">{item.category}</Badge> : <span>未分类</span>}
-                        <span>单位：{item.unit}</span>
-                        <span>安全库存：{item.safetyStock}</span>
-                      </div>
-                      <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
-                        <div className="flex items-center justify-between gap-3">
-                          <span>采购单价</span>
-                          <span className="text-foreground">¥{item.unitPrice.toLocaleString()} / {item.unit}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-3">
-                          <span>建议售价</span>
-                          <span className="text-foreground">¥{item.salePrice.toLocaleString()} / {item.unit}</span>
-                        </div>
-                      </div>
-                      <div className="mt-4 flex flex-wrap justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-9 px-3"
-                          onClick={() => openReserveDialog('reserve', item)}
-                          disabled={!canOperateStock}
-                        >
-                          预留
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-9 px-3"
-                          onClick={() => openReserveDialog('release', item)}
-                          disabled={!canOperateStock}
-                        >
-                          释放
-                        </Button>
-                        <Button size="sm" variant="secondary" className="h-9 px-3" onClick={() => openEditDialog(item)}>
-                          编辑
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          className="h-9 px-3"
-                          onClick={() => handleDelete(item)}
-                          disabled={deletingId === item.id}
-                        >
-                          {deletingId === item.id ? '删除中...' : '删除'}
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })
+              ) : filteredItems.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
+                    <Package className="mx-auto mb-2 h-8 w-8 opacity-30" />
+                    {search ? '未找到匹配的商品' : '暂无商品，点击「新增商品」创建'}
+                  </td>
+                </tr>
               ) : (
-                <DataState
-                  variant="empty"
-                  title="暂无商品数据"
-                  description="点击右上角“新建商品”添加第一条 SKU"
-                />
+                filteredItems.map((item) => (
+                  <tr key={item.id} className="transition-colors hover:bg-muted/20">
+                    <td className="px-4 py-3 font-medium text-foreground">{item.name}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{item.sku}</td>
+                    <td className="px-4 py-3">
+                      <Badge variant="secondary" className="text-[10px]">{item.category}</Badge>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{item.unit}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{fmt.format(item.unitPrice)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{item.safetyStock}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      <span className={
+                        (item.stockQuantity ?? 0) < item.safetyStock
+                          ? 'text-destructive font-semibold'
+                          : 'text-foreground'
+                      }>
+                        {item.stockQuantity ?? 0}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {item.specFields?.length ? (
+                        <span className="text-xs text-muted-foreground">{item.specFields.length} 项</span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground/50">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(item)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
               )}
-            </div>
-          </div>
-          <div className="hidden md:block">
-            <Table
-              stickyHeader
-              scrollAreaClassName="max-h-[calc(100vh-200px)] custom-scrollbar"
-              className="min-w-[1100px] text-sm text-muted-foreground"
-            >
-              <TableHeader>
-                <TableRow className="bg-muted/50 text-[11px] uppercase tracking-wide">
-                  <TableHead className="w-12">
-                    <button onClick={toggleSelectAll} className="flex items-center justify-center text-muted-foreground hover:text-foreground">
-                      {isAllSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-                    </button>
-                  </TableHead>
-                  <TableHead className="w-16">图片</TableHead>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>名称</TableHead>
-                  <TableHead>类别</TableHead>
-                  <TableHead>单位</TableHead>
-                  <TableHead>采购单价</TableHead>
-                  <TableHead>建议售价</TableHead>
-                  <TableHead>规格参数</TableHead>
-                  <TableHead>安全库存</TableHead>
-                  <TableHead>创建时间</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  Array.from({ length: 5 }).map((_, idx) => (
-                    <TableRow key={`loading-${idx}`} className="animate-pulse bg-muted/40">
-                      {Array.from({ length: 11 }).map((__, cellIdx) => (
-                        <TableCell key={cellIdx} className="px-4 py-3">
-                          <span className="inline-block h-4 w-full rounded bg-muted/80" />
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                ) : items.length ? (
-                  visibleItems.map((item) => {
-                    const isSelected = selectedIds.has(item.id);
-                    return (
-                      <TableRow key={item.id} className={isSelected ? 'bg-primary/10' : ''}>
-                        <TableCell className="w-12">
-                          <button
-                            onClick={() => toggleSelect(item.id)}
-                            className={`flex items-center justify-center ${isSelected ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-                          >
-                            {isSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-                          </button>
-                        </TableCell>
-                        <TableCell>
-                          {item.imageUrl ? (
-                            <div
-                              className="relative h-10 w-10 cursor-pointer overflow-hidden rounded border border-border"
-                              onClick={() => setPreviewFile({ url: item.imageUrl!, name: item.name })}
-                            >
-                              <Image
-                                src={item.imageUrl}
-                                alt={item.name}
-                                fill
-                                className="object-cover"
-                                unoptimized
-                              />
-                            </div>
-                          ) : (
-                            <div className="flex h-10 w-10 items-center justify-center rounded border border-border bg-muted/30">
-                              <ImageIcon className="h-4 w-4 text-muted-foreground/30" />
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">{item.sku}</TableCell>
-                        <TableCell className="text-foreground">{item.name}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {item.category ? <Badge variant="secondary">{item.category}</Badge> : '—'}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{item.unit}</TableCell>
-                        <TableCell className="text-foreground">
-                          ¥{item.unitPrice.toLocaleString()} / {item.unit}
-                        </TableCell>
-                        <TableCell className="text-foreground">
-                          ¥{item.salePrice.toLocaleString()} / {item.unit}
-                        </TableCell>
-                        <TableCell className="whitespace-normal">
-                          <InventorySpecSummary item={item} />
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{item.safetyStock}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {formatDateTimeLocal(item.createdAt) ?? item.createdAt}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex flex-wrap justify-end gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-9 px-3"
-                              onClick={() => openReserveDialog('reserve', item)}
-                              disabled={!canOperateStock}
-                            >
-                              预留
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-9 px-3"
-                              onClick={() => openReserveDialog('release', item)}
-                              disabled={!canOperateStock}
-                            >
-                              释放
-                            </Button>
-                            <Button size="sm" variant="secondary" className="h-9 px-3" onClick={() => openEditDialog(item)}>
-                              编辑
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              className="h-9 px-3"
-                              onClick={() => handleDelete(item)}
-                              disabled={deletingId === item.id}
-                            >
-                              {deletingId === item.id ? '删除中...' : '删除'}
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={11} className="px-3 py-6">
-                      <DataState
-                        variant="empty"
-                        title="暂无商品数据"
-                        description="点击右上角“新建商品”添加第一条 SKU"
-                      />
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+            </tbody>
+          </table>
         </div>
-
-        <div className="flex flex-col gap-3 border-t border-transparent px-4 py-3 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
-          <div>共 {items.length} 个商品 • 第 {page} / {totalPages} 页</div>
-          <div className="flex flex-col gap-3 md:flex-row md:items-center">
-            <Select value={String(pageSize)} onValueChange={(value) => handlePageSizeChange(Number(value))}>
-              <SelectTrigger className="h-9 w-[140px]">
-                <SelectValue placeholder="每页数量" />
-              </SelectTrigger>
-              <SelectContent>
-                {PAGE_SIZE_OPTIONS.map((size) => (
-                  <SelectItem key={size} value={String(size)}>
-                    每页 {size} 条
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange('prev')}
-                disabled={page <= 1}
-                className="gap-1"
-              >
-                <ChevronLeft className="h-4 w-4" /> 上一页
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange('next')}
-                disabled={page >= totalPages}
-                className="gap-1"
-              >
-                下一页 <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-
       </div>
 
-      <InventoryItemFormDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        item={editingItem}
-        onSuccess={fetchItems}
-      />
+      {/* Create / Edit Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{editingItem ? '编辑商品' : '新增商品'}</DialogTitle>
+            <DialogDescription>
+              {editingItem ? `修改「${editingItem.name}」的信息` : '填写商品基本信息和规格参数'}
+            </DialogDescription>
+          </DialogHeader>
 
-      <InventoryReserveDialog
-        open={reserveDialog.open}
-        mode={reserveDialog.mode}
-        item={reserveDialog.item}
-        warehouses={warehouses}
-        submitting={reserveSubmitting}
-        onOpenChange={(open) => {
-          if (!open) {
-            setReserveDialog({ open: false, mode: 'reserve', item: null });
-          }
-        }}
-        onSubmit={handleReserveSubmit}
-      />
+          <div className="flex-1 overflow-y-auto space-y-5 py-4 px-1">
+            {error && <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{error}</div>}
 
-      <FilePreviewDialog
-        open={!!previewFile}
-        onClose={() => setPreviewFile(null)}
-        fileUrl={previewFile?.url ?? ''}
-        fileLabel={previewFile?.name ?? 'Preview'}
-      />
+            <div className="grid grid-cols-2 gap-x-6 gap-y-5">
+              <div className="space-y-2">
+                <Label>商品名称 *</Label>
+                <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="例：电致发光丝" />
+              </div>
+              <div className="space-y-2">
+                <Label>SKU</Label>
+                <Input value={form.sku} onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))} placeholder="留空自动生成" />
+              </div>
+              <div className="space-y-2">
+                <Label>分类</Label>
+                <Input value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} placeholder="原材料" />
+              </div>
+              <div className="space-y-2">
+                <Label>单位 *</Label>
+                <Input value={form.unit} onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))} placeholder="米 / 升 / 个" />
+              </div>
+              <div className="space-y-2">
+                <Label>单价 (¥)</Label>
+                <Input type="number" min={0} step={0.01} value={form.unitPrice} onChange={(e) => setForm((f) => ({ ...f, unitPrice: Number(e.target.value) }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>安全库存</Label>
+                <Input type="number" min={0} value={form.safetyStock} onChange={(e) => setForm((f) => ({ ...f, safetyStock: Number(e.target.value) }))} />
+              </div>
+              <div className="col-span-2 space-y-2">
+                <Label>条码</Label>
+                <Input value={form.barcode ?? ''} onChange={(e) => setForm((f) => ({ ...f, barcode: e.target.value }))} placeholder="可选" />
+              </div>
+            </div>
+
+            {/* Spec Fields */}
+            <div className="space-y-3 pt-4 border-t border-border">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">规格参数</Label>
+                <Button type="button" variant="outline" size="sm" onClick={addSpecField} className="h-7 text-xs">
+                  <Plus className="mr-1 h-3 w-3" />添加规格
+                </Button>
+              </div>
+              {specFields.length === 0 && (
+                <p className="text-xs text-muted-foreground">暂无规格参数，点击「添加规格」新增</p>
+              )}
+              {specFields.map((sf, idx) => (
+                <div key={idx} className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">规格 #{idx + 1}</span>
+                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeSpecField(idx)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input placeholder="字段 key" value={sf.key} onChange={(e) => updateSpecField(idx, { key: e.target.value })} className="h-8 text-xs" />
+                    <Input placeholder="显示名称" value={sf.label} onChange={(e) => updateSpecField(idx, { label: e.target.value })} className="h-8 text-xs" />
+                  </div>
+                  <Input
+                    placeholder="选项（逗号分隔），如：蓝,绿,红"
+                    value={(sf.options ?? []).join(',')}
+                    onChange={(e) => updateSpecField(idx, { options: e.target.value ? e.target.value.split(',').map((s) => s.trim()) : [] })}
+                    className="h-8 text-xs"
+                  />
+                  <Input
+                    placeholder="默认值"
+                    value={sf.defaultValue ?? ''}
+                    onChange={(e) => updateSpecField(idx, { defaultValue: e.target.value })}
+                    className="h-8 text-xs"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>取消</Button>
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? '保存中...' : editingItem ? '保存修改' : '创建商品'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

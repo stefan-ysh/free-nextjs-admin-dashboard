@@ -80,8 +80,8 @@ export default function InventoryTransfersPage() {
   };
 
   return (
-    <div className="space-y-5">
-      <div className="surface-card p-4 sm:p-5">
+    <div className="flex h-full flex-col gap-4 overflow-hidden">
+      <div className="surface-card flex-1 min-h-0 flex flex-col p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="text-sm font-semibold text-foreground">调拨单</div>
@@ -94,7 +94,7 @@ export default function InventoryTransfersPage() {
           </div>
         </div>
 
-        <div className="surface-table">
+        <div className="surface-table flex-1 min-h-0">
           <Table
             stickyHeader
             scrollAreaClassName="max-h-[calc(100vh-220px)] custom-scrollbar"

@@ -83,7 +83,7 @@ export default function PurchaseTable({
 }: PurchaseTableProps) {
 	const scrollContainerClassName = cn(
 		'custom-scrollbar',
-		scrollAreaClassName ?? 'max-h-[calc(100vh-350px)]'
+		scrollAreaClassName ?? 'max-h-[calc(100vh-280px)]'
 	);
 	if (loading) {
 		return (
@@ -110,7 +110,7 @@ export default function PurchaseTable({
 	}
 
 	return (
-		<div className="surface-table">
+		<div className="surface-table flex-1 min-h-0 flex flex-col">
 			<div className="md:hidden">
 				<div className="space-y-3 p-4">
 					{purchases.map((purchase) => {
@@ -249,7 +249,7 @@ export default function PurchaseTable({
 					})}
 				</div>
 			</div>
-			<div className="hidden md:block">
+			<div className="hidden md:flex md:flex-col flex-1 min-h-0">
 				<Table
 					stickyHeader
 					scrollAreaClassName={scrollContainerClassName}

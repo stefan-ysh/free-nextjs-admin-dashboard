@@ -135,7 +135,7 @@ export default function PurchaseAuditClient() {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full flex-col gap-4 overflow-hidden">
       <div className="surface-toolbar p-4 sm:p-5">
         <div className="grid gap-3 md:grid-cols-5">
           <Input
@@ -176,9 +176,10 @@ export default function PurchaseAuditClient() {
 
       {error ? <DataState variant="error" title="加载失败" description={error} className="min-h-[120px]" /> : null}
 
-      <div className="surface-table overflow-x-auto">
+      <div className="surface-table flex-1 min-h-0 flex flex-col">
+        <div className="max-h-[calc(100vh-280px)] overflow-auto custom-scrollbar">
         <table className="w-full min-w-[980px] text-sm">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-card">
             <tr className="border-b border-border/70 bg-muted/20 text-left text-xs text-muted-foreground">
               <th className="px-3 py-2 font-medium">时间</th>
               <th className="px-3 py-2 font-medium">单号</th>
@@ -204,6 +205,7 @@ export default function PurchaseAuditClient() {
           </tbody>
         </table>
         {!loading && items.length === 0 ? <p className="p-4 text-sm text-muted-foreground">暂无审计日志</p> : null}
+        </div>
       </div>
 
       <div className="flex items-center justify-between text-sm text-muted-foreground">

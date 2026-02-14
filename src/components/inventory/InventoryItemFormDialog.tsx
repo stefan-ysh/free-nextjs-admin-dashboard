@@ -25,7 +25,6 @@ type FormValues = {
   name: string;
   unit: string;
   unitPrice: string;
-  salePrice: string;
   category: string;
   safetyStock: string;
   barcode: string;
@@ -37,7 +36,6 @@ const buildDefaultValues = (item?: InventoryItem | null): FormValues => ({
   name: item?.name ?? '',
   unit: item?.unit ?? BASE_UNIT_OPTIONS[0],
   unitPrice: item?.unitPrice != null ? String(item.unitPrice) : '',
-  salePrice: item?.salePrice != null ? String(item.salePrice) : '',
   category: item?.category ?? BASE_CATEGORY_OPTIONS[0],
   safetyStock: item?.safetyStock != null ? String(item.safetyStock) : '',
   barcode: item?.barcode ?? '',
@@ -96,9 +94,6 @@ export default function InventoryItemFormDialog({ open, onOpenChange, item, onSu
       if (!values.unitPrice.trim() || Number(values.unitPrice) < 0) {
         throw new Error('请输入有效的商品单价');
       }
-      if (!values.salePrice.trim() || Number(values.salePrice) < 0) {
-        throw new Error('请输入有效的建议售价');
-      }
       if (!values.safetyStock.trim() || Number(values.safetyStock) < 0) {
         throw new Error('请输入有效的安全库存');
       }
@@ -107,7 +102,6 @@ export default function InventoryItemFormDialog({ open, onOpenChange, item, onSu
         name: values.name.trim(),
         unit: values.unit.trim(),
         unitPrice: Number(values.unitPrice),
-        salePrice: Number(values.salePrice),
         category: values.category.trim() || '未分类',
         safetyStock: Number(values.safetyStock),
       };
@@ -282,21 +276,6 @@ export default function InventoryItemFormDialog({ open, onOpenChange, item, onSu
                     <FormItem>
                       <FormLabel>
                         单价 (¥)<Required />
-                      </FormLabel>
-                      <FormControl>
-                        <Input type="number" min="0" step="0.01" disabled={submitting} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="salePrice"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        建议售价 (¥)<Required />
                       </FormLabel>
                       <FormControl>
                         <Input type="number" min="0" step="0.01" disabled={submitting} {...field} />

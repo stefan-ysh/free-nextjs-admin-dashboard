@@ -29,9 +29,6 @@ export function sanitizeItemPayload(
   if (raw.unitPrice !== undefined) {
     payload.unitPrice = toNumber(raw.unitPrice);
   }
-  if (raw.salePrice !== undefined) {
-    payload.salePrice = toNumber(raw.salePrice);
-  }
   if (raw.safetyStock !== undefined) {
     payload.safetyStock = toNumber(raw.safetyStock);
   }
@@ -46,7 +43,6 @@ export function validateItemPayload(
     'name',
     'unit',
     'unitPrice',
-    'salePrice',
     'category',
     'safetyStock',
   ];
@@ -69,12 +65,6 @@ export function validateItemPayload(
   }
   if (payload.unitPrice !== undefined && payload.unitPrice < 0) {
     return '商品单价必须大于等于 0';
-  }
-  if (payload.salePrice !== undefined && !Number.isFinite(payload.salePrice)) {
-    return '建议售价必须是有效数字';
-  }
-  if (payload.salePrice !== undefined && payload.salePrice < 0) {
-    return '建议售价必须大于等于 0';
   }
   if (payload.safetyStock !== undefined && !Number.isFinite(payload.safetyStock)) {
     return '安全库存必须是有效数字';

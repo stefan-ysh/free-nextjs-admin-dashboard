@@ -136,7 +136,7 @@ export default function InventoryMovementsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full flex-col gap-4 overflow-hidden">
       {/* Stats Section */}
       <div className="grid gap-4 md:grid-cols-3">
         {([
@@ -225,7 +225,7 @@ export default function InventoryMovementsPage() {
         </div>
       </div>
 
-      <div className="surface-table">
+      <div className="surface-table flex-1 min-h-0 flex flex-col">
         <InventoryMovementsTable
           movements={filteredMovements}
           loading={loading}

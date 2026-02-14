@@ -1,7 +1,7 @@
 import type { ClientType } from '@/types/client';
 
 export type InventoryDirection = 'inbound' | 'outbound';
-export type InventoryMovementType = 'purchase' | 'transfer' | 'sale' | 'adjust' | 'return';
+export type InventoryMovementType = 'purchase' | 'transfer' | 'adjust' | 'return' | 'use';
 
 export interface InventorySpecField {
   key: string;
@@ -18,7 +18,6 @@ export interface InventoryItem {
   name: string;
   unit: string;
   unitPrice: number;
-  salePrice: number;
   category: string;
   safetyStock: number;
   barcode?: string;
@@ -141,15 +140,9 @@ export interface InventoryOutboundPayload {
   itemId: string;
   warehouseId: string;
   quantity: number;
-  type: Extract<InventoryMovementType, 'sale' | 'transfer' | 'adjust' | 'return'>;
+  type: Extract<InventoryMovementType, 'transfer' | 'adjust' | 'return' | 'use'>;
   targetWarehouseId?: string;
   relatedOrderId?: string;
-  clientId?: string;
-  clientType?: ClientType;
-  clientName?: string;
-  clientContact?: string;
-  clientPhone?: string;
-  clientAddress?: string;
   occurredAt?: string;
   attributes?: Record<string, string>;
   notes?: string;
@@ -166,12 +159,44 @@ export interface InventoryItemPayload {
   name: string;
   unit: string;
   unitPrice: number;
-  salePrice: number;
   category: string;
   safetyStock: number;
   barcode?: string;
   imageUrl?: string;
   specFields?: InventorySpecField[];
+}
+
+export type InventoryApplicationStatus = 'pending' | 'approved' | 'rejected';
+
+export interface InventoryApplicationItem {
+  id: string;
+  applicationId: string;
+  itemId: string;
+  itemName: string; // snapshot for display
+  itemSku: string; // snapshot 
+  quantity: number;
+  unit: string;
+}
+
+export interface InventoryApplication {
+  id: string;
+  number: string; // APP-YYYYMMDD-XXXX
+  applicantId: string;
+  applicantName: string;
+  department?: string;
+  status: InventoryApplicationStatus;
+  type: 'use' | 'transfer'; // 'use' for internal requests
+  reason?: string;
+  items: InventoryApplicationItem[];
+  warehouseId: string; // The target warehouse to take items from
+  warehouseName: string;
+  approverId?: string;
+  approverName?: string;
+  approvedAt?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface WarehousePayload {

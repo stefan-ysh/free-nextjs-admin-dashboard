@@ -22,8 +22,6 @@ const defaultPayload: InventoryInboundPayload = {
     quantity: 1,
     type: 'purchase',
 };
-const FORM_GRID_CLASS = 'grid gap-5 grid-cols-1 md:grid-cols-3 lg:grid-cols-6';
-const FIELD_CLASS = 'w-full lg:col-span-1';
 
 interface InventoryInboundFormProps {
     onSuccess?: () => void;
@@ -137,9 +135,8 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
     }
 
     return (
-        <form id={formId} onSubmit={handleSubmit} className="space-y-5">
-            <div className={FORM_GRID_CLASS}>
-            <div className={`space-y-2 lg:col-span-3`}>
+        <form id={formId} onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
                 <Label htmlFor="inbound-item" className="text-sm font-medium">
                     商品
                 </Label>
@@ -162,17 +159,17 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
             </div>
 
             {selectedItem && (
-                <div className="rounded-lg border border-dashed border-primary/40 bg-primary/10 p-3 text-sm text-primary lg:col-span-3">
+                <div className="rounded-lg border border-dashed border-primary/40 bg-primary/10 p-3 text-sm text-primary">
                     标准单价：¥{selectedItem.unitPrice.toLocaleString()} / {selectedItem.unit}
                 </div>
             )}
 
             {selectedItem?.specFields?.length ? (
-                <div className={`${FORM_GRID_CLASS} lg:col-span-6`}>
+                <div className="space-y-4">
                     {selectedItem.specFields.map((field) => {
                         const specValue = payload.attributes?.[field.key] ?? '';
                         return (
-                            <div key={field.key} className={`space-y-2 ${FIELD_CLASS}`}>
+                            <div key={field.key} className="space-y-2">
                                 <Label className="text-sm font-medium">{field.label}</Label>
                                 {field.options ? (
                                     <Select
@@ -205,79 +202,81 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
                 </div>
             ) : null}
 
-                <div className={`space-y-2 ${FIELD_CLASS}`}>
-                    <Label htmlFor="inbound-warehouse" className="text-sm font-medium">
-                        仓库
-                    </Label>
-                    <Select
-                        value={payload.warehouseId || undefined}
-                        onValueChange={(value) => handleChange('warehouseId', value)}
-                        disabled={submitting}
-                    >
-                        <SelectTrigger id="inbound-warehouse" className="w-full">
-                            <SelectValue placeholder="选择仓库" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {warehouses.map((warehouse) => (
-                                <SelectItem key={warehouse.id} value={warehouse.id}>
-                                    {warehouse.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className={`space-y-2 ${FIELD_CLASS}`}>
-                    <Label htmlFor="inbound-type" className="text-sm font-medium">
-                        入库类型
-                    </Label>
-                    <Select
-                        value={payload.type}
-                        onValueChange={(value) => handleChange('type', value as InventoryInboundPayload['type'])}
-                        disabled={submitting}
-                    >
-                        <SelectTrigger id="inbound-type" className="w-full">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="purchase">采购入库</SelectItem>
-                            <SelectItem value="adjust">盘盈调整</SelectItem>
-                            <SelectItem value="return">退货入库</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
+            <div className="space-y-2">
+                <Label htmlFor="inbound-warehouse" className="text-sm font-medium">
+                    仓库
+                </Label>
+                <Select
+                    value={payload.warehouseId || undefined}
+                    onValueChange={(value) => handleChange('warehouseId', value)}
+                    disabled={submitting}
+                >
+                    <SelectTrigger id="inbound-warehouse" className="w-full">
+                        <SelectValue placeholder="选择仓库" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {warehouses.map((warehouse) => (
+                            <SelectItem key={warehouse.id} value={warehouse.id}>
+                                {warehouse.name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
 
-                <div className={`space-y-2 ${FIELD_CLASS}`}>
-                    <Label htmlFor="inbound-quantity" className="text-sm font-medium">
-                        数量
-                    </Label>
-                    <Input
-                        id="inbound-quantity"
-                        type="number"
-                        min={1}
-                        value={payload.quantity}
-                        onChange={(event) => handleChange('quantity', Number(event.target.value))}
-                        required
-                        disabled={submitting}
-                    />
-                </div>
-                <div className={`space-y-2 ${FIELD_CLASS}`}>
-                    <Label htmlFor="inbound-unit-cost" className="text-sm font-medium">
-                        单价 (¥)
-                    </Label>
-                    <Input
-                        id="inbound-unit-cost"
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={payload.unitCost ?? ''}
-                        onChange={(event) =>
-                            handleChange('unitCost', event.target.value ? Number(event.target.value) : undefined)
-                        }
-                        disabled={submitting}
-                    />
-                </div>
+            <div className="space-y-2">
+                <Label htmlFor="inbound-type" className="text-sm font-medium">
+                    入库类型
+                </Label>
+                <Select
+                    value={payload.type}
+                    onValueChange={(value) => handleChange('type', value as InventoryInboundPayload['type'])}
+                    disabled={submitting}
+                >
+                    <SelectTrigger id="inbound-type" className="w-full">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="purchase">采购入库</SelectItem>
+                        <SelectItem value="adjust">盘盈调整</SelectItem>
+                        <SelectItem value="return">退货入库</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
 
-            <div className="space-y-2 lg:col-span-3">
+            <div className="space-y-2">
+                <Label htmlFor="inbound-quantity" className="text-sm font-medium">
+                    数量
+                </Label>
+                <Input
+                    id="inbound-quantity"
+                    type="number"
+                    min={1}
+                    value={payload.quantity}
+                    onChange={(event) => handleChange('quantity', Number(event.target.value))}
+                    required
+                    disabled={submitting}
+                />
+            </div>
+
+            <div className="space-y-2">
+                <Label htmlFor="inbound-unit-cost" className="text-sm font-medium">
+                    单价 (¥)
+                </Label>
+                <Input
+                    id="inbound-unit-cost"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={payload.unitCost ?? ''}
+                    onChange={(event) =>
+                        handleChange('unitCost', event.target.value ? Number(event.target.value) : undefined)
+                    }
+                    disabled={submitting}
+                />
+            </div>
+
+            <div className="space-y-2">
                 <Label htmlFor="inbound-notes" className="text-sm font-medium">
                     备注
                 </Label>
@@ -289,7 +288,6 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
                     placeholder="可填写采购单号、批次等信息"
                     disabled={submitting}
                 />
-            </div>
             </div>
 
             {!hideActions && (

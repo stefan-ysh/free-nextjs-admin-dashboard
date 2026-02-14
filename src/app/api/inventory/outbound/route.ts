@@ -5,11 +5,9 @@ import { toPermissionUser } from '@/lib/auth/permission-user';
 import {
   createOutboundRecord,
   INVENTORY_ERRORS,
-  revertOutboundMovement,
 } from '@/lib/db/inventory';
 import { checkPermission, Permissions } from '@/lib/permissions';
 import type { InventoryOutboundPayload } from '@/types/inventory';
-import { createSaleIncome } from '@/lib/services/finance-automation';
 
 function unauthorizedResponse() {
   return NextResponse.json({ error: '未登录' }, { status: 401 });
@@ -39,20 +37,6 @@ export async function POST(request: NextRequest) {
     }
 
     const movement = await createOutboundRecord(payload, permissionUser.id);
-
-    if (movement.type === 'sale') {
-      try {
-        await createSaleIncome(movement, permissionUser.id);
-      } catch (automationError) {
-        console.error('[inventory.outbound] finance automation failed', automationError);
-        try {
-          await revertOutboundMovement(movement);
-        } catch (revertError) {
-          console.error('[inventory.outbound] failed to revert movement after automation error', revertError);
-        }
-        return NextResponse.json({ error: '财务自动化失败，出库操作已回滚' }, { status: 500 });
-      }
-    }
 
     return NextResponse.json({ data: movement }, { status: 201 });
   } catch (error) {
