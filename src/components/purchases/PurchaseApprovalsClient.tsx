@@ -10,6 +10,7 @@ import RejectionReasonDialog from '@/components/purchases/RejectionReasonDialog'
 import ApprovalCommentDialog from '@/components/purchases/ApprovalCommentDialog';
 import TransferApprovalDialog from '@/components/purchases/TransferApprovalDialog';
 import { Button } from '@/components/ui/button';
+import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
@@ -411,8 +412,8 @@ export default function PurchaseApprovalsClient() {
             placeholder="最大金额"
             className="h-10 w-28"
           />
-          <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-10 w-44" />
-          <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-10 w-44" />
+          <DatePicker value={startDate} onChange={setStartDate} placeholder="开始日期" className="h-10 w-44" />
+          <DatePicker value={endDate} onChange={setEndDate} placeholder="结束日期" className="h-10 w-44" />
           <select
             value={overdueHours}
             onChange={(event) => setOverdueHours(event.target.value)}

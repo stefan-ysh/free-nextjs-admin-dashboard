@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import DataState from '@/components/common/DataState';
 import { Button } from '@/components/ui/button';
+import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -164,8 +165,18 @@ export default function PurchaseAuditClient() {
               ))}
             </SelectContent>
           </Select>
-          <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-          <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+          <DatePicker
+            value={startDate}
+            onChange={setStartDate}
+            placeholder="开始日期"
+            className="w-full min-w-[140px]"
+          />
+          <DatePicker
+            value={endDate}
+            onChange={setEndDate}
+            placeholder="结束日期"
+            className="w-full min-w-[140px]"
+          />
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">

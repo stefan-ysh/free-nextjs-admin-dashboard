@@ -59,9 +59,6 @@ type FinanceRecordRow = RowDataPacket & {
   status: FinanceRecordStatus;
   purchase_id: string | null;
   purchase_payment_id: string | null;
-  project_id: string | null;
-  inventory_movement_id: string | null;
-  project_payment_id: string | null;
   metadata_json: string | null;
   created_at: Date | string;
   updated_at: Date | string;
@@ -129,9 +126,7 @@ function mapFinanceRecord(row: FinanceRecordRow): FinanceRecord {
     sourceType: row.source_type ?? 'manual',
     purchaseId: row.purchase_id ?? undefined,
     purchasePaymentId: row.purchase_payment_id ?? undefined,
-    projectId: row.project_id ?? undefined,
     inventoryMovementId: row.inventory_movement_id ?? undefined,
-    projectPaymentId: row.project_payment_id ?? undefined,
     metadata,
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
@@ -295,11 +290,9 @@ export async function createRecord(
   const dateValue = formatDateForDb(record.date);
   const sourceType: FinanceSourceType = record.sourceType ?? 'manual';
   const status: FinanceRecordStatus = record.status ?? 'draft';
-  const projectId = record.projectId ?? null;
   const purchaseId = record.purchaseId ?? null;
   const purchasePaymentId = record.purchasePaymentId ?? null;
   const inventoryMovementId = record.inventoryMovementId ?? null;
-  const projectPaymentId = record.projectPaymentId ?? null;
   const quantity = record.quantity ?? 1;
   const paymentChannel = record.paymentChannel ?? null;
   const payer = record.payer ?? null;
@@ -315,9 +308,9 @@ export async function createRecord(
       contract_amount, fee, total_amount, payment_type,
       quantity, payment_channel, payer, transaction_no,
       invoice_json, description, tags_json, created_by,
-      source_type, status, purchase_id, purchase_payment_id, project_id,
-      inventory_movement_id, project_payment_id, metadata_json
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      source_type, status, purchase_id, purchase_payment_id,
+      inventory_movement_id, metadata_json
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id,
       record.name,
@@ -340,9 +333,7 @@ export async function createRecord(
       status,
       purchaseId,
       purchasePaymentId,
-      projectId,
       inventoryMovementId,
-      projectPaymentId,
       metadataJson,
     ]
   );
@@ -413,22 +404,6 @@ export async function findRecordByInventoryMovementId(
   return mapFinanceRecord(rows[0]);
 }
 
-export async function findRecordByProjectPaymentId(
-  paymentId: string
-): Promise<FinanceRecord | null> {
-  await ensureFinanceSchema();
-  if (!paymentId) {
-    return null;
-  }
-  const [rows] = await pool.query<FinanceRecordRow[]>(
-    'SELECT * FROM finance_records WHERE project_payment_id = ? LIMIT 1',
-    [paymentId]
-  );
-  if (!rows.length) {
-    return null;
-  }
-  return mapFinanceRecord(rows[0]);
-}
 
 export async function updateRecord(
   id: string,
@@ -468,9 +443,7 @@ export async function updateRecord(
   merged.sourceType = updates.sourceType ?? existing.sourceType;
   merged.purchaseId = updates.purchaseId ?? existing.purchaseId;
   merged.purchasePaymentId = updates.purchasePaymentId ?? existing.purchasePaymentId;
-  merged.projectId = updates.projectId ?? existing.projectId;
   merged.inventoryMovementId = updates.inventoryMovementId ?? existing.inventoryMovementId;
-  merged.projectPaymentId = updates.projectPaymentId ?? existing.projectPaymentId;
   merged.status = updates.status ?? existing.status ?? 'draft';
   merged.metadata = updates.metadata ?? existing.metadata;
 
@@ -498,9 +471,7 @@ export async function updateRecord(
       source_type = ?,
       purchase_id = ?,
       purchase_payment_id = ?,
-      project_id = ?,
       inventory_movement_id = ?,
-      project_payment_id = ?,
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ?`,
     [
@@ -524,9 +495,7 @@ export async function updateRecord(
       merged.sourceType ?? 'manual',
       merged.purchaseId ?? null,
       merged.purchasePaymentId ?? null,
-      merged.projectId ?? null,
       merged.inventoryMovementId ?? null,
-      merged.projectPaymentId ?? null,
       id,
     ]
   );

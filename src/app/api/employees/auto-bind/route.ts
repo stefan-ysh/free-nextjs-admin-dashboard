@@ -9,7 +9,7 @@ export async function POST(request: Request) {
 	try {
 		const context = await requireCurrentUser();
 		const permissionUser = await toPermissionUser(context.user);
-		const perm = await checkPermission(permissionUser, Permissions.PROJECT_CREATE);
+		const perm = await checkPermission(permissionUser, Permissions.USER_UPDATE);
 		if (!perm.allowed) {
 			return NextResponse.json({ success: false, error: '无权操作' }, { status: 403 });
 		}

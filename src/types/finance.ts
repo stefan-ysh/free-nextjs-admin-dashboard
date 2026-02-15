@@ -41,7 +41,7 @@ export interface InvoiceInfo {
 }
 
 // 财务记录接口
-export type FinanceSourceType = 'manual' | 'purchase' | 'project' | 'import' | 'inventory' | 'project_payment';
+export type FinanceSourceType = 'manual' | 'purchase' | 'import' | 'inventory';
 export type FinanceRecordStatus = 'draft' | 'cleared';
 export type FinanceRecordMetadata = Record<string, unknown>;
 
@@ -76,9 +76,7 @@ export interface FinanceRecord {
   sourceType?: FinanceSourceType;  // 数据来源
   purchaseId?: string | null;      // 关联采购记录
   purchasePaymentId?: string | null; // 关联采购打款记录
-  projectId?: string | null;       // 关联项目
   inventoryMovementId?: string | null; // 关联库存流水
-  projectPaymentId?: string | null; // 关联项目收款
   metadata?: FinanceRecordMetadata; // 额外元数据(JSON)
 
   // 系统字段

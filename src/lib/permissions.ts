@@ -91,33 +91,6 @@ export const Permissions = {
     anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN],
   } as PermissionConfig,
   
-  // ============ 项目管理 ============
-  PROJECT_VIEW_ALL: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.DEPARTMENT_MANAGER],
-  } as PermissionConfig,
-  
-  PROJECT_CREATE: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEPARTMENT_MANAGER],
-  } as PermissionConfig,
-  
-  PROJECT_UPDATE: {
-    customCheck: (user: UserProfile) => {
-      // 管理员、部门经理和财务相关角色可以更新项目
-      return hasAnyRole(user, [
-        UserRole.SUPER_ADMIN,
-        UserRole.ADMIN,
-        UserRole.DEPARTMENT_MANAGER,
-        UserRole.FINANCE,
-        UserRole.FINANCE_SCHOOL,
-        UserRole.FINANCE_COMPANY,
-      ]);
-    },
-  } as PermissionConfig,
-  
-  PROJECT_DELETE: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN],
-  } as PermissionConfig,
-  
   // ============ 采购管理 ============
   PURCHASE_VIEW_ALL: {
     anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
@@ -313,25 +286,6 @@ export function canAccessDepartmentData(
   return false;
 }
 
-/**
- * 检查用户是否可以编辑项目
- */
-export function canEditProject(
-  user: UserProfile,
-  projectManagerId: string
-): boolean {
-  // 管理员可以编辑所有项目
-  if (isAdmin(user)) {
-    return true;
-  }
-  
-  // 项目经理可以编辑自己的项目
-  if (user.id === projectManagerId) {
-    return true;
-  }
-  
-  return false;
-}
 
 /**
  * 检查用户是否可以编辑采购记录
@@ -403,12 +357,6 @@ export const can = {
   updateUser: (user: UserProfile) => checkPermission(user, Permissions.USER_UPDATE),
   deleteUser: (user: UserProfile) => checkPermission(user, Permissions.USER_DELETE),
   assignRoles: (user: UserProfile) => checkPermission(user, Permissions.USER_ASSIGN_ROLES),
-  
-  // 项目管理
-  viewAllProjects: (user: UserProfile) => checkPermission(user, Permissions.PROJECT_VIEW_ALL),
-  createProject: (user: UserProfile) => checkPermission(user, Permissions.PROJECT_CREATE),
-  updateProject: (user: UserProfile) => checkPermission(user, Permissions.PROJECT_UPDATE),
-  deleteProject: (user: UserProfile) => checkPermission(user, Permissions.PROJECT_DELETE),
   
   // 采购管理
   viewAllPurchases: (user: UserProfile) => checkPermission(user, Permissions.PURCHASE_VIEW_ALL),

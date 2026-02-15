@@ -2,9 +2,7 @@ import type { Pool } from 'mysql2/promise';
 
 import { mysqlPool } from '@/lib/mysql';
 import { ensureColumn, ensureForeignKey } from '@/lib/schema/mysql-utils';
-import { ensureProjectsSchema } from '@/lib/schema/projects';
 import { ensurePurchasesSchema } from '@/lib/schema/purchases';
-import { ensureProjectPaymentsSchema } from '@/lib/schema/project-payments';
 import { ensureInventorySchema } from '@/lib/schema/inventory';
 import { getDefaultCategoryLabels } from '@/constants/finance-categories';
 import { TransactionType } from '@/types/finance';
@@ -94,9 +92,7 @@ async function seedDefaultCategories(pool: Pool) {
 export async function ensureFinanceSchema() {
   if (initialized) return;
 
-  await ensureProjectsSchema();
   await ensurePurchasesSchema();
-  await ensureProjectPaymentsSchema();
   await ensureInventorySchema();
   const pool = mysqlPool();
 
@@ -119,14 +115,12 @@ export async function ensureFinanceSchema() {
       description TEXT,
       tags_json JSON NULL,
       created_by VARCHAR(64),
-      source_type ENUM('manual','purchase','project','import','inventory','project_payment') NOT NULL DEFAULT 'manual',
+      source_type ENUM('manual','purchase','import','inventory') NOT NULL DEFAULT 'manual',
       status ENUM('draft','cleared') NOT NULL DEFAULT 'draft',
       purchase_id CHAR(36) NULL,
       purchase_payment_id CHAR(36) NULL,
-      project_id CHAR(36) NULL,
       inventory_movement_id VARCHAR(64) NULL,
       metadata_json JSON NULL,
-      project_payment_id CHAR(36) NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -135,16 +129,14 @@ export async function ensureFinanceSchema() {
   await ensureColumn(
     'finance_records',
     'source_type',
-    "ENUM('manual','purchase','project','import','inventory','project_payment') NOT NULL DEFAULT 'manual'"
+    "ENUM('manual','purchase','import','inventory') NOT NULL DEFAULT 'manual'"
   );
   await pool.query(
-    "ALTER TABLE `finance_records` MODIFY COLUMN `source_type` ENUM('manual','purchase','project','import','inventory','project_payment') NOT NULL DEFAULT 'manual'"
+    "ALTER TABLE `finance_records` MODIFY COLUMN `source_type` ENUM('manual','purchase','import','inventory') NOT NULL DEFAULT 'manual'"
   );
   await ensureColumn('finance_records', 'purchase_id', 'CHAR(36) NULL');
   await ensureColumn('finance_records', 'purchase_payment_id', 'CHAR(36) NULL');
-  await ensureColumn('finance_records', 'project_id', 'CHAR(36) NULL');
   await ensureColumn('finance_records', 'inventory_movement_id', 'VARCHAR(64) NULL');
-  await ensureColumn('finance_records', 'project_payment_id', 'CHAR(36) NULL');
   await ensureColumn('finance_records', 'quantity', 'DECIMAL(16,2) NOT NULL DEFAULT 1');
   await ensureColumn('finance_records', 'payment_channel', 'VARCHAR(120) NULL');
   await ensureColumn('finance_records', 'payer', 'VARCHAR(120) NULL');
@@ -154,6 +146,15 @@ export async function ensureFinanceSchema() {
   await dropForeignKeyIfExists(pool, 'finance_records', 'fk_finance_supplier');
   await dropIndexIfExists(pool, 'finance_records', 'idx_finance_supplier');
   await dropColumnIfExists(pool, 'finance_records', 'supplier_id');
+  
+  // Cleanup removed columns
+  await dropForeignKeyIfExists(pool, 'finance_records', 'fk_finance_project');
+  await dropForeignKeyIfExists(pool, 'finance_records', 'fk_finance_project_payment');
+  await dropIndexIfExists(pool, 'finance_records', 'idx_finance_project');
+  await dropIndexIfExists(pool, 'finance_records', 'idx_finance_project_payment');
+  await dropColumnIfExists(pool, 'finance_records', 'project_id');
+  await dropColumnIfExists(pool, 'finance_records', 'project_payment_id');
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS finance_categories (
       id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -170,9 +171,7 @@ export async function ensureFinanceSchema() {
   await createIndex(pool, 'CREATE INDEX idx_finance_category ON finance_records(category)');
   await createIndex(pool, 'CREATE INDEX idx_finance_purchase ON finance_records(purchase_id)');
   await createIndex(pool, 'CREATE INDEX idx_finance_purchase_payment ON finance_records(purchase_payment_id)');
-  await createIndex(pool, 'CREATE INDEX idx_finance_project ON finance_records(project_id)');
   await createIndex(pool, 'CREATE INDEX idx_finance_inventory_movement ON finance_records(inventory_movement_id)');
-  await createIndex(pool, 'CREATE INDEX idx_finance_project_payment ON finance_records(project_payment_id)');
   await ensureForeignKey(
     'finance_records',
     'fk_finance_purchase',
@@ -185,18 +184,8 @@ export async function ensureFinanceSchema() {
   );
   await ensureForeignKey(
     'finance_records',
-    'fk_finance_project',
-    'FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL'
-  );
-  await ensureForeignKey(
-    'finance_records',
     'fk_finance_inventory_movement',
     'FOREIGN KEY (inventory_movement_id) REFERENCES inventory_movements(id) ON DELETE SET NULL'
-  );
-  await ensureForeignKey(
-    'finance_records',
-    'fk_finance_project_payment',
-    'FOREIGN KEY (project_payment_id) REFERENCES project_payments(id) ON DELETE SET NULL'
   );
 
   await seedDefaultCategories(pool);

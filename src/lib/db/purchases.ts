@@ -42,10 +42,22 @@ import {
   PaymentQueueStatus,
 } from '@/types/purchase';
 import { findUserById, ensureBusinessUserRecord } from '@/lib/users';
-import { normalizeDateInput } from '@/lib/dates';
+import { normalizeDateInput, formatDateOnly } from '@/lib/dates';
 import { InvoiceType as FinanceInvoiceType } from '@/types/finance';
-import { createPurchaseExpense } from '@/lib/services/finance-automation';
-import { createInboundRecord, getWarehouseByCode } from '@/lib/db/inventory';
+
+function safeIsoString(value: string | Date | null | undefined): string | null {
+  if (!value) return null;
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
+}
+
+function safeDateString(value: string | Date | null | undefined): string | null {
+  if (!value) return null;
+  if (value instanceof Date) {
+     return formatDateOnly(value);
+  }
+  return String(value);
+}
 
 function sanitizeId(value: string | null | undefined): string | null {
   if (value == null) return null;
@@ -283,7 +295,7 @@ function mapPurchase(row: RawPurchaseRow | undefined): PurchaseRecord | null {
   return {
     id: row.id,
     purchaseNumber: row.purchase_number,
-    purchaseDate: row.purchase_date,
+    purchaseDate: safeDateString(row.purchase_date) ?? '',
     organizationType: isPurchaseOrganization(row.organization_type) ? row.organization_type : 'company',
     itemName: row.item_name,
     inventoryItemId: row.inventory_item_id ?? null,
@@ -305,13 +317,13 @@ function mapPurchase(row: RawPurchaseRow | undefined): PurchaseRecord | null {
     invoiceType: normalizeInvoiceType(row.invoice_type),
     invoiceStatus: normalizeInvoiceStatus(row.invoice_status),
     reimbursementStatus: normalizeReimbursementStatus(row.reimbursement_status),
-    reimbursementSubmittedAt: row.reimbursement_submitted_at ?? null,
+    reimbursementSubmittedAt: safeIsoString(row.reimbursement_submitted_at),
     reimbursementSubmittedBy: row.reimbursement_submitted_by ?? null,
-    reimbursementRejectedAt: row.reimbursement_rejected_at ?? null,
+    reimbursementRejectedAt: safeIsoString(row.reimbursement_rejected_at),
     reimbursementRejectedBy: row.reimbursement_rejected_by ?? null,
     reimbursementRejectedReason: row.reimbursement_rejected_reason ?? null,
     invoiceNumber: row.invoice_number,
-    invoiceIssueDate: row.invoice_issue_date,
+    invoiceIssueDate: safeDateString(row.invoice_issue_date),
     invoiceImages: parseJsonArray(row.invoice_images),
     receiptImages: parseJsonArray(row.receipt_images),
     status: normalizePurchaseStatus(row.status),
@@ -319,23 +331,23 @@ function mapPurchase(row: RawPurchaseRow | undefined): PurchaseRecord | null {
 
     paymentIssueOpen: Boolean(row.payment_issue_open),
     paymentIssueReason: row.payment_issue_reason ?? null,
-    paymentIssueAt: row.payment_issue_at ?? null,
+    paymentIssueAt: safeIsoString(row.payment_issue_at),
     paymentIssueBy: row.payment_issue_by ?? null,
-    submittedAt: row.submitted_at,
-    approvedAt: row.approved_at,
+    submittedAt: safeIsoString(row.submitted_at),
+    approvedAt: safeIsoString(row.approved_at),
     approvedBy: row.approved_by,
-    rejectedAt: row.rejected_at,
+    rejectedAt: safeIsoString(row.rejected_at),
     rejectedBy: row.rejected_by,
     rejectionReason: row.rejection_reason,
-    paidAt: row.paid_at,
+    paidAt: safeIsoString(row.paid_at),
     paidBy: row.paid_by,
     notes: row.notes,
     attachments: parseJsonArray(row.attachments),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: safeIsoString(row.created_at) ?? '',
+    updatedAt: safeIsoString(row.updated_at) ?? '',
     createdBy: row.created_by,
     isDeleted: row.is_deleted === 1,
-    deletedAt: row.deleted_at,
+    deletedAt: safeIsoString(row.deleted_at),
   };
 }
 
@@ -1519,75 +1531,30 @@ export async function markAsPaid(
   if (remaining <= 0) throw new Error('ALREADY_PAID');
   if (normalizedAmount > remaining + 0.01) throw new Error('PAYMENT_EXCEEDS_REMAINING');
 
-  const { id: paymentId, paidAt } = await createPurchasePayment(purchaseId, normalizedAmount, operatorId, note);
+  await createPurchasePayment(purchaseId, normalizedAmount, operatorId, note);
   const nextPaidAmount = Number((paidAmount + normalizedAmount).toFixed(2));
   const isFullyPaid = nextPaidAmount + 0.01 >= dueAmount;
 
-  try {
-    if (isFullyPaid) {
-      const paidAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
-      await mysqlQuery`
-        UPDATE purchases
-        SET status = 'paid',
-            reimbursement_status = 'reimbursed',
-            paid_at = ${paidAt},
-            paid_by = ${operatorId},
-            updated_at = NOW()
-        WHERE id = ${purchaseId}
-      `;
-    } else {
-      await mysqlQuery`
-        UPDATE purchases
-        SET updated_at = NOW()
-        WHERE id = ${purchaseId}
-      `;
-    }
-
-    const updated = (await findPurchaseById(purchaseId))!;
-    await createPurchaseExpense(updated, paymentId, normalizedAmount, operatorId, paidAt);
-
-    // Auto Inbound Logic
-    try {
-      if (updated.inventoryItemId && updated.quantity > 0) {
-        // Map purchase organization type to warehouse code
-        // School -> SCHOOL, Company -> COMPANY
-        const warehouseCode = (updated.organizationType === 'school' ? 'SCHOOL' : 'COMPANY');
-        const warehouse = await getWarehouseByCode(warehouseCode);
-        
-        if (warehouse) {
-          await createInboundRecord({
-            itemId: updated.inventoryItemId,
-            warehouseId: warehouse.id,
-            quantity: updated.quantity,
-            type: 'purchase',
-            unitCost: updated.unitPrice,
-            occurredAt: new Date().toISOString(),
-            notes: `自动入库：关联采购单 ${updated.purchaseNumber}`,
-            attributes: {}, // Uses defaults
-          }, operatorId);
-        }
-      }
-    } catch (inboundError) {
-      console.error(`[AutoInbound] Failed to create inbound record for purchase ${purchaseId}`, inboundError);
-      // We do not fail the payment if inbound fails, just log it.
-    }
-  } catch (error) {
+  if (isFullyPaid) {
+    const paidAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
     await mysqlQuery`
-      DELETE FROM purchase_payments WHERE id = ${paymentId}
+      UPDATE purchases
+      SET status = 'paid',
+          reimbursement_status = 'reimbursed',
+          paid_at = ${paidAt},
+          paid_by = ${operatorId},
+          updated_at = NOW()
+      WHERE id = ${purchaseId}
     `;
-    if (isFullyPaid) {
-      await mysqlQuery`
-        UPDATE purchases
-        SET status = 'approved',
-            reimbursement_status = 'reimbursement_pending',
-            paid_at = NULL,
-            paid_by = NULL,
-            updated_at = NOW()
-        WHERE id = ${purchaseId}
-      `;
-    }
-    throw error;
+  } else {
+    await mysqlQuery`
+      UPDATE purchases
+      SET updated_at = NOW()
+      WHERE id = ${purchaseId}
+    `;
   }
+  
+  // NOTE: Auto-finance-record creation and auto-inbound logic removed due to project module removal cleanup.
 
   const comment = isFullyPaid
     ? null

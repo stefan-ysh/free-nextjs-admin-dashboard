@@ -199,374 +199,392 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 
 	return (
 		<Form {...form}>
-			<form id={formId} onSubmit={handleFormSubmit} className="space-y-6">
-
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-					<FormField
-						control={control}
-						name="employeeCode"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>员工编号</FormLabel>
-								<FormControl>
-									<Input placeholder="可选, 例如 EMP-001" {...field} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={control}
-						name="displayName"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>
-									姓名 <span className="text-destructive">*</span>
-								</FormLabel>
-								<FormControl>
-									<Input placeholder="请输入员工姓名" {...field} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-				</div>
-
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-					<FormField
-						control={control}
-						name="email"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>邮箱</FormLabel>
-								<FormControl>
-									<Input type="email" placeholder="name@example.com" {...field} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={control}
-						name="phone"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>电话</FormLabel>
-								<FormControl>
-									<Input placeholder="手机号或分机号" {...field} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-				</div>
-				{isCreating && (
-					<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+			<form id={formId} onSubmit={handleFormSubmit} className="space-y-8">
+				{/* 1. 基本信息 */}
+				<div className="space-y-4">
+					<h3 className="text-lg font-medium">基本信息</h3>
+					<div className="grid grid-cols-1 gap-6 md:grid-cols-2">
 						<FormField
 							control={control}
-							name="initialPassword"
+							name="employeeCode"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>员工编号</FormLabel>
+									<FormControl>
+										<Input placeholder="可选, 例如 EMP-001" {...field} />
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={control}
+							name="displayName"
 							render={({ field }) => (
 								<FormItem>
 									<FormLabel>
-										初始密码 <span className="text-destructive">*</span>
+										姓名 <span className="text-destructive">*</span>
 									</FormLabel>
 									<FormControl>
-										<Input type="password" placeholder="设置初始登录密码" {...field} />
+										<Input placeholder="请输入员工姓名" {...field} />
 									</FormControl>
-									<FormDescription>员工可用邮箱/手机号/员工编号登录。</FormDescription>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={control}
+							name="email"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>邮箱</FormLabel>
+									<FormControl>
+										<Input type="email" placeholder="name@example.com" {...field} />
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={control}
+							name="phone"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>电话</FormLabel>
+									<FormControl>
+										<Input placeholder="手机号或分机号" {...field} />
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						{isCreating && (
+							<FormField
+								control={control}
+								name="initialPassword"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>
+											初始密码 <span className="text-destructive">*</span>
+										</FormLabel>
+										<FormControl>
+											<Input type="password" placeholder="设置初始登录密码" {...field} />
+										</FormControl>
+										<FormDescription>员工可用邮箱/手机号/员工编号登录。</FormDescription>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+						)}
+					</div>
+				</div>
+
+				<div className="border-t" />
+
+				{/* 2. 个人信息 */}
+				<div className="space-y-4">
+					<h3 className="text-lg font-medium">个人信息</h3>
+					<div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+						<FormField
+							control={control}
+							name="nationalId"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>身份证号</FormLabel>
+									<FormControl>
+										<Input placeholder="填写居民身份证号码" {...field} />
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={control}
+							name="gender"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>性别</FormLabel>
+									<Select
+										value={field.value || 'unspecified'}
+										onValueChange={(value) => field.onChange(value === 'unspecified' ? '' : value)}
+									>
+										<FormControl>
+											<SelectTrigger>
+												<SelectValue placeholder="未设置" />
+											</SelectTrigger>
+										</FormControl>
+										<SelectContent>
+											<SelectItem value="unspecified">未设置</SelectItem>
+											{GENDER_OPTIONS.map((option) => (
+												<SelectItem key={option} value={option}>
+													{EMPLOYEE_GENDER_LABELS[option]}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={control}
+							name="educationBackground"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>教育背景</FormLabel>
+									<FormControl>
+										<Input placeholder="最高学历或专业" {...field} />
+									</FormControl>
 									<FormMessage />
 								</FormItem>
 							)}
 						/>
 					</div>
-				)}
+				</div>
 
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-					<FormField
-						control={control}
-						name="nationalId"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>身份证号</FormLabel>
-								<FormControl>
-									<Input placeholder="填写居民身份证号码" {...field} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={control}
-						name="gender"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>性别</FormLabel>
-								<Select
-									value={field.value || 'unspecified'}
-									onValueChange={(value) => field.onChange(value === 'unspecified' ? '' : value)}
-								>
+				<div className="border-t" />
+
+				{/* 3. 工作信息 */}
+				<div className="space-y-4">
+					<h3 className="text-lg font-medium">工作信息</h3>
+					<div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+						<FormField
+							control={control}
+							name="departmentId"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>部门 (结构化)</FormLabel>
+									<Select
+										value={field.value || 'none'}
+										onValueChange={(value) => {
+											const normalized = value === 'none' ? '' : value;
+											field.onChange(normalized);
+											if (normalized) {
+												const matched = availableDepartments.find((option) => option.id === normalized);
+												form.setValue('department', matched?.name ?? '', { shouldDirty: true });
+											} else {
+												form.setValue('department', '', { shouldDirty: true });
+											}
+										}}
+									>
+										<FormControl>
+											<SelectTrigger>
+												<SelectValue placeholder={availableDepartments.length ? '选择部门' : '正在加载部门…'} />
+											</SelectTrigger>
+										</FormControl>
+										<SelectContent>
+											<SelectItem value="none">未设置</SelectItem>
+											{availableDepartments.length === 0 && (
+												<SelectItem value="__no_departments" disabled>
+													暂无可选部门
+												</SelectItem>
+											)}
+											{availableDepartments.map((dept) => (
+												<SelectItem key={dept.id} value={dept.id}>
+													{dept.name}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+									<FormDescription>选择后会自动同步部门名称，可右侧手动微调。</FormDescription>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={control}
+							name="department"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>部门名称</FormLabel>
 									<FormControl>
-										<SelectTrigger>
-											<SelectValue placeholder="未设置" />
-										</SelectTrigger>
+										<Input placeholder="例如: 财务中心" {...field} />
 									</FormControl>
-									<SelectContent>
-										<SelectItem value="unspecified">未设置</SelectItem>
-										{GENDER_OPTIONS.map((option) => (
-											<SelectItem key={option} value={option}>
-												{EMPLOYEE_GENDER_LABELS[option]}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
+									<FormDescription>无结构化数据时，可手动填写或覆盖自动名称。</FormDescription>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={control}
+							name="jobGradeId"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>职级</FormLabel>
+									<Select
+										value={field.value || 'none'}
+										onValueChange={(value) => field.onChange(value === 'none' ? '' : value)}
+									>
+										<FormControl>
+											<SelectTrigger>
+												<SelectValue placeholder={availableJobGrades.length ? '选择职级' : '正在加载职级…'} />
+											</SelectTrigger>
+										</FormControl>
+										<SelectContent>
+											<SelectItem value="none">未设置</SelectItem>
+											{availableJobGrades.length === 0 && (
+												<SelectItem value="__no_job_grade" disabled>
+													暂无可选职级
+												</SelectItem>
+											)}
+											{availableJobGrades.map((grade) => (
+												<SelectItem key={grade.id} value={grade.id}>
+													{grade.name}
+													{grade.level != null ? ` (L${grade.level})` : ''}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={control}
+							name="jobTitle"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>职位</FormLabel>
+									<FormControl>
+										<Input placeholder="职位名称" {...field} />
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={control}
+							name="organization"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>机关 / 单位</FormLabel>
+									<FormControl>
+										<Input placeholder="供职机构或行政机关" {...field} />
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+					</div>
 				</div>
 
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-					<FormField
-						control={control}
-						name="organization"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>机关 / 单位</FormLabel>
-								<FormControl>
-									<Input placeholder="供职机构或行政机关" {...field} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={control}
-						name="educationBackground"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>教育背景</FormLabel>
-								<FormControl>
-									<Input placeholder="最高学历或专业" {...field} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-				</div>
+				<div className="border-t" />
 
-				<FormField
-					control={control}
-					name="address"
-					render={({ field }) => (
-						<FormItem>
-							<FormLabel>住址</FormLabel>
-							<FormControl>
-								<Textarea rows={3} placeholder="省市区 + 详细地址" {...field} />
-							</FormControl>
-							<FormMessage />
-						</FormItem>
+				{/* 4. 在职状态 */}
+				<div className="space-y-4">
+					<h3 className="text-lg font-medium">在职状态</h3>
+					<div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+						<FormField
+							control={control}
+							name="employmentStatus"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>状态</FormLabel>
+									<Select value={field.value} onValueChange={field.onChange} disabled={hasReadonlyStatus}>
+										<FormControl>
+											<SelectTrigger>
+												<SelectValue />
+											</SelectTrigger>
+										</FormControl>
+										<SelectContent>
+											{STATUS_OPTIONS.map((option) => (
+												<SelectItem key={option} value={option}>
+													{EMPLOYMENT_STATUS_LABELS[option]}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={control}
+							name="hireDate"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>入职日期</FormLabel>
+									<FormControl>
+										<DatePicker value={field.value ?? ''} onChange={field.onChange} clearable={false} />
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={control}
+							name="terminationDate"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>离职日期</FormLabel>
+									<FormControl>
+										<DatePicker value={field.value ?? ''} onChange={field.onChange} />
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+					</div>
+
+					{initialData && statusChanged && (
+						<FormField
+							control={control}
+							name="statusChangeNote"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>状态变更备注</FormLabel>
+									<FormDescription>可选，说明此次状态调整的背景或审批信息。</FormDescription>
+									<FormControl>
+										<Textarea rows={3} placeholder="例如：完成入职手续，状态改为在职" {...field} />
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
 					)}
-				/>
-
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-					<FormField
-						control={control}
-						name="departmentId"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>部门 (结构化)</FormLabel>
-								<Select
-									value={field.value || 'none'}
-									onValueChange={(value) => {
-										const normalized = value === 'none' ? '' : value;
-										field.onChange(normalized);
-										if (normalized) {
-											const matched = availableDepartments.find((option) => option.id === normalized);
-											form.setValue('department', matched?.name ?? '', { shouldDirty: true });
-										} else {
-											form.setValue('department', '', { shouldDirty: true });
-										}
-									}}
-								>
-									<FormControl>
-										<SelectTrigger>
-											<SelectValue placeholder={availableDepartments.length ? '选择部门' : '正在加载部门…'} />
-										</SelectTrigger>
-									</FormControl>
-									<SelectContent>
-										<SelectItem value="none">未设置</SelectItem>
-										{!availableDepartments.length && (
-											<SelectItem value="__no_departments" disabled>
-												暂无可选部门
-											</SelectItem>
-										)}
-										{availableDepartments.map((dept) => (
-											<SelectItem key={dept.id} value={dept.id}>
-												{dept.name}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-								<FormDescription>选择后会自动同步部门名称，可右侧手动微调。</FormDescription>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={control}
-						name="department"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>部门名称</FormLabel>
-								<FormControl>
-									<Input placeholder="例如: 财务中心" {...field} />
-								</FormControl>
-								<FormDescription>无结构化数据时，可手动填写或覆盖自动名称。</FormDescription>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={control}
-						name="jobGradeId"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>职级</FormLabel>
-								<Select
-									value={field.value || 'none'}
-									onValueChange={(value) => field.onChange(value === 'none' ? '' : value)}
-								>
-									<FormControl>
-										<SelectTrigger>
-											<SelectValue placeholder={availableJobGrades.length ? '选择职级' : '正在加载职级…'} />
-										</SelectTrigger>
-									</FormControl>
-									<SelectContent>
-										<SelectItem value="none">未设置</SelectItem>
-										{!availableJobGrades.length && (
-											<SelectItem value="__no_job_grade" disabled>
-												暂无可选职级
-											</SelectItem>
-										)}
-										{availableJobGrades.map((grade) => (
-											<SelectItem key={grade.id} value={grade.id}>
-												{grade.name}
-												{grade.level != null ? ` (L${grade.level})` : ''}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={control}
-						name="jobTitle"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>职位</FormLabel>
-								<FormControl>
-									<Input placeholder="职位名称" {...field} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
 				</div>
 
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-					<FormField
-						control={control}
-						name="employmentStatus"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>状态</FormLabel>
-								<Select value={field.value} onValueChange={field.onChange} disabled={hasReadonlyStatus}>
+				<div className="border-t" />
+
+				{/* 5. 其他信息 */}
+				<div className="space-y-4">
+					<h3 className="text-lg font-medium">其他信息</h3>
+					<div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+						<FormField
+							control={control}
+							name="managerId"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>直属上级</FormLabel>
 									<FormControl>
-										<SelectTrigger>
-											<SelectValue />
-										</SelectTrigger>
+										<Input placeholder="可填写上级工号或姓名" {...field} />
 									</FormControl>
-									<SelectContent>
-										{STATUS_OPTIONS.map((option) => (
-											<SelectItem key={option} value={option}>
-												{EMPLOYMENT_STATUS_LABELS[option]}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={control}
+							name="location"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>办公地点</FormLabel>
+									<FormControl>
+										<Input placeholder="城市 / 园区 / 办公室" {...field} />
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+					</div>
 					<FormField
 						control={control}
-						name="hireDate"
+						name="address"
 						render={({ field }) => (
 							<FormItem>
-								<FormLabel>入职日期</FormLabel>
+								<FormLabel>住址</FormLabel>
 								<FormControl>
-									<DatePicker value={field.value ?? ''} onChange={field.onChange} clearable={false} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={control}
-						name="terminationDate"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>离职日期</FormLabel>
-								<FormControl>
-									<DatePicker value={field.value ?? ''} onChange={field.onChange} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-				</div>
-
-				{initialData && statusChanged && (
-					<FormField
-						control={control}
-						name="statusChangeNote"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>状态变更备注</FormLabel>
-								<FormDescription>可选，说明此次状态调整的背景或审批信息。</FormDescription>
-								<FormControl>
-									<Textarea rows={3} placeholder="例如：完成入职手续，状态改为在职" {...field} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-				)}
-
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-					<FormField
-						control={control}
-						name="managerId"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>直属上级</FormLabel>
-								<FormControl>
-									<Input placeholder="可填写上级工号或姓名" {...field} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={control}
-						name="location"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>办公地点</FormLabel>
-								<FormControl>
-									<Input placeholder="城市 / 园区 / 办公室" {...field} />
+									<Textarea rows={3} placeholder="省市区 + 详细地址" {...field} />
 								</FormControl>
 								<FormMessage />
 							</FormItem>
@@ -575,7 +593,7 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 				</div>
 
 				{!hideActions && (
-					<div className="flex justify-end gap-4">
+					<div className="flex justify-end gap-4 pt-4 border-t">
 						{onCancel && (
 							<Button type="button" variant="outline" onClick={onCancel} disabled={formState.isSubmitting}>
 								取消
