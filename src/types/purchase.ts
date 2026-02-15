@@ -368,7 +368,6 @@ export interface PurchaseDetail extends PurchaseRecord {
   purchaser: {
     id: string;
     displayName: string;
-    avatarUrl: string | null;
     employeeCode: string | null;
     department: string | null;
   };

@@ -10,7 +10,6 @@ import {
   ListEmployeesParams,
   ensureEmployeeUserAccount,
 } from '@/lib/hr/employees';
-import { deleteAvatarAsset, saveAvatarToLocal } from '@/lib/storage/avatar';
 import { checkPermission, Permissions } from '@/lib/permissions';
 
 function unauthorizedResponse() {
@@ -57,7 +56,7 @@ export async function GET(request: Request) {
     const allowedSorts: ListEmployeesParams['sortBy'][] = [
       'createdAt',
       'updatedAt',
-      'lastName',
+      'displayName',
       'department',
       'status',
     ];
@@ -90,7 +89,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  let uploadedAvatarPath: string | null = null;
   try {
     const context = await requireCurrentUser();
     const permissionUser = await toPermissionUser(context.user);
@@ -108,20 +106,12 @@ export async function POST(request: Request) {
       return badRequestResponse('请设置初始密码');
     }
 
-    const trimmedAvatarDataUrl = typeof body.avatarDataUrl === 'string' ? body.avatarDataUrl.trim() : '';
-    if (trimmedAvatarDataUrl) {
-      uploadedAvatarPath = await saveAvatarToLocal(trimmedAvatarDataUrl);
-    }
 
     const result = await createEmployee({
       employeeCode: body.employeeCode,
-      firstName: body.firstName,
-      lastName: body.lastName,
       displayName: body.displayName,
-      avatarUrl: uploadedAvatarPath ?? null,
       email: body.email,
       phone: body.phone,
-      wecomUserId: body.wecomUserId,
       initialPassword,
       department: body.department,
       departmentId: body.departmentId,
@@ -155,9 +145,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, data: finalRecord }, { status: 201 });
   } catch (error) {
-    if (uploadedAvatarPath) {
-      await deleteAvatarAsset(uploadedAvatarPath).catch(() => undefined);
-    }
     if (error instanceof Error) {
       if (error.message === 'UNAUTHENTICATED') {
         return unauthorizedResponse();
@@ -170,9 +157,6 @@ export async function POST(request: Request) {
       }
       if (error.message === 'EMPLOYEE_CODE_EXISTS') {
         return badRequestResponse('员工编号已存在');
-      }
-      if (error.message === 'WECOM_USER_ID_EXISTS') {
-        return badRequestResponse('企业微信账号已被其他员工占用');
       }
       if (error.message === 'MISSING_PASSWORD') {
         return badRequestResponse('请设置初始密码');
@@ -188,15 +172,6 @@ export async function POST(request: Request) {
       }
       if (error.message === 'USER_NOT_FOUND') {
         return badRequestResponse('关联的用户不存在');
-      }
-      if (error.message === 'FILE_TOO_LARGE') {
-        return badRequestResponse('头像文件超过允许大小');
-      }
-      if (error.message === 'UNSUPPORTED_FILE_TYPE') {
-        return badRequestResponse('头像文件格式不受支持');
-      }
-      if (error.message === 'The provided string is not a valid base64 data URI') {
-        return badRequestResponse('头像数据无效');
       }
     }
     console.error('创建员工失败', error);

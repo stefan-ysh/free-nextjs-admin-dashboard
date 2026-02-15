@@ -1,14 +1,12 @@
 import type { PurchaseDetail } from '@/types/purchase';
 import {
-  sendSmsTextMessage,
-  sendSmsToEmployeeIds,
-  sendSmsToFinance,
-} from '@/lib/notify/sms';
-import { createInAppNotifications, listFinanceRecipientIds } from '@/lib/db/notifications';
+  createInAppNotifications,
+  listFinanceRecipientIds,
+  listRecipientEmailsByIds,
+} from '@/lib/db/notifications';
 import type { NotifyChannel } from '@/lib/notify/policy';
 import { getNotifyPolicy, type PurchaseNotifyEvent } from '@/lib/notify/policy';
-
-type SmsTargetChannel = 'approval' | 'applicant' | 'finance';
+import { sendEmailMessages } from '@/lib/notify/email';
 
 function buildAppBaseUrl(): string {
   const raw =
@@ -22,27 +20,45 @@ function buildDetailLink(purchaseId: string): string {
   return `${buildAppBaseUrl()}/m/tasks/${purchaseId}`;
 }
 
-async function sendTargetedOrFallback(params: {
-  content: string;
-  employeeIds?: string[];
-  channel: SmsTargetChannel;
-  financeGroup?: boolean;
-}): Promise<void> {
-  const { content, employeeIds = [], channel, financeGroup } = params;
-  let sent = false;
+function buildEmailSubject(title: string): string {
+  return `【${title}】`;
+}
 
-  try {
-    if (financeGroup) {
-      sent = await sendSmsToFinance(content);
-    } else if (employeeIds.length > 0) {
-      sent = await sendSmsToEmployeeIds(employeeIds, content, channel);
-    }
-  } catch (error) {
-    console.warn('[sms] 精准短信发送失败，回退默认通道', error);
-  }
+function buildEmailHtml(title: string, content: string): string {
+  const lines = content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
 
-  if (sent) return;
-  await sendSmsTextMessage(content, { channel });
+  const items = lines
+    .map((line) => {
+      const escaped = line
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+      if (line.startsWith('处理链接：') || line.startsWith('详情链接：')) {
+        const url = line.replace(/^(处理链接：|详情链接：)/, '').trim();
+        if (/^https?:\/\//i.test(url)) {
+          return `<li style="margin:0 0 10px;"><a href="${url}" style="color:#2563eb;text-decoration:none;">查看详情</a></li>`;
+        }
+      }
+      return `<li style="margin:0 0 10px;">${escaped}</li>`;
+    })
+    .join('');
+
+  return `
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f7fb;padding:24px;">
+      <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+        <div style="padding:16px 20px;background:#111827;color:#ffffff;font-size:16px;font-weight:600;">${title}</div>
+        <div style="padding:18px 20px;color:#111827;">
+          <ul style="margin:0;padding-left:18px;line-height:1.7;">${items}</ul>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 async function sendInAppMessage(params: {
@@ -64,12 +80,6 @@ async function sendInAppMessage(params: {
   });
 }
 
-async function sendEmailMessage(event: PurchaseNotifyEvent, content: string): Promise<void> {
-  // Keep a no-op placeholder for later email provider integration.
-  if (!content) return;
-  console.info(`[notify][email] ${event}`);
-}
-
 async function dispatchByPolicy(
   event: PurchaseNotifyEvent,
   params: {
@@ -78,22 +88,13 @@ async function dispatchByPolicy(
     content: string;
     purchaseId: string;
     employeeIds?: string[];
-    smsChannel: SmsTargetChannel;
     financeGroup?: boolean;
   }
 ) {
+  const recipientIds = params.financeGroup ? await listFinanceRecipientIds() : (params.employeeIds ?? []);
+
   for (const channel of params.channels) {
-    if (channel === 'sms') {
-      await sendTargetedOrFallback({
-        content: params.content,
-        employeeIds: params.employeeIds,
-        channel: params.smsChannel,
-        financeGroup: params.financeGroup,
-      });
-      continue;
-    }
     if (channel === 'in_app') {
-      const recipientIds = params.financeGroup ? await listFinanceRecipientIds() : (params.employeeIds ?? []);
       await sendInAppMessage({
         event,
         title: params.title,
@@ -104,7 +105,13 @@ async function dispatchByPolicy(
       continue;
     }
     if (channel === 'email') {
-      await sendEmailMessage(event, params.content);
+      const recipientEmails = await listRecipientEmailsByIds(recipientIds);
+      await sendEmailMessages({
+        to: recipientEmails,
+        subject: buildEmailSubject(params.title),
+        text: params.content,
+        html: buildEmailHtml(params.title, params.content),
+      });
     }
   }
 }
@@ -144,7 +151,6 @@ export async function notifyPurchaseEvent(
       channels: policy.channels,
       title,
       employeeIds: purchase.pendingApprover?.id ? [purchase.pendingApprover.id] : [],
-      smsChannel: 'approval',
       purchaseId: purchase.id,
       content,
     });
@@ -164,7 +170,6 @@ export async function notifyPurchaseEvent(
       channels: policy.channels,
       title,
       employeeIds: purchase.purchaser?.id ? [purchase.purchaser.id] : [],
-      smsChannel: 'applicant',
       purchaseId: purchase.id,
       content,
     });
@@ -185,7 +190,6 @@ export async function notifyPurchaseEvent(
     await dispatchByPolicy(event, {
       channels: policy.channels,
       title,
-      smsChannel: 'finance',
       financeGroup: true,
       purchaseId: purchase.id,
       content,
@@ -206,7 +210,6 @@ export async function notifyPurchaseEvent(
       channels: policy.channels,
       title,
       employeeIds: purchase.purchaser?.id ? [purchase.purchaser.id] : [],
-      smsChannel: 'applicant',
       purchaseId: purchase.id,
       content,
     });
@@ -227,7 +230,6 @@ export async function notifyPurchaseEvent(
       channels: policy.channels,
       title,
       employeeIds: purchase.purchaser?.id ? [purchase.purchaser.id] : [],
-      smsChannel: 'applicant',
       purchaseId: purchase.id,
       content,
     });
@@ -247,7 +249,6 @@ export async function notifyPurchaseEvent(
       channels: policy.channels,
       title,
       employeeIds: purchase.purchaser?.id ? [purchase.purchaser.id] : [],
-      smsChannel: 'applicant',
       purchaseId: purchase.id,
       content,
     });

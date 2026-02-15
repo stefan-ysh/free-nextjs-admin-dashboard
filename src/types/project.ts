@@ -216,12 +216,10 @@ export interface ProjectDetail extends ProjectRecord {
   projectManager: {
     id: string;
     displayName: string;
-    avatarUrl: string | null;
   };
   teamMembers: Array<{
     id: string;
     displayName: string;
-    avatarUrl: string | null;
   }>;
   purchaseCount: number;
   purchaseTotal: number;

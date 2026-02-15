@@ -25,8 +25,6 @@ type RawUserRow = RowDataPacket & {
   password_hash: string;
   roles: unknown; // JSON array of roles
   primary_role: string;
-  first_name: string | null;
-  last_name: string | null;
   display_name: string | null;
   job_title: string | null;
   phone: string | null;
@@ -35,7 +33,6 @@ type RawUserRow = RowDataPacket & {
   city: string | null;
   postal_code: string | null;
   tax_id: string | null;
-  avatar_url: string | null;
   social_links: unknown;
   custom_fields: unknown;
   is_active: number;
@@ -55,8 +52,6 @@ export type UserRecord = {
   role: UserRole; // Keep for backward compatibility
   roles: UserRole[]; // Array of roles from hr_employees table
   primary_role: UserRole;
-  first_name: string | null;
-  last_name: string | null;
   display_name: string | null;
   job_title: string | null;
   phone: string | null;
@@ -65,7 +60,6 @@ export type UserRecord = {
   city: string | null;
   postal_code: string | null;
   tax_id: string | null;
-  avatar_url: string | null;
   social_links: SocialLinks;
   employment_status: string | null;
   is_active: boolean;
@@ -113,9 +107,6 @@ function parseJsonArray<T = string>(value: unknown): T[] {
 function buildDisplayName(row: RawUserRow): string {
   const candidates: Array<string | null | undefined> = [
     row.display_name,
-    row.first_name && row.last_name ? `${row.last_name}${row.first_name}` : null,
-    row.first_name,
-    row.last_name,
     row.email,
   ];
 
@@ -159,8 +150,6 @@ function mapUser(row: RawUserRow | undefined): UserRecord | null {
     roles: roles.length ? roles : [primaryRole],
     primary_role: primaryRole,
     role: primaryRole, // For backward compatibility
-    first_name: row.first_name,
-    last_name: row.last_name,
     display_name: displayName,
     job_title: row.job_title,
     phone: row.phone,
@@ -169,7 +158,6 @@ function mapUser(row: RawUserRow | undefined): UserRecord | null {
     city: row.city,
     postal_code: row.postal_code,
     tax_id: row.tax_id,
-    avatar_url: row.avatar_url,
     social_links: normalizeSocialLinks(parseJsonObject(row.social_links)),
     employment_status: row.employment_status ?? null,
     is_active: row.is_active === 1,
@@ -295,14 +283,18 @@ export async function createUser(params: {
   const id = randomUUID();
   const passwordHash = await hashPassword(params.password);
   const role = params.role ?? 'staff';
-  const displayName = params.displayName?.trim() || email.split('@')[0];
+  const displayName = sanitizeNullableText(params.displayName ?? null);
+  if (!displayName) {
+    throw new Error('DISPLAY_NAME_REQUIRED');
+  }
 
   // Convert single role to roles array for hr_employees table
   const rolesJson = JSON.stringify([role]);
 
   await pool.query(
-    `INSERT INTO hr_employees (id, email, password_hash, roles, primary_role, display_name, is_active, email_verified, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, 1, 0, NOW(), NOW())`,
+    `INSERT INTO hr_employees (
+      id, email, password_hash, roles, primary_role, display_name, is_active, email_verified, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, 1, 0, NOW(), NOW())`,
     [id, email, passwordHash, rolesJson, role, displayName]
   );
 
@@ -326,8 +318,6 @@ export async function updateUserPassword(userId: string, password: string): Prom
 }
 
 export type UpdateUserProfileInput = {
-  firstName: string | null;
-  lastName: string | null;
   displayName: string | null;
   jobTitle: string | null;
   phone: string | null;
@@ -347,11 +337,13 @@ function sanitizeNullableText(value: string | null): string | null {
 
 export async function updateUserProfile(userId: string, input: UpdateUserProfileInput): Promise<UserRecord> {
   await ensureAuthAndHrSchemas();
+  const current = await findUserById(userId);
+  if (!current) {
+    throw new Error('USER_NOT_FOUND');
+  }
 
   const payload = {
-    firstName: sanitizeNullableText(input.firstName),
-    lastName: sanitizeNullableText(input.lastName),
-    displayName: sanitizeNullableText(input.displayName),
+    displayName: sanitizeNullableText(input.displayName) ?? current.display_name ?? current.email,
     jobTitle: sanitizeNullableText(input.jobTitle),
     phone: sanitizeNullableText(input.phone),
     bio: sanitizeNullableText(input.bio),
@@ -361,12 +353,13 @@ export async function updateUserProfile(userId: string, input: UpdateUserProfile
     taxId: sanitizeNullableText(input.taxId),
     socialLinks: cleanSocialLinks(input.socialLinks ?? null),
   };
+  if (!payload.displayName || !payload.displayName.trim()) {
+    throw new Error('DISPLAY_NAME_REQUIRED');
+  }
 
   const [result] = await pool.query<ResultSetHeader>(
     `UPDATE hr_employees
       SET
-        first_name = ?,
-        last_name = ?,
         display_name = ?,
         job_title = ?,
         phone = ?,
@@ -379,8 +372,6 @@ export async function updateUserProfile(userId: string, input: UpdateUserProfile
         updated_at = NOW()
       WHERE id = ?`,
     [
-      payload.firstName,
-      payload.lastName,
       payload.displayName,
       payload.jobTitle,
       payload.phone,
@@ -392,21 +383,6 @@ export async function updateUserProfile(userId: string, input: UpdateUserProfile
       JSON.stringify(payload.socialLinks),
       userId,
     ]
-  );
-
-  if (result.affectedRows === 0) {
-    throw new Error('USER_NOT_FOUND');
-  }
-
-  return (await findUserById(userId))!;
-}
-
-export async function updateUserAvatar(userId: string, avatarUrl: string | null): Promise<UserRecord> {
-  await ensureAuthAndHrSchemas();
-  const sanitized = sanitizeNullableText(avatarUrl);
-  const [result] = await pool.query<ResultSetHeader>(
-    'UPDATE hr_employees SET avatar_url = ?, updated_at = NOW() WHERE id = ?',
-    [sanitized, userId]
   );
 
   if (result.affectedRows === 0) {

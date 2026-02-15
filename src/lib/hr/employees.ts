@@ -26,12 +26,8 @@ export type EmployeeRecord = {
   userId: string | null;
   userRoles: UserRole[];
   userPrimaryRole: UserRole | null;
-  wecomUserId: string | null;
   employeeCode: string | null;
-  firstName: string;
-  lastName: string;
   displayName: string | null;
-  avatarUrl: string | null;
   email: string | null;
   phone: string | null;
   department: string | null;
@@ -97,12 +93,8 @@ const BASE_EMPLOYEE_SELECT = `
     he.roles,
     he.primary_role,
     he.password_hash,
-    he.wecom_user_id,
     he.employee_code,
-    he.first_name,
-    he.last_name,
     he.display_name,
-	he.avatar_url,
     he.email,
     he.phone,
     he.department,
@@ -132,7 +124,7 @@ const BASE_EMPLOYEE_SELECT = `
 
 type EmployeeFilterOptions = Pick<
   ListEmployeesParams,
-  'search' | 'department' | 'departmentId' | 'jobGradeId' | 'status' | 'includeSystemAccounts'
+  'search' | 'department' | 'departmentId' | 'jobGradeId' | 'status'
 >;
 
 type MatchField = 'id' | 'employeeCode' | 'email';
@@ -142,12 +134,8 @@ type RawEmployeeRow = RowDataPacket & {
   roles: unknown;
   primary_role: string | null;
   password_hash: string | null;
-  wecom_user_id: string | null;
   employee_code: string | null;
-  first_name: string;
-  last_name: string;
   display_name: string | null;
-  avatar_url: string | null;
   email: string | null;
   phone: string | null;
   department: string | null;
@@ -195,8 +183,6 @@ type RecentChangeRow = RowDataPacket & {
   id: string;
   employee_id: string;
   display_name: string | null;
-  first_name: string | null;
-  last_name: string | null;
   department: string | null;
   previous_status: EmploymentStatus;
   next_status: EmploymentStatus;
@@ -265,12 +251,8 @@ function mapEmployee(row: RawEmployeeRow | undefined): EmployeeRecord | null {
     userId: hasLoginAccount ? row.id : null,
     userRoles: parsedRoles,
     userPrimaryRole: primaryRole,
-    wecomUserId: row.wecom_user_id,
     employeeCode: row.employee_code,
-    firstName: row.first_name,
-    lastName: row.last_name,
     displayName: row.display_name,
-  	avatarUrl: row.avatar_url,
     email: row.email,
     phone: row.phone,
     department: row.department ?? row.department_code ?? null,
@@ -468,9 +450,8 @@ export type ListEmployeesParams = {
   status?: EmploymentStatus | 'all' | null;
   page?: number;
   pageSize?: number;
-  sortBy?: 'createdAt' | 'updatedAt' | 'lastName' | 'department' | 'status';
+  sortBy?: 'createdAt' | 'updatedAt' | 'displayName' | 'department' | 'status';
   sortOrder?: 'asc' | 'desc';
-  includeSystemAccounts?: boolean;
 };
 
 export type ListEmployeesResult = {
@@ -483,7 +464,7 @@ export type ListEmployeesResult = {
 const SORT_COLUMN_MAP: Record<NonNullable<ListEmployeesParams['sortBy']>, string> = {
   createdAt: 'created_at',
   updatedAt: 'updated_at',
-  lastName: 'last_name',
+  displayName: 'display_name',
   department: 'department',
   status: 'employment_status',
 };
@@ -495,13 +476,11 @@ function buildEmployeeWhereClause(filters: EmployeeFilterOptions = {}) {
   if (filters.search) {
     const search = `%${filters.search.trim().toLowerCase()}%`;
     const searchCondition = [
-      'LOWER(he.first_name) LIKE ?',
-      'LOWER(he.last_name) LIKE ?',
       'LOWER(he.display_name) LIKE ?',
       'LOWER(he.email) LIKE ?',
     ].join(' OR ');
     conditions.push(`(${searchCondition})`);
-    values.push(search, search, search, search);
+    values.push(search, search);
   }
 
   if (filters.department) {
@@ -523,16 +502,6 @@ function buildEmployeeWhereClause(filters: EmployeeFilterOptions = {}) {
     const normalizedStatus = sanitizeStatus(filters.status);
     conditions.push('he.employment_status = ?');
     values.push(normalizedStatus);
-  }
-
-  if (!filters.includeSystemAccounts) {
-    conditions.push(`(
-      he.employee_code IS NOT NULL
-      OR (
-        COALESCE(JSON_CONTAINS(he.roles, JSON_QUOTE('super_admin'), '$'), 0) = 0
-        AND COALESCE(JSON_CONTAINS(he.roles, JSON_QUOTE('admin'), '$'), 0) = 0
-      )
-    )`);
   }
 
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -601,9 +570,7 @@ type EmployeeExportColumn = {
 const EMPLOYEE_EXPORT_COLUMNS: EmployeeExportColumn[] = [
   { key: 'id', header: '员工ID' },
   { key: 'employeeCode', header: '员工编号' },
-  { key: 'firstName', header: '名' },
-  { key: 'lastName', header: '姓' },
-  { key: 'displayName', header: '显示名称' },
+  { key: 'displayName', header: '姓名' },
   { key: 'email', header: '邮箱' },
   { key: 'phone', header: '电话' },
   { key: 'department', header: '部门名称' },
@@ -681,11 +648,7 @@ export function employeesToCsv(records: EmployeeRecord[]): string {
 
 export type CreateEmployeeInput = {
   employeeCode?: string | null;
-  wecomUserId?: string | null;
-  firstName: string;
-  lastName: string;
-  displayName?: string | null;
-  avatarUrl?: string | null;
+  displayName: string;
   email?: string | null;
   phone?: string | null;
   initialPassword?: string | null;
@@ -738,13 +701,6 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
     }
   }
 
-  if (input.wecomUserId) {
-    const existingWecomId = await findEmployeeIdByWecomUserId(input.wecomUserId);
-    if (existingWecomId) {
-      throw new Error('WECOM_USER_ID_EXISTS');
-    }
-  }
-
   const id = randomUUID();
   const password = sanitizeNullableText(input.initialPassword ?? null);
   const passwordHash = password ? await hashPassword(password) : null;
@@ -753,11 +709,7 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
   }
   const payload = {
     employeeCode: sanitizeNullableText(input.employeeCode ?? null),
-    wecomUserId: sanitizeNullableText(input.wecomUserId ?? null),
-    firstName: requireText(input.firstName, 'first_name'),
-    lastName: requireText(input.lastName, 'last_name'),
-    displayName: sanitizeNullableText(input.displayName ?? null),
-    avatarUrl: sanitizeNullableText(input.avatarUrl ?? null),
+    displayName: requireText(input.displayName, 'display_name'),
     email: sanitizeNullableText(input.email ?? null),
     phone: sanitizeNullableText(input.phone ?? null),
     department: sanitizeNullableText(input.department ?? null),
@@ -785,11 +737,7 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
     INSERT INTO hr_employees (
       id,
       employee_code,
-      wecom_user_id,
-      first_name,
-      last_name,
       display_name,
-      avatar_url,
       email,
       phone,
       password_hash,
@@ -812,11 +760,7 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
     VALUES (
       ${id},
       ${payload.employeeCode},
-      ${payload.wecomUserId},
-      ${payload.firstName},
-      ${payload.lastName},
       ${payload.displayName},
-      ${payload.avatarUrl},
       ${payload.email},
       ${payload.phone},
       ${passwordHash},
@@ -870,13 +814,6 @@ export async function updateEmployee(id: string, input: UpdateEmployeeInput): Pr
     }
   }
 
-  if (input.wecomUserId) {
-    const existingWecomId = await findEmployeeIdByWecomUserId(input.wecomUserId);
-    if (existingWecomId && existingWecomId !== id) {
-      throw new Error('WECOM_USER_ID_EXISTS');
-    }
-  }
-
   const fields: string[] = [];
   const values: unknown[] = [];
   let pendingStatusLog: { previous: EmploymentStatus; next: EmploymentStatus; note?: string | null } | null = null;
@@ -890,20 +827,9 @@ export async function updateEmployee(id: string, input: UpdateEmployeeInput): Pr
   if (input.employeeCode !== undefined) {
     pushField('employee_code', sanitizeNullableText(input.employeeCode ?? null));
   }
-  if (input.wecomUserId !== undefined) {
-    pushField('wecom_user_id', sanitizeNullableText(input.wecomUserId ?? null));
-  }
-  if (input.firstName !== undefined) {
-    pushField('first_name', requireText(input.firstName, 'first_name'));
-  }
-  if (input.lastName !== undefined) {
-    pushField('last_name', requireText(input.lastName, 'last_name'));
-  }
   if (input.displayName !== undefined) {
-    pushField('display_name', sanitizeNullableText(input.displayName ?? null));
-  }
-  if (input.avatarUrl !== undefined) {
-    pushField('avatar_url', sanitizeNullableText(input.avatarUrl ?? null));
+    const displayName = requireText(input.displayName, 'display_name');
+    pushField('display_name', displayName);
   }
   if (input.email !== undefined) {
     pushField('email', sanitizeNullableText(input.email ?? null));
@@ -1045,7 +971,7 @@ export async function ensureEmployeeUserAccount(employeeId: string) {
   }
 
   const ensuredEmployeeCode = await ensureEmployeeCodeValue(employee.id, employee.employeeCode);
-  const loginAccount = ensuredEmployeeCode || employee.email?.split('@')[0] || employee.id;
+  const loginAccount = ensuredEmployeeCode || employee.email || employee.id;
   if (!loginAccount) {
     throw new Error('EMPLOYEE_LOGIN_ID_MISSING');
   }
@@ -1054,7 +980,7 @@ export async function ensureEmployeeUserAccount(employeeId: string) {
   const fallbackEmail = normalizedAccount.includes('@')
     ? normalizedAccount.toLowerCase()
     : `${normalizedAccount.toLowerCase()}@staff.local`;
-  const employeeDisplayName = employee.displayName?.trim() || `${employee.lastName ?? ''}${employee.firstName ?? ''}`.trim() || normalizedAccount;
+  const employeeDisplayName = employee.displayName?.trim() || normalizedAccount;
 
   const roles = employee.userRoles.length ? employee.userRoles : ['employee'];
   const primaryRole = employee.userPrimaryRole ?? roles[0];
@@ -1250,8 +1176,6 @@ export async function getEmployeeDashboardStats(limit = 6): Promise<EmployeeDash
        l.id,
        l.employee_id,
        he.display_name,
-       he.first_name,
-       he.last_name,
        he.department,
        l.previous_status,
        l.next_status,
@@ -1280,11 +1204,10 @@ export async function getEmployeeDashboardStats(limit = 6): Promise<EmployeeDash
     newHires30d: Number(summary?.newHires30d ?? 0),
     departures30d: Number(summary?.departures30d ?? 0),
     recentChanges: changeRows.map((row) => {
-      const fallbackName = `${row.last_name ?? ''}${row.first_name ?? ''}`.trim();
       return {
         id: row.id,
         employeeId: row.employee_id,
-        employeeName: row.display_name?.trim() || fallbackName || '未命名员工',
+        employeeName: row.display_name?.trim() || '未命名员工',
         department: row.department ?? null,
         previousStatus: row.previous_status,
         nextStatus: row.next_status,
@@ -1376,16 +1299,6 @@ async function findEmployeeIdByPhone(phone: string): Promise<string | null> {
   return rows[0]?.id ?? null;
 }
 
-async function findEmployeeIdByWecomUserId(wecomUserId: string): Promise<string | null> {
-  const normalized = wecomUserId.trim();
-  if (!normalized) return null;
-  const [rows] = await pool.query<Array<RowDataPacket & { id: string }>>(
-    'SELECT id FROM hr_employees WHERE wecom_user_id = ? LIMIT 1',
-    [normalized]
-  );
-  return rows[0]?.id ?? null;
-}
-
 async function findDepartmentIdByCode(code: string | null | undefined): Promise<string | null> {
   if (!code) return null;
   const normalized = code.trim().toUpperCase();
@@ -1412,8 +1325,7 @@ async function normalizeBulkImportRow(
   row: BulkEmployeeImportRow,
   options: BulkEmployeeImportOptions
 ): Promise<CreateEmployeeInput> {
-  const fallbackFirstName = row.firstName ?? row.displayName ?? row.lastName ?? '员工';
-  const fallbackLastName = row.lastName ?? row.displayName ?? row.firstName ?? '姓名';
+  const resolvedDisplayName = sanitizeNullableText(row.displayName ?? null) ?? '未命名员工';
 
   let departmentId = row.departmentId ?? null;
   if (!departmentId && row.departmentCode) {
@@ -1444,10 +1356,7 @@ async function normalizeBulkImportRow(
 
   return {
     employeeCode: row.employeeCode ?? null,
-    firstName: fallbackFirstName,
-    lastName: fallbackLastName,
-    displayName: row.displayName ?? null,
-    avatarUrl: row.avatarUrl ?? null,
+    displayName: resolvedDisplayName,
     email: row.email ?? null,
     phone: row.phone ?? null,
     initialPassword: resolvedPassword,

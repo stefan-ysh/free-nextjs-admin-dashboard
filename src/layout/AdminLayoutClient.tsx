@@ -13,7 +13,7 @@ export function AdminLayoutClient({ children }: { children: React.ReactNode }) {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
   const pathname = usePathname();
 
-  const edgeToEdgeRoutes = ['/', '/calendar', '/profile'];
+  const edgeToEdgeRoutes = ['/', '/profile'];
   const isEdgeToEdge = edgeToEdgeRoutes.includes(pathname ?? '');
 
   const mainContentMargin = isMobileOpen

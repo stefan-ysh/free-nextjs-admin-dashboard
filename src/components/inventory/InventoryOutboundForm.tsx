@@ -92,16 +92,6 @@ export default function InventoryOutboundForm({ onSuccess, onCancel, formId, hid
             toast.info("请选择商品与仓库");
             return;
         }
-        if (payload.type === 'transfer') {
-            if (!payload.targetWarehouseId) {
-                toast.info('请选择调拨到的目标仓库');
-                return;
-            }
-            if (payload.targetWarehouseId === payload.warehouseId) {
-                toast.info('目标仓库不能与来源仓库相同');
-                return;
-            }
-        }
         setSubmitting(true);
         toast.dismiss();
         try {
@@ -240,38 +230,11 @@ export default function InventoryOutboundForm({ onSuccess, onCancel, formId, hid
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="use">自用出库</SelectItem>
-                        <SelectItem value="transfer">调拨出库</SelectItem>
                         <SelectItem value="adjust">盘亏调整</SelectItem>
                         <SelectItem value="return">退还供应商</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
-
-            {payload.type === 'transfer' && (
-                <div className="space-y-2">
-                    <Label htmlFor="outbound-target-warehouse" className="text-sm font-medium">
-                        目标仓库
-                    </Label>
-                    <Select
-                        value={payload.targetWarehouseId || undefined}
-                        onValueChange={(value) => handleChange('targetWarehouseId', value)}
-                        disabled={submitting}
-                    >
-                        <SelectTrigger id="outbound-target-warehouse" className="w-full">
-                            <SelectValue placeholder="选择目标仓库" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {warehouses
-                                .filter((warehouse) => warehouse.id !== payload.warehouseId)
-                                .map((warehouse) => (
-                                    <SelectItem key={warehouse.id} value={warehouse.id}>
-                                        {warehouse.name}
-                                    </SelectItem>
-                                ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-            )}
 
             <div className="space-y-2">
                 <Label htmlFor="outbound-quantity" className="text-sm font-medium">
@@ -297,7 +260,7 @@ export default function InventoryOutboundForm({ onSuccess, onCancel, formId, hid
                     type="text"
                     value={payload.relatedOrderId ?? ''}
                     onChange={(event) => handleChange('relatedOrderId', event.target.value)}
-                    placeholder="如领用单、调拨单"
+                    placeholder="如领用单、盘点单"
                     disabled={submitting}
                 />
             </div>

@@ -161,11 +161,6 @@ const navItems: NavItem[] = [
         path: "/inventory/movements",
         requiredPermission: "INVENTORY_VIEW_ALL",
       },
-      {
-        name: "调拨单",
-        path: "/inventory/transfers",
-        requiredPermission: "INVENTORY_VIEW_ALL",
-      },
     ],
   },
   {

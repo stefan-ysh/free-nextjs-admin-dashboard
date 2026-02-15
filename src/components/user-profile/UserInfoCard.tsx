@@ -21,8 +21,7 @@ import type { ProfileData } from "./types";
 type UserInfoCardProps = {
   profile: ProfileData | null;
   onUpdate: (payload: {
-    firstName: string | null;
-    lastName: string | null;
+    displayName: string | null;
     phone: string | null;
     bio: string | null;
   }) => Promise<void>;
@@ -34,8 +33,7 @@ export default function UserInfoCard({ profile, onUpdate, loading = false }: Use
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formState, setFormState] = useState({
-    firstName: "",
-    lastName: "",
+    displayName: "",
     phone: "",
     bio: "",
   });
@@ -43,8 +41,7 @@ export default function UserInfoCard({ profile, onUpdate, loading = false }: Use
   useEffect(() => {
     if (!profile) return;
     setFormState({
-      firstName: profile.firstName ?? "",
-      lastName: profile.lastName ?? "",
+      displayName: profile.displayName ?? "",
       phone: profile.phone ?? "",
       bio: profile.bio ?? "",
     });
@@ -52,8 +49,7 @@ export default function UserInfoCard({ profile, onUpdate, loading = false }: Use
 
   const fullName = useMemo(() => {
     if (!profile) return "";
-    const parts = [profile.firstName, profile.lastName].filter(Boolean);
-    return parts.join(" ");
+    return profile.displayName ?? "";
   }, [profile]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -63,8 +59,7 @@ export default function UserInfoCard({ profile, onUpdate, loading = false }: Use
     setError(null);
     try {
       await onUpdate({
-        firstName: formState.firstName,
-        lastName: formState.lastName,
+        displayName: formState.displayName,
         phone: formState.phone,
         bio: formState.bio,
       });
@@ -136,19 +131,11 @@ export default function UserInfoCard({ profile, onUpdate, loading = false }: Use
             <form id="user-info-form" className="flex flex-col gap-6" onSubmit={handleSubmit}>
               <div className="grid grid-cols-1 gap-x-6 gap-y-5 lg:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>名</Label>
+                  <Label>姓名</Label>
                   <Input
                     type="text"
-                    value={formState.firstName}
-                    onChange={(event) => setFormState((prev) => ({ ...prev, firstName: event.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>姓</Label>
-                  <Input
-                    type="text"
-                    value={formState.lastName}
-                    onChange={(event) => setFormState((prev) => ({ ...prev, lastName: event.target.value }))}
+                    value={formState.displayName}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, displayName: event.target.value }))}
                   />
                 </div>
                 <div className="space-y-2">

@@ -1,6 +1,6 @@
 'use client';
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -44,13 +44,12 @@ function formatDate(value: string | null) {
 
 function resolveDisplayName(employee: Employee) {
 	if (employee.displayName) return employee.displayName;
-	return `${employee.lastName}${employee.firstName}`.trim() || employee.email || employee.phone || '未知员工';
+	return employee.email || employee.phone || '未知员工';
 }
 
 function getAvatarInitials(employee: Employee) {
 	const source =
 		employee.displayName ||
-		`${employee.lastName}${employee.firstName}`.trim() ||
 		employee.email ||
 		employee.phone ||
 		'员工';
@@ -108,13 +107,9 @@ export default function EmployeeTable({
 								<div className="flex items-start justify-between gap-3">
 									<div className="flex items-center gap-3">
 										<Avatar className="border border-border bg-background">
-											{employee.avatarUrl ? (
-												<AvatarImage src={employee.avatarUrl} alt={`${displayName} avatar`} />
-											) : (
-												<AvatarFallback className="bg-primary/10 text-sm font-medium text-primary">
-													{getAvatarInitials(employee)}
-												</AvatarFallback>
-											)}
+											<AvatarFallback className="bg-primary/10 text-sm font-medium text-primary">
+												{getAvatarInitials(employee)}
+											</AvatarFallback>
 										</Avatar>
 										<div className="space-y-1">
 											<div className="flex flex-wrap items-center gap-2">
@@ -236,13 +231,9 @@ export default function EmployeeTable({
 								<TableCell className="px-4 py-4">
 									<div className="flex items-center gap-3">
 										<Avatar className="border border-border bg-background">
-											{employee.avatarUrl ? (
-												<AvatarImage src={employee.avatarUrl} alt={`${resolveDisplayName(employee)} avatar`} />
-											) : (
-												<AvatarFallback className="bg-primary/10 text-sm font-medium text-primary">
-													{getAvatarInitials(employee)}
-												</AvatarFallback>
-											)}
+											<AvatarFallback className="bg-primary/10 text-sm font-medium text-primary">
+												{getAvatarInitials(employee)}
+											</AvatarFallback>
 										</Avatar>
 										<div className="flex items-center gap-2 truncate">
 											<span className="font-medium text-foreground truncate" title={resolveDisplayName(employee)}>

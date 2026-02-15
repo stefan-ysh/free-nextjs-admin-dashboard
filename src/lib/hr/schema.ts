@@ -1,6 +1,36 @@
+import type { RowDataPacket } from 'mysql2';
+
 import { schemaPool, safeCreateIndex, ensureColumn, ensureForeignKey } from '@/lib/schema/mysql-utils';
 
 let initialized = false;
+
+async function hasColumn(table: string, column: string): Promise<boolean> {
+  const pool = schemaPool();
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT 1
+     FROM information_schema.columns
+     WHERE table_schema = DATABASE()
+       AND table_name = ?
+       AND column_name = ?
+     LIMIT 1`,
+    [table, column]
+  );
+  return rows.length > 0;
+}
+
+async function hasIndex(table: string, indexName: string): Promise<boolean> {
+  const pool = schemaPool();
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT 1
+     FROM information_schema.statistics
+     WHERE table_schema = DATABASE()
+       AND table_name = ?
+       AND index_name = ?
+     LIMIT 1`,
+    [table, indexName]
+  );
+  return rows.length > 0;
+}
 
 export async function ensureHrSchema() {
   if (initialized) return;
@@ -47,12 +77,8 @@ export async function ensureHrSchema() {
       password_hash VARCHAR(255),
       roles JSON NOT NULL DEFAULT (JSON_ARRAY('employee')),
       primary_role VARCHAR(64) NOT NULL DEFAULT 'employee',
-      first_name VARCHAR(120) NOT NULL,
-      last_name VARCHAR(120) NOT NULL,
-      display_name VARCHAR(255),
+      display_name VARCHAR(255) NOT NULL,
       phone VARCHAR(60),
-      wecom_user_id VARCHAR(128),
-      avatar_url TEXT,
       employee_code VARCHAR(120),
       department VARCHAR(120),
       department_id CHAR(36),
@@ -103,9 +129,9 @@ export async function ensureHrSchema() {
 
   await ensureColumn('hr_employees', 'email', 'VARCHAR(255) NULL');
   await ensureColumn('hr_employees', 'password_hash', 'VARCHAR(255) NULL');
-  await ensureColumn('hr_employees', 'wecom_user_id', 'VARCHAR(128) NULL');
   await ensureColumn('hr_employees', 'roles', "JSON NOT NULL DEFAULT (JSON_ARRAY('employee'))");
   await ensureColumn('hr_employees', 'primary_role', "VARCHAR(64) NOT NULL DEFAULT 'employee'");
+  await ensureColumn('hr_employees', 'display_name', "VARCHAR(255) NULL");
   await ensureColumn('hr_employees', 'bio', 'TEXT NULL');
   await ensureColumn('hr_employees', 'city', 'VARCHAR(120) NULL');
   await ensureColumn('hr_employees', 'country', 'VARCHAR(120) NULL');
@@ -137,14 +163,83 @@ export async function ensureHrSchema() {
     }
     console.warn('[hr_employees] Duplicate phone detected; skip unique index creation.');
   }
-  try {
-    await safeCreateIndex('CREATE UNIQUE INDEX hr_employees_wecom_user_id_idx ON hr_employees(wecom_user_id)');
-  } catch (error) {
-    const code = (error as { code?: string }).code;
-    if (code !== 'ER_DUP_ENTRY') {
-      throw error;
+  // Cleanup legacy wecom column/index from historical schema versions.
+  if (await hasIndex('hr_employees', 'hr_employees_wecom_user_id_idx')) {
+    try {
+      await pool.query('DROP INDEX hr_employees_wecom_user_id_idx ON hr_employees');
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code !== 'ER_CANT_DROP_FIELD_OR_KEY' && code !== 'ER_LOCK_DEADLOCK') {
+        throw error;
+      }
     }
-    console.warn('[hr_employees] Duplicate wecom_user_id detected; skip unique index creation.');
+  }
+  if (await hasColumn('hr_employees', 'wecom_user_id')) {
+    try {
+      await pool.query('ALTER TABLE hr_employees DROP COLUMN wecom_user_id');
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (
+        code !== 'ER_BAD_FIELD_ERROR' &&
+        code !== 'ER_CANT_DROP_FIELD_OR_KEY' &&
+        code !== 'ER_LOCK_DEADLOCK'
+      ) {
+        throw error;
+      }
+    }
+  }
+
+  // Migrate legacy name columns into display_name, then physically drop old columns.
+  const hasFirstName = await hasColumn('hr_employees', 'first_name');
+  const hasLastName = await hasColumn('hr_employees', 'last_name');
+  if (hasFirstName || hasLastName) {
+    await pool.query(`
+      UPDATE hr_employees
+      SET display_name = COALESCE(
+        NULLIF(TRIM(display_name), ''),
+        NULLIF(TRIM(CONCAT(COALESCE(last_name, ''), COALESCE(first_name, ''))), ''),
+        NULLIF(TRIM(first_name), ''),
+        NULLIF(TRIM(last_name), ''),
+        NULLIF(TRIM(email), ''),
+        NULLIF(TRIM(employee_code), ''),
+        id
+      )
+      WHERE display_name IS NULL OR TRIM(display_name) = ''
+    `);
+  }
+
+  await pool.query(`
+    UPDATE hr_employees
+    SET display_name = COALESCE(
+      NULLIF(TRIM(display_name), ''),
+      NULLIF(TRIM(email), ''),
+      NULLIF(TRIM(employee_code), ''),
+      id
+    )
+    WHERE display_name IS NULL OR TRIM(display_name) = ''
+  `);
+
+  await pool.query(`ALTER TABLE hr_employees MODIFY COLUMN display_name VARCHAR(255) NOT NULL`);
+
+  if (hasFirstName) {
+    try {
+      await pool.query('ALTER TABLE hr_employees DROP COLUMN first_name');
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code !== 'ER_BAD_FIELD_ERROR' && code !== 'ER_CANT_DROP_FIELD_OR_KEY' && code !== 'ER_LOCK_DEADLOCK') {
+        throw error;
+      }
+    }
+  }
+  if (hasLastName) {
+    try {
+      await pool.query('ALTER TABLE hr_employees DROP COLUMN last_name');
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code !== 'ER_BAD_FIELD_ERROR' && code !== 'ER_CANT_DROP_FIELD_OR_KEY' && code !== 'ER_LOCK_DEADLOCK') {
+        throw error;
+      }
+    }
   }
   await safeCreateIndex('CREATE INDEX hr_employees_department_idx ON hr_employees(department)');
   await safeCreateIndex('CREATE INDEX hr_employees_department_id_idx ON hr_employees(department_id)');

@@ -20,12 +20,8 @@ export type Employee = {
 	userId: string | null;
 	userRoles?: UserRole[];
 	userPrimaryRole?: UserRole | null;
-	wecomUserId?: string | null;
 	employeeCode: string | null;
-	firstName: string;
-	lastName: string;
 	displayName: string | null;
-	avatarUrl: string | null;
 	email: string | null;
 	phone: string | null;
 	department: string | null;
@@ -115,9 +111,6 @@ export type EmployeeBulkImportResponse = {
 export type EmployeeImportRow = {
 	id?: string | null;
 	employeeCode?: string | null;
-	wecomUserId?: string | null;
-	firstName?: string | null;
-	lastName?: string | null;
 	displayName?: string | null;
 	email?: string | null;
 	phone?: string | null;
@@ -143,12 +136,7 @@ export type EmployeeImportRow = {
 
 export type EmployeeFormSubmitPayload = {
 	employeeCode?: string | null;
-	wecomUserId?: string | null;
-	firstName: string;
-	lastName: string;
-	displayName?: string | null;
-	avatarDataUrl?: string | null;
-	removeAvatar?: boolean;
+	displayName: string;
 	email?: string | null;
 	phone?: string | null;
 	initialPassword?: string | null;
@@ -176,6 +164,6 @@ export type EmployeeFilters = {
 	departmentId: string | null;
 	jobGradeId?: string | null;
 	status: EmploymentStatus | 'all';
-	sortBy: 'updatedAt' | 'createdAt' | 'lastName' | 'department' | 'status';
+	sortBy: 'updatedAt' | 'createdAt' | 'displayName' | 'department' | 'status';
 	sortOrder: 'asc' | 'desc';
 };

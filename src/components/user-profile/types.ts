@@ -2,8 +2,6 @@ export type ProfileData = {
   id: string;
   email: string;
   role: string;
-  firstName: string | null;
-  lastName: string | null;
   displayName: string | null;
   jobTitle: string | null;
   phone: string | null;
@@ -12,7 +10,6 @@ export type ProfileData = {
   city: string | null;
   postalCode: string | null;
   taxId: string | null;
-  avatarUrl: string | null;
   socialLinks: Record<string, string | null>;
   createdAt: string;
   updatedAt: string;

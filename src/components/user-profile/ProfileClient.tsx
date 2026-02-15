@@ -12,8 +12,6 @@ import UserPasswordCard from "./UserPasswordCard";
 import type { DeviceInfo, ProfileData } from "./types";
 
 type ProfileUpdatePayload = {
-  firstName: string | null;
-  lastName: string | null;
   displayName: string | null;
   jobTitle: string | null;
   phone: string | null;
@@ -34,14 +32,11 @@ type PasswordPayload = {
 };
 
 const PROFILE_ENDPOINT = "/api/profile";
-const AVATAR_ENDPOINT = "/api/profile/avatar";
 const PASSWORD_ENDPOINT = "/api/profile/password";
 const DEVICES_ENDPOINT = "/api/profile/devices";
 
 function mergeProfilePayload(current: ProfileData, overrides: ProfileUpdateOverrides): ProfileUpdatePayload {
   const base: ProfileUpdatePayload = {
-    firstName: current.firstName ?? null,
-    lastName: current.lastName ?? null,
     displayName: current.displayName ?? null,
     jobTitle: current.jobTitle ?? null,
     phone: current.phone ?? null,
@@ -54,8 +49,6 @@ function mergeProfilePayload(current: ProfileData, overrides: ProfileUpdateOverr
   };
 
   const keys: Array<keyof Omit<ProfileUpdatePayload, "socialLinks">> = [
-    "firstName",
-    "lastName",
     "displayName",
     "jobTitle",
     "phone",
@@ -102,7 +95,6 @@ export default function ProfileClient() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
-  const [avatarUpdating, setAvatarUpdating] = useState(false);
 
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [devicesLoading, setDevicesLoading] = useState(true);
@@ -192,35 +184,6 @@ export default function ProfileClient() {
     [profile, refresh]
   );
 
-  const handleAvatarUpdate = useCallback(
-    async (dataUrl: string | null) => {
-      if (!profile) {
-        throw new Error("资料尚未加载");
-      }
-      setAvatarUpdating(true);
-      try {
-        const payload = dataUrl ? { avatar: dataUrl } : { clear: true };
-        const res = await fetch(AVATAR_ENDPOINT, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const json = (await res.json().catch(() => null)) as ApiResponse<ProfileData> | null;
-        if (!res.ok || !json?.success || !json.data) {
-          throw new Error(json?.error ?? "头像更新失败");
-        }
-        setProfile(json.data);
-        try {
-          await refresh();
-        } catch (err) {
-          console.error('刷新用户上下文失败', err);
-        }
-      } finally {
-        setAvatarUpdating(false);
-      }
-    },
-    [profile, refresh]
-  );
 
   const handlePasswordChange = useCallback(
     async (payload: PasswordPayload) => {
@@ -277,7 +240,7 @@ export default function ProfileClient() {
         <p className="mb-4 text-sm text-error-500">{profileError}</p>
       )}
       <div className="space-y-6">
-        <UserMetaCard profile={profile} onProfileUpdate={handleProfileUpdate} onAvatarUpdate={handleAvatarUpdate} loading={profileLoading} avatarUpdating={avatarUpdating} />
+        <UserMetaCard profile={profile} onProfileUpdate={handleProfileUpdate} loading={profileLoading} />
         <UserInfoCard profile={profile} onUpdate={(payload) => handleProfileUpdate(payload)} loading={profileLoading} />
         <UserAddressCard profile={profile} onUpdate={(payload) => handleProfileUpdate(payload)} loading={profileLoading} />
         <UserPasswordCard passwordUpdatedAt={profile?.passwordUpdatedAt ?? null} onChangePassword={handlePasswordChange} loading={profileLoading} />

@@ -8,11 +8,8 @@ export interface AuthUser {
   role: string;
   roles: string[];
   primaryRole: string;
-  firstName: string | null;
-  lastName: string | null;
   displayName: string | null;
   jobTitle: string | null;
-  avatarUrl: string | null;
   expiresAt?: string;
 }
 
@@ -62,11 +59,8 @@ async function fetchMe(): Promise<AuthUser | null> {
       role,
       roles: normalizedRoles,
       primaryRole,
-      firstName: (payload.firstName as string | null | undefined) ?? null,
-      lastName: (payload.lastName as string | null | undefined) ?? null,
       displayName: (payload.displayName as string | null | undefined) ?? null,
       jobTitle: (payload.jobTitle as string | null | undefined) ?? null,
-      avatarUrl: (payload.avatarUrl as string | null | undefined) ?? null,
       expiresAt: (payload.expiresAt as string | null | undefined) ?? undefined,
     };
   } catch (error) {

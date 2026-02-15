@@ -7,12 +7,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 export interface EmployeeOption {
     id: string;
     displayName: string;
-    avatarUrl?: string | null;
     email?: string;
 }
 
@@ -69,7 +68,6 @@ export default function EmployeeSelect({
                     <SelectItem key={employee.id} value={employee.id}>
                         <div className="flex items-center gap-2">
                             <Avatar className="h-5 w-5">
-                                <AvatarImage src={employee.avatarUrl || undefined} />
                                 <AvatarFallback className="text-[10px]">
                                     {employee.displayName.slice(0, 2)}
                                 </AvatarFallback>

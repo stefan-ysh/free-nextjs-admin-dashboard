@@ -142,7 +142,7 @@ export default function RoleAssignmentDialog({
     [primaryRole, selectedRoles]
   );
 
-  const employeeName = employee?.displayName || `${employee?.lastName ?? ''}${employee?.firstName ?? ''}`.trim() || employee?.email || employee?.employeeCode || '未命名';
+  const employeeName = employee?.displayName || employee?.email || employee?.employeeCode || '未命名';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

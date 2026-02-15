@@ -12,9 +12,6 @@ import type {
   InventoryOutboundPayload,
   InventorySpecField,
   InventoryStats,
-  InventoryTransferDetail,
-  InventoryTransferMovement,
-  InventoryTransferOrder,
   Warehouse,
   WarehousePayload,
 } from '@/types/inventory';
@@ -97,39 +94,6 @@ type WarehouseUsageRow = RowDataPacket & {
   warehouse_id: string;
   totalQuantity: number | null;
   totalReserved: number | null;
-};
-
-type TransferOrderRow = RowDataPacket & {
-  transfer_id: string;
-  item_id: string;
-  item_name: string | null;
-  item_sku: string | null;
-  quantity: number;
-  unit_cost: number | null;
-  amount: number | null;
-  source_warehouse_id: string | null;
-  source_warehouse_name: string | null;
-  target_warehouse_id: string | null;
-  target_warehouse_name: string | null;
-  operator_id: string | null;
-  occurred_at: Date | string;
-  notes: string | null;
-};
-
-type TransferMovementRow = RowDataPacket & {
-  id: string;
-  direction: InventoryMovement['direction'];
-  item_id: string;
-  item_name: string | null;
-  item_sku: string | null;
-  warehouse_id: string;
-  warehouse_name: string | null;
-  quantity: number;
-  unit_cost: number | null;
-  amount: number | null;
-  operator_id: string | null;
-  occurred_at: Date | string;
-  notes: string | null;
 };
 
 export const INVENTORY_ERRORS = {
@@ -258,43 +222,6 @@ function mapMovement(row: MovementRow): InventoryMovement {
     attributes: parseJsonColumn(row.attributes_json),
     notes: row.notes ?? undefined,
     createdAt: toIsoString(row.created_at),
-  };
-}
-
-function mapTransferOrder(row: TransferOrderRow): InventoryTransferOrder {
-  return {
-    transferId: row.transfer_id,
-    itemId: row.item_id,
-    itemName: row.item_name ?? null,
-    itemSku: row.item_sku ?? null,
-    quantity: Number(row.quantity ?? 0),
-    unitCost: row.unit_cost ?? null,
-    amount: row.amount ?? null,
-    sourceWarehouseId: row.source_warehouse_id ?? null,
-    sourceWarehouseName: row.source_warehouse_name ?? null,
-    targetWarehouseId: row.target_warehouse_id ?? null,
-    targetWarehouseName: row.target_warehouse_name ?? null,
-    operatorId: row.operator_id ?? null,
-    occurredAt: toIsoString(row.occurred_at),
-    notes: row.notes ?? null,
-  };
-}
-
-function mapTransferMovement(row: TransferMovementRow): InventoryTransferMovement {
-  return {
-    id: row.id,
-    direction: row.direction,
-    itemId: row.item_id,
-    itemName: row.item_name ?? null,
-    itemSku: row.item_sku ?? null,
-    warehouseId: row.warehouse_id,
-    warehouseName: row.warehouse_name ?? null,
-    quantity: Number(row.quantity ?? 0),
-    unitCost: row.unit_cost ?? null,
-    amount: row.amount ?? null,
-    operatorId: row.operator_id ?? null,
-    occurredAt: toIsoString(row.occurred_at),
-    notes: row.notes ?? null,
   };
 }
 
@@ -691,90 +618,6 @@ export async function listMovements(limit = 50): Promise<InventoryMovement[]> {
     [safeLimit]
   );
   return rows.map(mapMovement);
-}
-
-export async function listTransferOrders(limit = 50): Promise<InventoryTransferOrder[]> {
-  await ensureInventorySchema();
-  const safeLimit = Math.min(Math.max(limit, 1), 200);
-  const [rows] = await pool.query<TransferOrderRow[]>(
-    `SELECT
-      m.related_order_id AS transfer_id,
-      MAX(m.item_id) AS item_id,
-      MAX(i.name) AS item_name,
-      MAX(i.sku) AS item_sku,
-      MAX(m.quantity) AS quantity,
-      MAX(m.unit_cost) AS unit_cost,
-      MAX(m.amount) AS amount,
-      MAX(CASE WHEN m.direction = 'outbound' THEN m.warehouse_id END) AS source_warehouse_id,
-      MAX(CASE WHEN m.direction = 'outbound' THEN sw.name END) AS source_warehouse_name,
-      MAX(CASE WHEN m.direction = 'inbound' THEN m.warehouse_id END) AS target_warehouse_id,
-      MAX(CASE WHEN m.direction = 'inbound' THEN tw.name END) AS target_warehouse_name,
-      MAX(m.operator_id) AS operator_id,
-      MIN(m.occurred_at) AS occurred_at,
-      MAX(m.notes) AS notes
-     FROM inventory_movements m
-     LEFT JOIN inventory_items i ON i.id = m.item_id
-     LEFT JOIN inventory_warehouses sw ON sw.id = m.warehouse_id AND m.direction = 'outbound'
-     LEFT JOIN inventory_warehouses tw ON tw.id = m.warehouse_id AND m.direction = 'inbound'
-     WHERE m.type = 'transfer' AND m.related_order_id IS NOT NULL
-     GROUP BY m.related_order_id
-     ORDER BY occurred_at DESC
-     LIMIT ?`,
-    [safeLimit]
-  );
-  return rows.map(mapTransferOrder);
-}
-
-export async function getTransferOrderDetail(transferId: string): Promise<InventoryTransferDetail | null> {
-  await ensureInventorySchema();
-  if (!transferId) return null;
-
-  const [rows] = await pool.query<TransferMovementRow[]>(
-    `SELECT
-      m.id,
-      m.direction,
-      m.item_id,
-      i.name AS item_name,
-      i.sku AS item_sku,
-      m.warehouse_id,
-      w.name AS warehouse_name,
-      m.quantity,
-      m.unit_cost,
-      m.amount,
-      m.operator_id,
-      m.occurred_at,
-      m.notes
-     FROM inventory_movements m
-     LEFT JOIN inventory_items i ON i.id = m.item_id
-     LEFT JOIN inventory_warehouses w ON w.id = m.warehouse_id
-     WHERE m.type = 'transfer' AND m.related_order_id = ?
-     ORDER BY m.occurred_at ASC, m.direction DESC`,
-    [transferId]
-  );
-
-  if (!rows.length) return null;
-
-  const movements = rows.map(mapTransferMovement);
-  const outbound = movements.find((m) => m.direction === 'outbound') ?? movements[0];
-  const inbound = movements.find((m) => m.direction === 'inbound') ?? movements[movements.length - 1];
-  const header: InventoryTransferOrder = {
-    transferId,
-    itemId: outbound.itemId,
-    itemName: outbound.itemName,
-    itemSku: outbound.itemSku,
-    quantity: outbound.quantity,
-    unitCost: outbound.unitCost,
-    amount: outbound.amount,
-    sourceWarehouseId: outbound.warehouseId,
-    sourceWarehouseName: outbound.warehouseName,
-    targetWarehouseId: inbound.warehouseId,
-    targetWarehouseName: inbound.warehouseName,
-    operatorId: outbound.operatorId ?? inbound.operatorId ?? null,
-    occurredAt: outbound.occurredAt,
-    notes: outbound.notes ?? inbound.notes ?? null,
-  };
-
-  return { ...header, movements };
 }
 
 export async function reserveStock(

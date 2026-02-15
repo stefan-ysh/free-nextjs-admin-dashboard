@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -33,7 +33,6 @@ import {
 	EMPLOYMENT_STATUS_LABELS,
 	JobGradeOption,
 } from './types';
-import AvatarUpload from './AvatarUpload';
 import { useEmployeeOptions } from './useEmployeeOptions';
 
 type EmployeeFormProps = {
@@ -71,9 +70,6 @@ const extractDateInput = (value?: string | null) => {
 
 const buildDefaultValues = (data?: Employee | null): EmployeeFormValues => ({
 	employeeCode: data?.employeeCode ?? '',
-	wecomUserId: data?.wecomUserId ?? '',
-	firstName: data?.firstName ?? '',
-	lastName: data?.lastName ?? '',
 	displayName: data?.displayName ?? '',
 	email: data?.email ?? '',
 	phone: data?.phone ?? '',
@@ -97,16 +93,10 @@ const buildDefaultValues = (data?: Employee | null): EmployeeFormValues => ({
 
 const employeeSchema = z.object({
 	employeeCode: z.string().optional(),
-	wecomUserId: z.string().optional(),
-	firstName: z
+	displayName: z
 		.string()
-		.min(1, '请输入名')
-		.refine((val) => val.trim().length > 0, { message: '请输入名' }),
-	lastName: z
-		.string()
-		.min(1, '请输入姓氏')
-		.refine((val) => val.trim().length > 0, { message: '请输入姓氏' }),
-	displayName: z.string().optional(),
+		.min(1, '请输入姓名')
+		.refine((val) => val.trim().length > 0, { message: '请输入姓名' }),
 	email: z
 		.string()
 		.email('请输入有效邮箱')
@@ -134,8 +124,6 @@ const employeeSchema = z.object({
 type EmployeeFormValues = z.infer<typeof employeeSchema>;
 
 export default function EmployeeForm({ initialData, onSubmit, onCancel, departmentOptions, jobGradeOptions, formId, hideActions = false }: EmployeeFormProps) {
-	const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
-	const [removeAvatar, setRemoveAvatar] = useState(false);
 	const isCreating = !initialData;
 
 	const { departments: availableDepartments, jobGrades: availableJobGrades } = useEmployeeOptions({
@@ -154,8 +142,6 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 
 	useEffect(() => {
 		reset(buildDefaultValues(initialData));
-		setAvatarDataUrl(null);
-		setRemoveAvatar(false);
 	}, [initialData, reset]);
 
 	useEffect(() => {
@@ -185,10 +171,7 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 
 		const payload: EmployeeFormSubmitPayload = {
 			employeeCode: sanitizeText(values.employeeCode),
-			wecomUserId: sanitizeText(values.wecomUserId),
-			firstName: values.firstName.trim(),
-			lastName: values.lastName.trim(),
-			displayName: sanitizeText(values.displayName),
+			displayName: values.displayName.trim(),
 			email: sanitizeText(values.email),
 			phone: sanitizeText(values.phone),
 			initialPassword: isCreating ? sanitizeText(values.initialPassword) : null,
@@ -209,34 +192,14 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 			statusChangeNote: statusChanged ? sanitizeText(values.statusChangeNote) : null,
 		};
 
-		if (avatarDataUrl) {
-			payload.avatarDataUrl = avatarDataUrl;
-		} else if (removeAvatar && initialData?.avatarUrl) {
-			payload.removeAvatar = true;
-		}
 
 		await onSubmit(payload);
 	});
 
-	const handleAvatarChange = (dataUrl: string | null) => {
-		setAvatarDataUrl(dataUrl);
-		setRemoveAvatar(false);
-	};
-
-	const handleAvatarRemove = () => {
-		setAvatarDataUrl(null);
-		setRemoveAvatar(true);
-	};
 
 	return (
 		<Form {...form}>
 			<form id={formId} onSubmit={handleFormSubmit} className="space-y-6">
-				<AvatarUpload
-					initialAvatarUrl={initialData?.avatarUrl}
-					onAvatarChange={handleAvatarChange}
-					onAvatarRemove={handleAvatarRemove}
-					disabled={formState.isSubmitting}
-				/>
 
 				<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
 					<FormField
@@ -257,39 +220,11 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 						name="displayName"
 						render={({ field }) => (
 							<FormItem>
-								<FormLabel>常用名</FormLabel>
-								<FormControl>
-									<Input placeholder="昵称 / 名片展示名称" {...field} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={control}
-						name="lastName"
-						render={({ field }) => (
-							<FormItem>
 								<FormLabel>
-									姓 <span className="text-destructive">*</span>
+									姓名 <span className="text-destructive">*</span>
 								</FormLabel>
 								<FormControl>
-									<Input {...field} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={control}
-						name="firstName"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>
-									名 <span className="text-destructive">*</span>
-								</FormLabel>
-								<FormControl>
-									<Input {...field} />
+									<Input placeholder="请输入员工姓名" {...field} />
 								</FormControl>
 								<FormMessage />
 							</FormItem>
@@ -320,20 +255,6 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, departme
 								<FormControl>
 									<Input placeholder="手机号或分机号" {...field} />
 								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={control}
-						name="wecomUserId"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>企业微信账号</FormLabel>
-								<FormControl>
-									<Input placeholder="企业微信 UserId，用于精准通知" {...field} />
-								</FormControl>
-								<FormDescription>用于企业微信应用消息推送，不填则回退群机器人。</FormDescription>
 								<FormMessage />
 							</FormItem>
 						)}

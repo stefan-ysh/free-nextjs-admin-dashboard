@@ -307,7 +307,6 @@ export default function PurchaseApprovalsClient() {
         purchaser: {
           id: purchase.purchaserId,
           displayName: purchase.purchaserId,
-          avatarUrl: null,
           employeeCode: null,
           department: null,
         },

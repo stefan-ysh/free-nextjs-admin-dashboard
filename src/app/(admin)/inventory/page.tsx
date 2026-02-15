@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { PackagePlus, PackageMinus, List, ArrowRightLeft } from 'lucide-react';
+import { PackagePlus, PackageMinus, List } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -129,16 +129,6 @@ export default function InventoryOverviewPage() {
                 <Link href="/inventory/movements">
                   <List className="h-6 w-6 text-chart-5" />
                   <span>库存流水</span>
-                </Link>
-              </Button>
-              <Button
-                variant="outline"
-                className="h-auto flex-col gap-2 py-4 border-border/60 bg-background/50 hover:bg-accent hover:text-accent-foreground"
-                asChild
-              >
-                <Link href="/inventory/transfers">
-                  <ArrowRightLeft className="h-6 w-6 text-primary" />
-                  <span>调拨单</span>
                 </Link>
               </Button>
             </div>

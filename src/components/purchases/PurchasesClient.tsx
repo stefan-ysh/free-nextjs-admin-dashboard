@@ -102,7 +102,6 @@ function createFallbackDetail(record: PurchaseRecord): PurchaseDetail {
     purchaser: {
       id: record.purchaserId,
       displayName: record.purchaserId,
-      avatarUrl: null,
       employeeCode: null,
       department: null,
     },

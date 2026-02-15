@@ -62,7 +62,6 @@ INSERT INTO users (
     country, 
     postal_code, 
     tax_id,
-    avatar_url, 
     social_links,
     custom_fields,
     password_updated_at,
@@ -90,7 +89,6 @@ SELECT
     a.country,
     a.postal_code,
     a.tax_id,
-    a.avatar_url,
     a.social_links,
     JSON_OBJECT() as custom_fields,  -- 空对象
     a.password_updated_at,
@@ -133,8 +131,7 @@ SET
     u.city = COALESCE(u.city, a.city),
     u.country = COALESCE(u.country, a.country),
     u.postal_code = COALESCE(u.postal_code, a.postal_code),
-    u.tax_id = COALESCE(u.tax_id, a.tax_id),
-    u.avatar_url = COALESCE(u.avatar_url, a.avatar_url)
+    u.tax_id = COALESCE(u.tax_id, a.tax_id)
 WHERE 
     u.password_hash IS NULL 
     OR u.password_hash = ''

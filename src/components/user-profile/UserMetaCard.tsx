@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import { useModal } from "../../hooks/useModal";
 import Input from "../form/input/InputField";
@@ -77,17 +77,13 @@ type UserMetaCardProps = {
     jobTitle: string | null;
     socialLinks: Record<string, string | null>;
   }) => Promise<void>;
-  onAvatarUpdate: (dataUrl: string | null) => Promise<void>;
   loading?: boolean;
-  avatarUpdating?: boolean;
 };
 
-export default function UserMetaCard({ profile, onProfileUpdate, onAvatarUpdate, loading = false, avatarUpdating = false }: UserMetaCardProps) {
+export default function UserMetaCard({ profile, onProfileUpdate, loading = false }: UserMetaCardProps) {
   const { isOpen, openModal, closeModal } = useModal();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [avatarError, setAvatarError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formState, setFormState] = useState({
     displayName: "",
@@ -113,19 +109,9 @@ export default function UserMetaCard({ profile, onProfileUpdate, onAvatarUpdate,
 
   const displayName = useMemo(() => {
     if (!profile) return "";
-    return profile.displayName || [profile.firstName, profile.lastName].filter(Boolean).join(" ") || profile.email;
+    return profile.displayName || profile.email;
   }, [profile]);
 
-  const avatarInfo = useMemo(() => {
-    const fallback = "/images/user/owner.jpg";
-    if (!profile?.avatarUrl) {
-      return { src: fallback, unoptimized: false };
-    }
-    const src = profile.avatarUrl;
-    const isLocal = src.startsWith("/") || src.startsWith("./") || src.startsWith("../");
-    const isDataUrl = src.startsWith("data:");
-    return { src, unoptimized: isDataUrl || !isLocal };
-  }, [profile]);
 
   const location = useMemo(() => {
     if (!profile) return "";
@@ -133,47 +119,6 @@ export default function UserMetaCard({ profile, onProfileUpdate, onAvatarUpdate,
     return parts.join(", ");
   }, [profile]);
 
-  const handleOpenFilePicker = () => {
-    if (loading) return;
-    fileInputRef.current?.click();
-  };
-
-  const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-
-    if (file.size > 1024 * 1024) {
-      setAvatarError("请选择 1MB 以下的图片");
-      return;
-    }
-
-    setAvatarError(null);
-
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        await onAvatarUpdate(typeof reader.result === "string" ? reader.result : null);
-      } catch (err) {
-        console.error(err);
-        setAvatarError(err instanceof Error ? err.message : "头像上传失败");
-      }
-    };
-    reader.onerror = () => {
-      setAvatarError("读取图片失败，请重试");
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleAvatarRemove = async () => {
-    try {
-      setAvatarError(null);
-      await onAvatarUpdate(null);
-    } catch (err) {
-      console.error(err);
-      setAvatarError(err instanceof Error ? err.message : "移除头像失败");
-    }
-  };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -206,15 +151,7 @@ export default function UserMetaCard({ profile, onProfileUpdate, onAvatarUpdate,
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-col items-center w-full gap-6 xl:flex-row">
             <div className="relative w-20 h-20 overflow-hidden border border-border rounded-full">
-              <Image width={80} height={80} src={avatarInfo.src} alt={displayName || "用户头像"} unoptimized={avatarInfo.unoptimized} className={loading ? "animate-pulse" : ""} />
-              <button
-                className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white transition-opacity bg-gray-900/70 opacity-0 hover:opacity-100"
-                onClick={handleOpenFilePicker}
-                type="button"
-                disabled={loading || avatarUpdating || !profile}
-              >
-                {avatarUpdating ? "上传中" : "更换头像"}
-              </button>
+              <Image width={80} height={80} src="/images/user/owner.jpg" alt={displayName || "用户头像"} className={loading ? "animate-pulse" : ""} />
             </div>
             <div className="order-3 text-center xl:order-2 xl:text-left">
               <h4 className="mb-1 text-lg font-semibold text-foreground">
@@ -262,16 +199,6 @@ export default function UserMetaCard({ profile, onProfileUpdate, onAvatarUpdate,
           <div className="flex flex-col gap-3 w-full sm:flex-row sm:w-auto sm:items-center">
             <Button
               size="sm"
-              variant="outline"
-              className="w-full sm:w-auto"
-              onClick={handleAvatarRemove}
-              disabled={avatarUpdating || loading || !profile?.avatarUrl || !profile}
-              type="button"
-            >
-              移除头像
-            </Button>
-            <Button
-              size="sm"
               className="w-full sm:w-auto"
               onClick={openModal}
               disabled={loading || !profile}
@@ -281,17 +208,7 @@ export default function UserMetaCard({ profile, onProfileUpdate, onAvatarUpdate,
             </Button>
           </div>
         </div>
-        {avatarError && (
-          <p className="mt-3 text-sm text-error-500">{avatarError}</p>
-        )}
       </div>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/png, image/jpeg, image/webp"
-        className="hidden"
-        onChange={handleAvatarChange}
-      />
       <Dialog open={isOpen} onOpenChange={(nextOpen) => (nextOpen ? openModal() : closeModal())}>
         <DialogContent className="max-w-[640px]">
           <DialogHeader>

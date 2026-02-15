@@ -25,7 +25,7 @@ function normalizeStatusParam(value: string | null): ExportEmployeesParams['stat
 const ALLOWED_SORTS: Array<NonNullable<ExportEmployeesParams['sortBy']>> = [
   'createdAt',
   'updatedAt',
-  'lastName',
+  'displayName',
   'department',
   'status',
 ];

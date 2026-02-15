@@ -96,7 +96,6 @@ async function ensureAuthSchema() {
       city VARCHAR(120),
       postal_code VARCHAR(40),
       tax_id VARCHAR(120),
-      avatar_url TEXT,
       social_links JSON NOT NULL DEFAULT (JSON_OBJECT()),
       password_updated_at DATETIME(3),
       created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),

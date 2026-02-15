@@ -78,8 +78,6 @@ const DEFAULT_FILTERS: EmployeeFilters = {
 const IMPORT_TEMPLATE = `[
   {
     "employeeCode": "EMP-001",
-    "firstName": "晓华",
-    "lastName": "王",
     "displayName": "王晓华",
     "email": "xiaohua@example.com",
     "initialPassword": "Welcome123",
@@ -99,12 +97,10 @@ const CSV_HEADER_ALIASES: Record<string, keyof EmployeeImportRow> = {
   '员工编号': 'employeeCode',
   '编号': 'employeeCode',
   '员工id': 'id',
-  'first_name': 'firstName',
-  'first name': 'firstName',
-  '名': 'firstName',
-  'last_name': 'lastName',
-  'last name': 'lastName',
-  '姓': 'lastName',
+  'name': 'displayName',
+  'full_name': 'displayName',
+  'full name': 'displayName',
+  '姓名': 'displayName',
   'display_name': 'displayName',
   'display name': 'displayName',
   '昵称': 'displayName',
@@ -310,7 +306,7 @@ function buildQuery(filters: EmployeeFilters, page: number, pageSize: number) {
   if (filters.departmentId?.trim()) params.set('departmentId', filters.departmentId.trim());
   if (filters.jobGradeId?.trim()) params.set('jobGradeId', filters.jobGradeId.trim());
   if (filters.status !== 'all') params.set('status', filters.status);
-  if (filters.sortBy !== 'updatedAt') params.set('sortBy', filters.sortBy);
+      if (filters.sortBy !== 'updatedAt') params.set('sortBy', filters.sortBy);
   if (filters.sortOrder !== 'desc') params.set('sortOrder', filters.sortOrder);
   params.set('page', String(page));
   params.set('pageSize', String(pageSize));
@@ -324,7 +320,7 @@ function buildExportQuery(filters: EmployeeFilters) {
   if (filters.departmentId?.trim()) params.set('departmentId', filters.departmentId.trim());
   if (filters.jobGradeId?.trim()) params.set('jobGradeId', filters.jobGradeId.trim());
   if (filters.status !== 'all') params.set('status', filters.status);
-  if (filters.sortBy !== 'updatedAt') params.set('sortBy', filters.sortBy);
+      if (filters.sortBy !== 'updatedAt') params.set('sortBy', filters.sortBy);
   if (filters.sortOrder !== 'desc') params.set('sortOrder', filters.sortOrder);
   return params.toString();
 }
@@ -830,7 +826,7 @@ export default function EmployeeClient({
         return;
       }
       const confirmed = await confirm({
-        title: `确定删除员工 ${employee.displayName ?? employee.firstName}？`,
+        title: `确定删除员工 ${employee.displayName ?? employee.email ?? employee.employeeCode ?? ''}？`,
         description: '此操作无法撤销。',
         confirmText: '删除',
         cancelText: '取消',
@@ -1141,7 +1137,7 @@ export default function EmployeeClient({
       const sortLabelMap: Record<EmployeeFilters['sortBy'], string> = {
         updatedAt: '按更新时间',
         createdAt: '按创建时间',
-        lastName: '按姓名',
+        displayName: '按姓名',
         department: '按部门',
         status: '按状态',
       };
@@ -1315,7 +1311,7 @@ export default function EmployeeClient({
                       <SelectContent>
                         <SelectItem value="updatedAt">按更新时间</SelectItem>
                         <SelectItem value="createdAt">按创建时间</SelectItem>
-                        <SelectItem value="lastName">按姓名</SelectItem>
+                        <SelectItem value="displayName">按姓名</SelectItem>
                         <SelectItem value="department">按部门</SelectItem>
                         <SelectItem value="status">按状态</SelectItem>
                       </SelectContent>
@@ -1499,7 +1495,7 @@ export default function EmployeeClient({
               <div>
                 <DrawerTitle>
                   {isEditMode
-                    ? `编辑员工: ${selectedEmployee?.displayName ?? selectedEmployee?.firstName ?? ''}`
+                    ? `编辑员工: ${selectedEmployee?.displayName ?? selectedEmployee?.email ?? ''}`
                     : selectedEmployee
                       ? '员工详情'
                       : '新增员工'}

@@ -6,7 +6,7 @@ import { ChevronsUpDown, Loader2, RefreshCw, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/components/ui/sonner';
@@ -55,8 +55,6 @@ const statusClasses: Record<EmployeeRecord['employmentStatus'], string> = {
 
 function getEmployeeName(employee: EmployeeRecord): string {
 	if (employee.displayName) return employee.displayName;
-	const fullName = `${employee.lastName ?? ''}${employee.firstName ?? ''}`.trim();
-	if (fullName) return fullName;
 	if (employee.email) return employee.email;
 	return employee.id;
 }
@@ -302,7 +300,6 @@ useEffect(() => {
 														disabled={isBinding}
 													>
 														<Avatar className="h-10 w-10 border">
-															<AvatarImage src={employee.avatarUrl ?? undefined} alt={name} />
 															<AvatarFallback>{name.slice(0, 2).toUpperCase()}</AvatarFallback>
 														</Avatar>
 														<div className="flex flex-1 flex-col">

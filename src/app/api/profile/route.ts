@@ -8,8 +8,6 @@ function buildUserShape(user: UserRecord) {
     id: user.id,
     email: user.email,
     role: user.role,
-    firstName: user.first_name,
-    lastName: user.last_name,
     displayName: user.display_name,
     jobTitle: user.job_title,
     phone: user.phone,
@@ -18,7 +16,6 @@ function buildUserShape(user: UserRecord) {
     city: user.city,
     postalCode: user.postal_code,
     taxId: user.tax_id,
-    avatarUrl: user.avatar_url,
     socialLinks: user.social_links,
     createdAt: user.created_at,
     updatedAt: user.updated_at,
@@ -63,8 +60,6 @@ export async function PUT(request: Request) {
 
     const body = await request.json().catch(() => ({}));
     const payload = {
-      firstName: typeof body.firstName === 'string' ? body.firstName : null,
-      lastName: typeof body.lastName === 'string' ? body.lastName : null,
       displayName: typeof body.displayName === 'string' ? body.displayName : null,
       jobTitle: typeof body.jobTitle === 'string' ? body.jobTitle : null,
       phone: typeof body.phone === 'string' ? body.phone : null,
@@ -80,6 +75,9 @@ export async function PUT(request: Request) {
 
     return NextResponse.json({ success: true, data: buildUserShape(updated) });
   } catch (error) {
+    if (error instanceof Error && error.message === 'DISPLAY_NAME_REQUIRED') {
+      return NextResponse.json({ success: false, error: '姓名不能为空' }, { status: 400 });
+    }
     console.error('更新个人资料失败', error);
     return NextResponse.json({ success: false, error: '服务器错误' }, { status: 500 });
   }

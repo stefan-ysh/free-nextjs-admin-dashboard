@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { ArrowDownRight, ArrowUpRight, ClipboardList, TrendingUp, AlertTriangle, Clock, Package } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, ClipboardList, TrendingUp, AlertTriangle, Clock } from 'lucide-react';
 
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { toPermissionUser } from '@/lib/auth/permission-user';
@@ -12,7 +12,6 @@ import { getInventoryStats } from '@/lib/db/inventory';
 import { getRecords, getStats as getFinanceStats } from '@/lib/db/finance';
 import { getEmployeeDashboardStats } from '@/lib/hr/employees';
 import { getPurchaseStats, listPurchases } from '@/lib/db/purchases';
-import { listApplications } from '@/lib/db/inventory-applications';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -123,7 +122,7 @@ export default async function AdminDashboardPage() {
     purchaseViewDepartmentPermission.allowed ||
     purchaseApprovePermission.allowed;
 
-  const [inventoryStats, financeStats, recentFinanceRecords, hrStats, purchaseStats, pendingPurchases, pendingApplications] = await Promise.all([
+  const [inventoryStats, financeStats, recentFinanceRecords, hrStats, purchaseStats, pendingPurchases] = await Promise.all([
     inventoryPermission.allowed ? getInventoryStats() : null,
     financePermission.allowed ? getFinanceStats({ startDate: monthStartText, endDate: todayText }) : null,
     financePermission.allowed ? getRecords({ startDate: monthStartText, endDate: todayText, limit: 6, offset: 0 }) : [],
@@ -144,10 +143,6 @@ export default async function AdminDashboardPage() {
           pageSize: 5,
         })
       : null,
-    // Pending inventory applications (admins see all pending)
-    inventoryPermission.allowed
-      ? listApplications({ status: 'pending', pageSize: 5 })
-      : null,
   ]);
 
   const hasAnySection = [
@@ -157,7 +152,7 @@ export default async function AdminDashboardPage() {
     purchasePermissionAllowed,
   ].some(Boolean);
 
-  const greetingName = profile.displayName || profile.firstName || profile.email;
+  const greetingName = profile.displayName || profile.email;
   const primaryRole = profile.primaryRole ? USER_ROLE_LABELS[profile.primaryRole] : '员工';
   const lastLogin = formatDateTimeLocal(profile.lastLoginAt) ?? '暂无登录记录';
   const accessibleModules = (
@@ -312,9 +307,9 @@ export default async function AdminDashboardPage() {
           )}
 
           {/* My Approvals Section */}
-          {((pendingPurchases && pendingPurchases.items.length > 0) || (pendingApplications && pendingApplications.items.length > 0)) && (
+          {pendingPurchases && pendingPurchases.items.length > 0 && (
             <DashboardSection title="我的待办" description="需要您处理的审批事项">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4">
                 {/* Pending Purchase Approvals */}
                 {pendingPurchases && pendingPurchases.items.length > 0 && (
                   <Card className="border-none shadow-sm">
@@ -338,35 +333,6 @@ export default async function AdminDashboardPage() {
                       {pendingPurchases.total > 5 && (
                         <Button asChild variant="ghost" size="sm" className="w-full text-xs">
                           <Link href="/workflow/todo">查看全部 {pendingPurchases.total} 条 →</Link>
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Pending Inventory Applications */}
-                {pendingApplications && pendingApplications.items.length > 0 && (
-                  <Card className="border-none shadow-sm">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <div>
-                        <CardTitle className="text-base">领用审批</CardTitle>
-                        <CardDescription>共 {pendingApplications.total} 条待审批</CardDescription>
-                      </div>
-                      <Package className="h-5 w-5 text-chart-2" />
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {pendingApplications.items.map((app) => (
-                        <Link key={app.id} href="/inventory/approvals" className="flex items-center justify-between rounded-lg border border-transparent px-2 py-1.5 text-sm transition-colors hover:border-border hover:bg-muted/50">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate font-medium text-foreground">{app.applicantName} · {app.items.map(i => i.itemName).join(', ')}</p>
-                            <p className="text-xs text-muted-foreground">{app.number} · {app.warehouseName}</p>
-                          </div>
-                          <Badge variant="secondary" className="ml-3 shrink-0">待审批</Badge>
-                        </Link>
-                      ))}
-                      {pendingApplications.total > 5 && (
-                        <Button asChild variant="ghost" size="sm" className="w-full text-xs">
-                          <Link href="/inventory/approvals">查看全部 {pendingApplications.total} 条 →</Link>
                         </Button>
                       )}
                     </CardContent>

@@ -38,11 +38,8 @@ export interface UserRecord {
   primaryRole: UserRole;
   
   // 基本信息
-  firstName: string | null;
-  lastName: string | null;
   displayName: string;
   phone: string | null;
-  avatarUrl: string | null;
   
   // 员工信息（可选）
   employeeCode: string | null;
@@ -103,8 +100,6 @@ export interface CreateUserInput {
   roles?: UserRole[];
   primaryRole?: UserRole;
   displayName?: string;
-  firstName?: string;
-  lastName?: string;
   
   // 员工信息（可选）
   employeeCode?: string;
@@ -119,8 +114,6 @@ export interface CreateUserInput {
  * 更新用户资料输入
  */
 export interface UpdateUserProfileInput {
-  firstName?: string | null;
-  lastName?: string | null;
   displayName?: string;
   phone?: string | null;
   bio?: string | null;
@@ -156,7 +149,7 @@ export interface ListUsersParams {
   isActive?: boolean;
   page?: number;
   pageSize?: number;
-  sortBy?: 'createdAt' | 'updatedAt' | 'lastName' | 'department' | 'employmentStatus';
+  sortBy?: 'createdAt' | 'updatedAt' | 'displayName' | 'department' | 'employmentStatus';
   sortOrder?: 'asc' | 'desc';
 }
 

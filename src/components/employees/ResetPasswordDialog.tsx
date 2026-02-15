@@ -32,7 +32,7 @@ export default function ResetPasswordDialog({
     }
   }, [open]);
 
-  const displayName = employee?.displayName || `${employee?.lastName ?? ''}${employee?.firstName ?? ''}`.trim() || employee?.email || '该员工';
+  const displayName = employee?.displayName || employee?.email || '该员工';
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !saving && onOpenChange(nextOpen)}>

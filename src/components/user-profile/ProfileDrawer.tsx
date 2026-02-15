@@ -15,7 +15,7 @@ import {
     DrawerTitle,
     DrawerFooter,
 } from "@/components/ui/drawer";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
@@ -39,8 +39,7 @@ export default function ProfileDrawer({ open, onOpenChange }: ProfileDrawerProps
     const [saving, setSaving] = useState(false);
 
     // Form state for quick edit
-    const [firstName, setFirstName] = useState("");
-    const [lastName, setLastName] = useState("");
+    const [displayName, setDisplayName] = useState("");
     const [phone, setPhone] = useState("");
 
     // Load profile when drawer opens
@@ -57,8 +56,7 @@ export default function ProfileDrawer({ open, onOpenChange }: ProfileDrawerProps
             }
 
             setProfile(json.data);
-            setFirstName(json.data.firstName ?? "");
-            setLastName(json.data.lastName ?? "");
+            setDisplayName(json.data.displayName ?? "");
             setPhone(json.data.phone ?? "");
         } catch (err) {
             console.error(err);
@@ -82,8 +80,7 @@ export default function ProfileDrawer({ open, onOpenChange }: ProfileDrawerProps
         try {
             const payload = {
                 ...profile,
-                firstName: firstName.trim() || null,
-                lastName: lastName.trim() || null,
+                displayName: displayName.trim() || null,
                 phone: phone.trim() || null,
             };
 
@@ -119,10 +116,9 @@ export default function ProfileDrawer({ open, onOpenChange }: ProfileDrawerProps
                 </DrawerHeader>
 
                 <DrawerBody className="space-y-6">
-                    {/* Avatar */}
+                    {/* User Info */}
                     <div className="flex items-center gap-4">
                         <Avatar className="h-16 w-16">
-                            <AvatarImage src={user?.avatarUrl ?? undefined} alt={user?.displayName ?? "User"} />
                             <AvatarFallback>
                                 <UserCircle className="h-8 w-8" />
                             </AvatarFallback>
@@ -139,21 +135,12 @@ export default function ProfileDrawer({ open, onOpenChange }: ProfileDrawerProps
                         <div className="space-y-4">
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div className="space-y-2">
-                                    <Label htmlFor="firstName">名</Label>
+                                    <Label htmlFor="displayName">姓名</Label>
                                     <Input
-                                        id="firstName"
-                                        value={firstName}
-                                        onChange={(e) => setFirstName(e.target.value)}
-                                        placeholder="请输入名"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="lastName">姓</Label>
-                                    <Input
-                                        id="lastName"
-                                        value={lastName}
-                                        onChange={(e) => setLastName(e.target.value)}
-                                        placeholder="请输入姓"
+                                        id="displayName"
+                                        value={displayName}
+                                        onChange={(e) => setDisplayName(e.target.value)}
+                                        placeholder="请输入姓名"
                                     />
                                 </div>
                             </div>

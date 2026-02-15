@@ -6,7 +6,7 @@ export type PurchaseNotifyEvent =
   | 'payment_issue_marked'
   | 'payment_issue_resolved';
 
-export type NotifyChannel = 'sms' | 'in_app' | 'email';
+export type NotifyChannel = 'in_app' | 'email';
 
 export type NotifyPolicyRule = {
   enabled: boolean;
@@ -16,19 +16,19 @@ export type NotifyPolicyRule = {
 export type NotifyPolicyMap = Record<PurchaseNotifyEvent, NotifyPolicyRule>;
 
 const DEFAULT_NOTIFY_POLICY: NotifyPolicyMap = {
-  purchase_submitted: { enabled: true, channels: ['sms', 'in_app'] },
-  purchase_approved: { enabled: true, channels: ['sms', 'in_app'] },
-  reimbursement_submitted: { enabled: true, channels: ['sms', 'in_app'] },
-  purchase_paid: { enabled: true, channels: ['sms', 'in_app'] },
-  payment_issue_marked: { enabled: true, channels: ['sms', 'in_app'] },
-  payment_issue_resolved: { enabled: true, channels: ['sms', 'in_app'] },
+  purchase_submitted: { enabled: true, channels: ['in_app', 'email'] },
+  purchase_approved: { enabled: true, channels: ['in_app', 'email'] },
+  reimbursement_submitted: { enabled: true, channels: ['in_app', 'email'] },
+  purchase_paid: { enabled: true, channels: ['in_app', 'email'] },
+  payment_issue_marked: { enabled: true, channels: ['in_app', 'email'] },
+  payment_issue_resolved: { enabled: true, channels: ['in_app', 'email'] },
 };
 
 let cachedRaw = '';
 let cachedPolicy: NotifyPolicyMap = DEFAULT_NOTIFY_POLICY;
 
 function isNotifyChannel(value: unknown): value is NotifyChannel {
-  return value === 'sms' || value === 'in_app' || value === 'email';
+  return value === 'in_app' || value === 'email';
 }
 
 function normalizeRule(raw: unknown, fallback: NotifyPolicyRule): NotifyPolicyRule {

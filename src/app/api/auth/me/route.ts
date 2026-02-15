@@ -32,11 +32,8 @@ export async function GET() {
         role: user.role,
         roles: user.roles,
         primaryRole: user.primary_role,
-        firstName: user.first_name,
-        lastName: user.last_name,
         displayName: user.display_name,
         jobTitle: user.job_title,
-        avatarUrl: user.avatar_url,
         expiresAt: session.expires_at,
       },
     });

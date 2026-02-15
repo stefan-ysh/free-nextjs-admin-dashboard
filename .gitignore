@@ -13,6 +13,10 @@
 # next.js
 /.next/
 /out/
+.output
+.idea
+.vscode
+.agent
 
 # production
 /build

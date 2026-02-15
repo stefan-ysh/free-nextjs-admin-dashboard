@@ -34,11 +34,8 @@ type RawUserRow = RowDataPacket & {
   password_hash: string;
   roles: string | null;
   primary_role: string;
-  first_name: string | null;
-  last_name: string | null;
   display_name: string;
   phone: string | null;
-  avatar_url: string | null;
   employee_code: string | null;
   department: string | null;
   job_title: string | null;
@@ -100,9 +97,6 @@ function parseJsonObject(value: unknown): Record<string, unknown> {
 function buildDisplayName(row: RawUserRow): string {
   const candidates: Array<string | null | undefined> = [
     row.display_name,
-    row.first_name && row.last_name ? `${row.last_name}${row.first_name}` : null,
-    row.first_name,
-    row.last_name,
     row.email,
     row.employee_code,
   ];
@@ -127,11 +121,8 @@ function mapUser(row: RawUserRow | undefined): UserRecord | null {
     passwordHash: row.password_hash,
     roles: roles.length ? roles : [UserRole.EMPLOYEE],
     primaryRole: row.primary_role as UserRole,
-    firstName: row.first_name,
-    lastName: row.last_name,
     displayName,
     phone: row.phone,
-    avatarUrl: row.avatar_url,
     employeeCode: row.employee_code,
     department: row.department,
     jobTitle: row.job_title,
@@ -203,6 +194,14 @@ function sanitizeNullableText(value: string | null | undefined): string | null {
   return trimmed === '' ? null : trimmed;
 }
 
+function requireDisplayName(value: string | null | undefined): string {
+  const displayName = sanitizeNullableText(value);
+  if (!displayName) {
+    throw new Error('DISPLAY_NAME_REQUIRED');
+  }
+  return displayName;
+}
+
 /**
  * 通过邮箱查找用户
  */
@@ -266,20 +265,16 @@ export async function createUser(
   const passwordHash = await hashPassword(input.password);
   const roles = input.roles ?? [UserRole.EMPLOYEE];
   const primaryRole = input.primaryRole ?? roles[0];
-  const displayName = input.displayName?.trim() ||
-    `${input.firstName || ''} ${input.lastName || ''}`.trim() ||
-    email.split('@')[0];
+  const displayName = requireDisplayName(input.displayName ?? null);
 
   await mysqlQuery`
     INSERT INTO hr_employees (
       id, email, password_hash, roles, primary_role,
-      first_name, last_name, display_name,
+      display_name,
       employee_code, department, job_title, employment_status, hire_date, manager_id,
       created_by
     ) VALUES (
       ${id}, ${email}, ${passwordHash}, ${JSON.stringify(roles)}, ${primaryRole},
-      ${sanitizeNullableText(input.firstName)},
-      ${sanitizeNullableText(input.lastName)},
       ${displayName},
       ${sanitizeNullableText(input.employeeCode)},
       ${sanitizeNullableText(input.department)},
@@ -306,12 +301,18 @@ export async function updateUserProfile(
   input: UpdateUserProfileInput
 ): Promise<UserRecord> {
   await ensureHrSchema();
+  const current = await findUserById(userId);
+  if (!current) {
+    throw new Error('USER_NOT_FOUND');
+  }
+  const nextDisplayName = sanitizeNullableText(input.displayName ?? undefined) ?? current.displayName ?? current.email;
+  if (!nextDisplayName || !nextDisplayName.trim()) {
+    throw new Error('DISPLAY_NAME_REQUIRED');
+  }
 
   const [result] = await pool.query<ResultSetHeader>(
     `UPDATE hr_employees
       SET
-        first_name = ?,
-        last_name = ?,
         display_name = ?,
         phone = ?,
         bio = ?,
@@ -323,9 +324,7 @@ export async function updateUserProfile(
         updated_at = NOW()
       WHERE id = ?`,
     [
-      sanitizeNullableText(input.firstName ?? undefined),
-      sanitizeNullableText(input.lastName ?? undefined),
-      input.displayName ?? null,
+      nextDisplayName,
       sanitizeNullableText(input.phone ?? undefined),
       sanitizeNullableText(input.bio ?? undefined),
       sanitizeNullableText(input.city ?? undefined),
@@ -454,28 +453,6 @@ export async function updateUserPassword(userId: string, password: string): Prom
   `;
 }
 
-/**
- * 更新用户头像
- */
-export async function updateUserAvatar(
-  userId: string,
-  avatarUrl: string | null
-): Promise<UserRecord> {
-  await ensureHrSchema();
-  const sanitized = sanitizeNullableText(avatarUrl);
-
-  const [result] = await pool.query<ResultSetHeader>(
-    'UPDATE hr_employees SET avatar_url = ?, updated_at = NOW() WHERE id = ?',
-    [sanitized, userId]
-  );
-
-  if (result.affectedRows === 0) {
-    throw new Error('USER_NOT_FOUND');
-  }
-
-  return (await findUserById(userId))!;
-}
-
 export async function ensureBusinessUserRecord(userId: string): Promise<UserRecord> {
   await ensureHrSchema();
   const existing = await findUserById(userId);
@@ -486,7 +463,7 @@ export async function ensureBusinessUserRecord(userId: string): Promise<UserReco
     throw new Error('USER_NOT_FOUND');
   }
 
-  const displayName = authUser.display_name?.trim() || authUser.email.split('@')[0];
+  const displayName = authUser.display_name?.trim() || authUser.email;
   const mappedRole = mapAuthRole(authUser.role);
   const roles = [mappedRole];
   const passwordHash = await hashPassword(randomUUID());
@@ -495,8 +472,8 @@ export async function ensureBusinessUserRecord(userId: string): Promise<UserReco
     await mysqlQuery`
       INSERT INTO hr_employees (
         id, email, password_hash, roles, primary_role,
-        first_name, last_name, display_name,
-        phone, avatar_url, department, job_title,
+        display_name,
+        phone, department, job_title,
         employment_status, hire_date, manager_id,
         bio, city, country, postal_code, tax_id,
         social_links, is_active, email_verified,
@@ -507,11 +484,8 @@ export async function ensureBusinessUserRecord(userId: string): Promise<UserReco
         ${passwordHash},
         ${JSON.stringify(roles)},
         ${mappedRole},
-        ${sanitizeNullableText(authUser.first_name)},
-        ${sanitizeNullableText(authUser.last_name)},
         ${displayName},
         ${sanitizeNullableText(authUser.phone)},
-        ${sanitizeNullableText(authUser.avatar_url)},
         ${null},
         ${sanitizeNullableText(authUser.job_title)},
         ${'active'},
@@ -566,7 +540,7 @@ export async function listUsers(params: ListUsersParams = {}): Promise<ListUsers
   const sortColumnMap: Record<string, string> = {
     createdAt: 'created_at',
     updatedAt: 'updated_at',
-    lastName: 'last_name',
+    displayName: 'display_name',
     department: 'department',
     employmentStatus: 'employment_status',
   };
@@ -579,13 +553,11 @@ export async function listUsers(params: ListUsersParams = {}): Promise<ListUsers
   if (params.search) {
     const search = `%${params.search.trim().toLowerCase()}%`;
     conditions.push(`(
-      LOWER(first_name) LIKE ? OR 
-      LOWER(last_name) LIKE ? OR 
       LOWER(display_name) LIKE ? OR 
       LOWER(email) LIKE ? OR
       LOWER(employee_code) LIKE ?
     )`);
-    values.push(search, search, search, search, search);
+    values.push(search, search, search);
   }
 
   // 角色筛选
@@ -692,7 +664,7 @@ export async function getSubordinates(managerId: string): Promise<UserProfile[]>
     SELECT * FROM hr_employees
     WHERE manager_id = ${managerId}
       AND is_active = 1
-    ORDER BY last_name, first_name
+    ORDER BY display_name, id
   `;
   return result.rows.map(row => toProfile(mapUser(row)!));
 }

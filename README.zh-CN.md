@@ -103,7 +103,6 @@ npm install
 - [FINANCE_UI_UPDATE.md](./docs/FINANCE_UI_UPDATE.md): UI & 交互调整记录
 - [TEST_CHECKLIST.md](./docs/TEST_CHECKLIST.md): 端到端测试清单
 - [PROCUREMENT_SYSTEM_MASTER_LIST.md](./docs/PROCUREMENT_SYSTEM_MASTER_LIST.md): 需求追踪与交付状态
-- [WECOM_INTEGRATION.md](./docs/WECOM_INTEGRATION.md): 企业微信通知接入与二次开发说明
 
 ## 🔄 采购与报销流程（当前实现）
 

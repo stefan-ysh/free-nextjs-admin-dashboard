@@ -24,6 +24,10 @@ type FinanceUserRow = RowDataPacket & {
   id: string;
 };
 
+type EmployeeEmailRow = RowDataPacket & {
+  email: string | null;
+};
+
 async function ensureNotificationsSchema() {
   if (notificationSchemaReady) return;
   await ensureHrSchema();
@@ -150,6 +154,27 @@ export async function listFinanceRecipientIds() {
        )`
   );
   return rows.map((row) => row.id);
+}
+
+export async function listRecipientEmailsByIds(ids: string[]) {
+  await ensureNotificationsSchema();
+  const normalizedIds = Array.from(
+    new Set(ids.map((item) => item?.trim()).filter((item): item is string => Boolean(item)))
+  );
+  if (normalizedIds.length === 0) return [];
+
+  const placeholders = normalizedIds.map(() => '?').join(',');
+  const pool = mysqlPool();
+  const [rows] = await pool.query<EmployeeEmailRow[]>(
+    `SELECT email
+     FROM hr_employees
+     WHERE id IN (${placeholders})
+       AND is_active = 1`,
+    normalizedIds
+  );
+  return Array.from(
+    new Set(rows.map((row) => row.email?.trim().toLowerCase()).filter((item): item is string => Boolean(item)))
+  );
 }
 
 export async function markInAppNotificationsAsRead(params: {

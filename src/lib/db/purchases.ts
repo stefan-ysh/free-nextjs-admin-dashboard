@@ -495,7 +495,6 @@ function buildPurchaserProfile(user: Awaited<ReturnType<typeof findUserById>> | 
   return {
     id: user?.id ?? fallbackId,
     displayName: user?.displayName ?? '—',
-    avatarUrl: user?.avatarUrl ?? null,
     employeeCode: user?.employeeCode ?? null,
     department: user?.department ?? null,
   };
