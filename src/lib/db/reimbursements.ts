@@ -3,6 +3,7 @@ import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 
 import { mysqlPool } from '@/lib/mysql';
 import { ensureReimbursementsSchema } from '@/lib/schema/reimbursements';
+import { ensureInventorySchema } from '@/lib/schema/inventory';
 import { ensureBusinessUserRecord, findUserById } from '@/lib/users';
 import { formatDateOnly, normalizeDateInput } from '@/lib/dates';
 import { findPurchaseById } from '@/lib/db/purchases';
@@ -204,6 +205,8 @@ async function pickAutoApproverId(): Promise<string> {
 }
 
 async function assertLinkedPurchaseInboundReady(sourcePurchaseId: string) {
+  // Ensure inventory schema/columns are present before cross-module validation query.
+  await ensureInventorySchema();
   const purchase = await findPurchaseById(sourcePurchaseId);
   if (!purchase || purchase.isDeleted) throw new Error('SOURCE_PURCHASE_NOT_FOUND');
   if (purchase.status !== 'approved' && purchase.status !== 'paid') {
