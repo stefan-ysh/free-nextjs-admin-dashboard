@@ -1,7 +1,6 @@
 "use client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -14,6 +13,7 @@ import {
   ChevronDown,
   LayoutGrid as DashboardIcon,
   LineChart as FinanceIcon,
+  ReceiptText as ReimbursementIcon,
   ShoppingCart as PurchaseIcon,
   CircleGauge as PerformanceIcon,
 } from "lucide-react";
@@ -41,113 +41,103 @@ type NavItem = {
 const navItems: NavItem[] = [
   {
     icon: <PerformanceIcon />,
-    name: "仪表盘",
+    name: "首页",
     path: "/",
+  },
+  {
+    icon: <DashboardIcon />,
+    name: "我的待办",
+    path: "/workflow/todo",
+    requiredAnyPermissions: [
+      "PURCHASE_CREATE",
+      "PURCHASE_VIEW_ALL",
+      "PURCHASE_APPROVE",
+      "PURCHASE_REJECT",
+      "PURCHASE_PAY",
+    ],
   },
 
   {
     icon: <FinanceIcon />,
-    name: "财务管理",
+    name: "财务中心",
     requiredAnyPermissions: ["FINANCE_VIEW_ALL", "PURCHASE_PAY"],
     subItems: [
       {
-        name: "财务流水",
+        name: "收支流水",
         path: "/finance",
         requiredPermission: "FINANCE_VIEW_ALL",
       },
       {
-        name: "付款任务",
+        name: "付款处理",
         path: "/finance/payments",
         requiredPermission: "PURCHASE_PAY",
-        // new: true,
       },
     ],
   },
 
   {
     icon: <PurchaseIcon />,
-    name: "采购管理",
+    name: "采购中心",
     requiredAnyPermissions: [
       "PURCHASE_CREATE",
       "PURCHASE_VIEW_ALL",
-      "PURCHASE_VIEW_DEPARTMENT",
       "PURCHASE_APPROVE",
       "PURCHASE_REJECT",
       "PURCHASE_PAY",
     ],
     subItems: [
       {
-        name: "采购台账",
+        name: "采购申请",
         path: "/purchases",
-        requiredAnyPermissions: ["PURCHASE_CREATE", "PURCHASE_VIEW_ALL", "PURCHASE_VIEW_DEPARTMENT"],
+        requiredAnyPermissions: ["PURCHASE_CREATE", "PURCHASE_VIEW_ALL"],
       },
       {
-        name: "采购审批",
+        name: "审批处理",
         path: "/purchases/approvals",
-        requiredAnyPermissions: ["PURCHASE_APPROVE", "PURCHASE_REJECT", "PURCHASE_PAY"],
-        // new: true,
+        requiredAnyPermissions: ["PURCHASE_APPROVE", "PURCHASE_REJECT"],
       },
       {
-        name: "流程监控",
+        name: "进度监控",
         path: "/purchases/monitor",
         requiredAnyPermissions: ["PURCHASE_VIEW_ALL", "PURCHASE_APPROVE", "PURCHASE_REJECT", "PURCHASE_PAY"],
       },
       {
-        name: "审计日志",
+        name: "审计记录",
         path: "/purchases/audit",
         requiredAnyPermissions: ["PURCHASE_VIEW_ALL", "PURCHASE_APPROVE", "PURCHASE_PAY"],
       },
     ],
   },
   {
-    icon: <DashboardIcon />,
-    name: "工作台",
+    icon: <ReimbursementIcon />,
+    name: "报销中心",
     requiredAnyPermissions: [
-      "PURCHASE_CREATE",
-      "PURCHASE_VIEW_DEPARTMENT",
-      "PURCHASE_VIEW_ALL",
-      "PURCHASE_APPROVE",
-      "PURCHASE_REJECT",
-      "PURCHASE_PAY",
+      "REIMBURSEMENT_CREATE",
+      "REIMBURSEMENT_VIEW_ALL",
+      "REIMBURSEMENT_APPROVE",
+      "REIMBURSEMENT_REJECT",
+      "REIMBURSEMENT_PAY",
     ],
     subItems: [
       {
-        name: "待办",
-        path: "/workflow/todo",
-        requiredAnyPermissions: ["PURCHASE_APPROVE", "PURCHASE_REJECT", "PURCHASE_PAY", "PURCHASE_CREATE"],
-      },
-      {
-        name: "已办",
-        path: "/workflow/done",
+        name: "报销申请",
+        path: "/reimbursements",
         requiredAnyPermissions: [
-          "PURCHASE_CREATE",
-          "PURCHASE_VIEW_DEPARTMENT",
-          "PURCHASE_VIEW_ALL",
-          "PURCHASE_APPROVE",
-          "PURCHASE_REJECT",
-          "PURCHASE_PAY",
-        ],
-      },
-      {
-        name: "通知",
-        path: "/workflow/notifications",
-        requiredAnyPermissions: [
-          "PURCHASE_CREATE",
-          "PURCHASE_VIEW_DEPARTMENT",
-          "PURCHASE_VIEW_ALL",
-          "PURCHASE_APPROVE",
-          "PURCHASE_REJECT",
-          "PURCHASE_PAY",
+          "REIMBURSEMENT_CREATE",
+          "REIMBURSEMENT_VIEW_ALL",
+          "REIMBURSEMENT_APPROVE",
+          "REIMBURSEMENT_REJECT",
+          "REIMBURSEMENT_PAY",
         ],
       },
     ],
   },
   {
     icon: <InventoryIcon />,
-    name: "进销存",
+    name: "库存管理",
     subItems: [
       {
-        name: "概览",
+        name: "库存总览",
         path: "/inventory",
         requiredPermission: "INVENTORY_VIEW_DASHBOARD",
       },
@@ -164,29 +154,18 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    name: "组织架构",
+    name: "人员管理",
     icon: <OrgIcon />,
-    subItems: [
-      {
-        name: "员工管理",
-        path: "/employees",
-        pro: false,
-        requiredPermission: "USER_VIEW_ALL",
-      },
-      {
-        name: "部门管理",
-        path: "/departments",
-        pro: false,
-        requiredPermission: "USER_VIEW_ALL",
-      },
-    ],
+    path: "/employees",
+    requiredPermission: "USER_VIEW_ALL",
   },
 ];
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, loading: permissionLoading } = usePermissions();
+  const [todoCount, setTodoCount] = useState(0);
 
   const filterNavItems = useCallback(
     (items: NavItem[]) =>
@@ -268,7 +247,112 @@ const AppSidebar: React.FC = () => {
         : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
     );
 
-  const isActive = useCallback((path: string) => path === pathname, [pathname]);
+  const isActive = useCallback(
+    (path: string) => {
+      if (path === "/") {
+        return pathname === "/";
+      }
+      if (path === "/workflow/todo") {
+        return pathname.startsWith("/workflow");
+      }
+      // Avoid sibling double-highlight, e.g. /finance and /finance/payments.
+      if (path === "/finance" || path === "/inventory") {
+        return pathname === path;
+      }
+      if (path === "/purchases") {
+        return (
+          pathname === "/purchases" ||
+          pathname === "/purchases/new" ||
+          /^\/purchases\/[^/]+\/edit$/.test(pathname)
+        );
+      }
+      return pathname === path || pathname.startsWith(`${path}/`);
+    },
+    [pathname]
+  );
+
+  const refreshTodoCount = useCallback(async () => {
+    if (permissionLoading) return;
+    const canTodo = [
+      "PURCHASE_APPROVE",
+      "PURCHASE_REJECT",
+      "PURCHASE_PAY",
+      "REIMBURSEMENT_APPROVE",
+      "REIMBURSEMENT_PAY",
+    ].some((perm) =>
+      hasPermission(perm as PermissionName)
+    );
+    if (!canTodo) {
+      setTodoCount(0);
+      return;
+    }
+
+    const canPay = hasPermission("PURCHASE_PAY");
+    const canReimbursementApprove = hasPermission("REIMBURSEMENT_APPROVE");
+    const canReimbursementPay = hasPermission("REIMBURSEMENT_PAY");
+    const [approvalRes, paymentRes, reimbursementApprovalRes, reimbursementPayRes] = await Promise.allSettled([
+      fetch("/api/purchases/approvals?page=1&pageSize=1", { headers: { Accept: "application/json" } }),
+      canPay
+        ? fetch("/api/finance/payments?status=pending&page=1&pageSize=1", { headers: { Accept: "application/json" } })
+        : Promise.resolve(null),
+      canReimbursementApprove
+        ? fetch("/api/reimbursements?scope=approval&page=1&pageSize=1", { headers: { Accept: "application/json" } })
+        : Promise.resolve(null),
+      canReimbursementPay
+        ? fetch("/api/reimbursements?scope=pay&page=1&pageSize=1", { headers: { Accept: "application/json" } })
+        : Promise.resolve(null),
+    ]);
+
+    let approvals = 0;
+    if (approvalRes.status === "fulfilled") {
+      const payload = (await approvalRes.value.json().catch(() => null)) as
+        | { success?: boolean; data?: { total?: number } }
+        | null;
+      if (approvalRes.value.ok && payload?.success) {
+        approvals = Number(payload.data?.total ?? 0);
+      }
+    }
+
+    let payments = 0;
+    if (canPay && paymentRes.status === "fulfilled" && paymentRes.value) {
+      const payload = (await paymentRes.value.json().catch(() => null)) as
+        | { success?: boolean; data?: { total?: number } }
+        | null;
+      if (paymentRes.value.ok && payload?.success) {
+        payments = Number(payload.data?.total ?? 0);
+      }
+    }
+
+    let reimbursementApprovals = 0;
+    if (canReimbursementApprove && reimbursementApprovalRes.status === "fulfilled" && reimbursementApprovalRes.value) {
+      const payload = (await reimbursementApprovalRes.value.json().catch(() => null)) as
+        | { success?: boolean; data?: { total?: number } }
+        | null;
+      if (reimbursementApprovalRes.value.ok && payload?.success) {
+        reimbursementApprovals = Number(payload.data?.total ?? 0);
+      }
+    }
+
+    let reimbursementPays = 0;
+    if (canReimbursementPay && reimbursementPayRes.status === "fulfilled" && reimbursementPayRes.value) {
+      const payload = (await reimbursementPayRes.value.json().catch(() => null)) as
+        | { success?: boolean; data?: { total?: number } }
+        | null;
+      if (reimbursementPayRes.value.ok && payload?.success) {
+        reimbursementPays = Number(payload.data?.total ?? 0);
+      }
+    }
+
+    setTodoCount(Math.max(0, approvals + payments + reimbursementApprovals + reimbursementPays));
+  }, [hasPermission, permissionLoading]);
+
+  useEffect(() => {
+    void refreshTodoCount();
+    const timer = window.setInterval(() => {
+      void refreshTodoCount();
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [refreshTodoCount]);
 
   useEffect(() => {
     let matchedIndex: number | null = null;
@@ -301,10 +385,12 @@ const AppSidebar: React.FC = () => {
   };
 
   const renderMenuItems = (items: NavItem[]) => (
-    <ul className="flex flex-col gap-3">
+    <ul className="mt-3 flex flex-col gap-3">
       {items.map((nav, index) => {
         const isOpen = openSubmenuIndex === index;
         const isActiveRoot = nav.path ? isActive(nav.path) : false;
+        const hasActiveSubItem = Boolean(nav.subItems?.some((subItem) => isActive(subItem.path)));
+        const isParentActive = isActiveRoot || hasActiveSubItem;
         return (
           <li key={nav.name} className="space-y-1">
             {nav.subItems ? (
@@ -312,15 +398,24 @@ const AppSidebar: React.FC = () => {
                 onClick={() => handleSubmenuToggle(index)}
                 variant="ghost"
                 size="sm"
-                className={navButtonStyles(isOpen)}
+                className={navButtonStyles(isParentActive)}
               >
-                <span className={cn('text-lg', isOpen ? 'text-sidebar-primary' : 'text-sidebar-foreground/70')}>
+                <span className={cn('text-lg', isParentActive ? 'text-sidebar-primary' : 'text-sidebar-foreground/70')}>
                   {nav.icon}
                 </span>
                 {showLabels && <span className="text-sm font-medium">{nav.name}</span>}
+                {showLabels && nav.name === "工作台" && todoCount > 0 && (
+                  <span className="ml-auto rounded-full bg-destructive/15 px-2 py-0.5 text-xs font-semibold text-destructive">
+                    {todoCount}
+                  </span>
+                )}
                 {showLabels && (
                   <ChevronDown
-                    className={cn('h-4 w-4 text-sidebar-foreground/70 transition-transform', isOpen && 'rotate-180 text-sidebar-primary')}
+                    className={cn(
+                      'h-4 w-4 text-sidebar-foreground/70 transition-transform',
+                      isParentActive && 'text-sidebar-primary',
+                      isOpen && 'rotate-180'
+                    )}
                   />
                 )}
               </Button>
@@ -334,6 +429,11 @@ const AppSidebar: React.FC = () => {
                     {nav.icon}
                   </span>
                   {showLabels && <span className="text-sm font-medium">{nav.name}</span>}
+                  {showLabels && nav.path === "/workflow/todo" && todoCount > 0 && (
+                    <span className="ml-auto rounded-full bg-destructive/15 px-2 py-0.5 text-xs font-semibold text-destructive">
+                      {todoCount}
+                    </span>
+                  )}
                 </Link>
               )
             )}
@@ -357,6 +457,11 @@ const AppSidebar: React.FC = () => {
                       >
                         <span>{subItem.name}</span>
                         <span className="flex items-center gap-1">
+                          {subItem.path === "/workflow/todo" && todoCount > 0 && (
+                            <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-xs font-semibold text-destructive">
+                              {todoCount}
+                            </span>
+                          )}
                           {subItem.new && <span className="text-xs uppercase text-sidebar-primary">new</span>}
                           {subItem.pro && <span className="text-xs uppercase text-sidebar-primary">pro</span>}
                         </span>
@@ -383,16 +488,6 @@ const AppSidebar: React.FC = () => {
       onMouseEnter={() => !isExpanded && setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className={cn('py-8 flex', showLabels ? 'justify-start' : 'justify-center lg:justify-center')}>
-        <Link href="/" className="mx-auto">
-          <Image
-            src="/images/logo/logo.png"
-            alt="Logo"
-            width={150}
-            height={40}
-          />
-        </Link>
-      </div>
       <div className="flex flex-1 flex-col overflow-hidden">
         <ScrollArea className="flex-1 pb-8">
           <nav className="mb-6 pr-2">

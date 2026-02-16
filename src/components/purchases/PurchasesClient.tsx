@@ -50,6 +50,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useConfirm } from '@/hooks/useConfirm';
 import { formatDateOnly } from '@/lib/dates';
 import { formatCurrency } from '@/lib/format';
+import { isReimbursementV2Enabled } from '@/lib/features/gates';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
@@ -226,6 +227,7 @@ export default function PurchasesClient() {
     purchase: null,
   });
   const confirm = useConfirm();
+  const reimbursementV2Enabled = isReimbursementV2Enabled();
 
   const permissions: PermissionSnapshot = useMemo(
     () => ({
@@ -605,6 +607,10 @@ export default function PurchasesClient() {
   };
 
   const handleSubmitReimbursement = async (purchase: PurchaseRecord | PurchaseDetail) => {
+    if (reimbursementV2Enabled) {
+      router.push('/reimbursements');
+      return;
+    }
     if (!hasInvoiceEvidence(purchase)) {
       toast.error('请先上传发票或收款凭证后再提交报销', {
         action: {
@@ -748,10 +754,10 @@ export default function PurchasesClient() {
           permissions.canPay &&
           isPurchasePayable(purchase.status) &&
           purchase.reimbursementStatus === 'reimbursement_pending',
-        canSubmitReimbursement: isOwner && isReimbursementSubmittable(purchase),
+        canSubmitReimbursement: !reimbursementV2Enabled && isOwner && isReimbursementSubmittable(purchase),
       };
     },
-    [permissionUser, permissions.canApprove, permissions.canCreate, permissions.canPay, permissions.canReject, permissions.canViewAll]
+    [permissionUser, permissions.canApprove, permissions.canCreate, permissions.canPay, permissions.canReject, permissions.canViewAll, reimbursementV2Enabled]
   );
 
   const handleEdit = (purchase: PurchaseRecord) => {

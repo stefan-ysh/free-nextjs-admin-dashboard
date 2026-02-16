@@ -119,6 +119,7 @@ export default function PurchaseInboundDrawer({
         warehouseId: form.warehouseId,
         quantity: Number(form.quantity),
         type: 'purchase',
+        relatedPurchaseId: purchase.id,
         unitCost: form.unitCost === '' ? undefined : Number(form.unitCost),
         notes: form.notes?.trim() || undefined,
       };

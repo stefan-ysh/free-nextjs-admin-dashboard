@@ -8,6 +8,7 @@ import type {
     InventoryItem,
     Warehouse,
 } from '@/types/inventory';
+import type { PurchaseRecord } from '@/types/purchase';
 import { usePermissions } from '@/hooks/usePermissions';
 import { specFieldsToDefaultRecord } from '@/lib/inventory/spec';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,7 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
 
     const [items, setItems] = useState<InventoryItem[]>([]);
     const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+    const [purchases, setPurchases] = useState<PurchaseRecord[]>([]);
     const [payload, setPayload] = useState<InventoryInboundPayload>(defaultPayload);
     const [submitting, setSubmitting] = useState(false);
 
@@ -52,10 +54,13 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
         Promise.all([
             fetch('/api/inventory/items').then((res) => res.json()),
             fetch('/api/inventory/warehouses').then((res) => res.json()),
+            fetch('/api/purchases?page=1&pageSize=100&sortBy=updatedAt&sortOrder=desc').then((res) => res.json()),
         ])
-            .then(([itemsResponse, warehousesResponse]) => {
+            .then(([itemsResponse, warehousesResponse, purchasesResponse]) => {
                 setItems(itemsResponse.data ?? []);
                 setWarehouses(warehousesResponse.data ?? []);
+                const rows = (purchasesResponse?.data?.items ?? []) as PurchaseRecord[];
+                setPurchases(rows.filter((row) => row.status === 'approved' || row.status === 'paid'));
             })
             .catch((error) => console.error('Failed to load dependency data', error));
     }, [canOperate]);
@@ -88,6 +93,11 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
             attributes: prev.attributes ?? defaultAttributes ?? {},
         }));
     }, [selectedItem]);
+
+    useEffect(() => {
+        if (payload.type === 'purchase') return;
+        setPayload((prev) => ({ ...prev, relatedPurchaseId: undefined }));
+    }, [payload.type]);
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -243,6 +253,31 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
                     </SelectContent>
                 </Select>
             </div>
+
+            {payload.type === 'purchase' && (
+                <div className="space-y-2">
+                    <Label htmlFor="inbound-related-purchase" className="text-sm font-medium">
+                        关联采购单
+                    </Label>
+                    <Select
+                        value={payload.relatedPurchaseId || undefined}
+                        onValueChange={(value) => handleChange('relatedPurchaseId', value)}
+                        disabled={submitting}
+                    >
+                        <SelectTrigger id="inbound-related-purchase" className="w-full">
+                            <SelectValue placeholder="选择采购单（可选）" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {purchases.map((purchase) => (
+                                <SelectItem key={purchase.id} value={purchase.id}>
+                                    {purchase.purchaseNumber} · {purchase.itemName}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">关联后可用于报销时校验该采购单已入库。</p>
+                </div>
+            )}
 
             <div className="space-y-2">
                 <Label htmlFor="inbound-quantity" className="text-sm font-medium">

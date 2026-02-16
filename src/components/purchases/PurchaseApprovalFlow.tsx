@@ -5,6 +5,7 @@ import type { PurchaseRowPermissions } from './PurchaseTable';
 import type { PurchaseDetail, PurchaseRecord, ReimbursementLog, ReimbursementAction } from '@/types/purchase';
 import { getPurchaseStatusText } from '@/types/purchase';
 import { cn } from '@/lib/utils';
+import { isReimbursementV2Enabled } from '@/lib/features/gates';
 
 const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
 	year: 'numeric',
@@ -98,7 +99,7 @@ function formatDateTime(value?: string | null) {
 }
 
 // Hardcoded 5-step flow
-function buildTimeline(purchase: PurchaseDetail): TimelineStep[] {
+function buildTimeline(purchase: PurchaseDetail, reimbursementV2Enabled: boolean): TimelineStep[] {
 	const steps: TimelineStep[] = [];
 
 	// Step 1: Submit
@@ -146,7 +147,23 @@ function buildTimeline(purchase: PurchaseDetail): TimelineStep[] {
 
 	if (isRejected) return steps;
 
-	// Step 3: Reimbursement (Submit Invoice)
+	// v2: purchase flow ends after approval/payment stage.
+	if (reimbursementV2Enabled) {
+		const isPaid = purchase.status === 'paid';
+		steps.push({
+			key: 'payment',
+			title: '财务打款',
+			description: isPaid
+				? `已打款 (操作人: ${purchase.paidBy ?? '财务'})`
+				: '审批通过后由财务完成打款（如需报销请前往报销中心）',
+			timestamp: purchase.paidAt ?? undefined,
+			status: isPaid ? 'done' : isApproved ? 'active' : 'pending',
+			tone: isPaid ? 'success' : 'default',
+		});
+		return steps;
+	}
+
+	// Step 3: Reimbursement (Legacy)
 	const hasReimbursement = purchase.reimbursementStatus !== 'none' && purchase.reimbursementStatus !== 'invoice_pending';
 	steps.push({
 		key: 'reimbursement_submit',
@@ -243,7 +260,8 @@ export default function PurchaseApprovalFlow({
 	onTransfer,
 	busy,
 }: PurchaseApprovalFlowProps) {
-	const timeline = buildTimeline(purchase);
+	const reimbursementV2Enabled = isReimbursementV2Enabled();
+	const timeline = buildTimeline(purchase, reimbursementV2Enabled);
 
 	const actions: Array<{
 		key: keyof typeof ACTION_STYLES;
@@ -259,7 +277,7 @@ export default function PurchaseApprovalFlow({
 		{
 			key: 'submitReimbursement',
 			label: '提交报销',
-			visible: Boolean(permissions?.canSubmitReimbursement),
+			visible: !reimbursementV2Enabled && Boolean(permissions?.canSubmitReimbursement),
 			handler: onSubmitReimbursement,
 		},
 		{ key: 'pay', label: '标记打款', visible: Boolean(permissions?.canPay), handler: onPay },

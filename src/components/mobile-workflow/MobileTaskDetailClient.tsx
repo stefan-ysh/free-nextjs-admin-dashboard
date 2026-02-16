@@ -14,12 +14,10 @@ import {
   statusText,
 } from '@/components/mobile-workflow/shared';
 import {
-  hasInvoiceEvidence,
-  isReimbursementSubmittable,
   type PurchaseDetail,
-  type PurchaseStatus,
 } from '@/types/purchase';
 import { toast } from 'sonner';
+import { isReimbursementV2Enabled } from '@/lib/features/gates';
 
 type PurchaseDetailResponse = {
   success: boolean;
@@ -54,6 +52,7 @@ export default function MobileTaskDetailClient({
   const [payAmount, setPayAmount] = useState('');
   const [payNote, setPayNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const reimbursementV2Enabled = isReimbursementV2Enabled();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -120,12 +119,6 @@ export default function MobileTaskDetailClient({
     return canReject && record.status === 'pending_approval';
   }, [record, canReject]);
 
-  const canSubmitReimbursementCurrent = useMemo(() => {
-    if (!record) return false;
-    const isApplicant = record.createdBy === currentUserId || record.purchaserId === currentUserId;
-    return isApplicant && isReimbursementSubmittable(record) && hasInvoiceEvidence(record);
-  }, [record, currentUserId]);
-
   const canPayCurrent = useMemo(() => {
     if (!record) return false;
     return canPay && record.status === 'approved' && record.reimbursementStatus === 'reimbursement_pending';
@@ -174,7 +167,11 @@ export default function MobileTaskDetailClient({
         </div>
 
         <div className="rounded border border-border/70 bg-muted/20 p-2 text-xs text-muted-foreground">
-          <p>流程：采购申请 → 管理员审批 → 采购/入库/发票上传 → 提交报销 → 财务打款</p>
+          <p>
+            {reimbursementV2Enabled
+              ? '流程：采购申请 → 管理员审批 → 到货入库（可关联采购单）→ 报销中心发起报销 → 财务审批与打款'
+              : '流程：采购申请 → 管理员审批 → 采购/入库/发票上传 → 提交报销 → 财务打款'}
+          </p>
         </div>
       </div>
 
@@ -205,16 +202,6 @@ export default function MobileTaskDetailClient({
               驳回
             </Button>
           </div>
-        </div>
-      )}
-
-      {canSubmitReimbursementCurrent && (
-        <div className="surface-panel space-y-2 p-3">
-          <h2 className="text-sm font-semibold">报销操作</h2>
-          <p className="text-xs text-muted-foreground">发票已上传后可提交报销，进入财务待办。</p>
-          <Button className="w-full" disabled={submitting} onClick={() => void runAction('submit_reimbursement', {})}>
-            提交报销
-          </Button>
         </div>
       )}
 

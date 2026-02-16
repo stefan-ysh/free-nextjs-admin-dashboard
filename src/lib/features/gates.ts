@@ -19,7 +19,7 @@ function parseBooleanEnv(value: string | undefined, defaultValue: boolean): bool
  */
 export const ENABLE_REIMBURSEMENT_V2 = parseBooleanEnv(
   process.env.ENABLE_REIMBURSEMENT_V2,
-  false
+  true
 );
 
 /**
@@ -43,4 +43,3 @@ export function isReimbursementV2Enabled(): boolean {
 export function isReimbursementV2UIEnabled(): boolean {
   return featureGates.reimbursementV2UI;
 }
-
