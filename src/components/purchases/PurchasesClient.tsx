@@ -795,9 +795,16 @@ export default function PurchasesClient() {
 
   const selectedPurchasePermissions = selectedPurchase ? getRowPermissions(selectedPurchase) : undefined;
   const canReceive = Boolean(
-    permissions.canReceive &&
     selectedPurchase &&
-    (selectedPurchase.status === 'approved' || selectedPurchase.status === 'paid')
+      (selectedPurchase.status === 'approved' || selectedPurchase.status === 'paid') &&
+      (
+        permissions.canReceive ||
+        (
+          permissions.canCreate &&
+          permissionUser &&
+          (selectedPurchase.createdBy === permissionUser.id || selectedPurchase.purchaserId === permissionUser.id)
+        )
+      )
   );
   const selectedPurchaseBusy = selectedPurchase ? mutatingId === selectedPurchase.id : false;
 

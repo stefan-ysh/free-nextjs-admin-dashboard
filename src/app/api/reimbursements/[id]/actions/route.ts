@@ -12,6 +12,7 @@ import {
   withdrawReimbursement,
 } from '@/lib/db/reimbursements';
 import { mapReimbursementError } from '@/lib/reimbursements/error-messages';
+import { notifyReimbursementEvent } from '@/lib/notify/reimbursement';
 import { UserRole } from '@/types/user';
 
 type WorkflowAction = 'submit' | 'approve' | 'reject' | 'pay' | 'withdraw';
@@ -49,6 +50,19 @@ function canPayByOrg(role: UserRole, orgType: 'school' | 'company'): boolean {
   return false;
 }
 
+async function notifySafely(
+  event: 'reimbursement_submitted' | 'reimbursement_approved' | 'reimbursement_rejected' | 'reimbursement_paid',
+  reimbursementId: string
+) {
+  try {
+    const detail = await getReimbursementById(reimbursementId);
+    if (!detail) return;
+    await notifyReimbursementEvent(event, detail);
+  } catch (error) {
+    console.error(`[notify] reimbursement event ${event} failed`, error);
+  }
+}
+
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -67,6 +81,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (!canSubmit.allowed) return forbiddenResponse();
       if (existing.applicantId !== permissionUser.id && existing.createdBy !== permissionUser.id) return forbiddenResponse();
       const updated = await submitReimbursement(id, permissionUser.id);
+      await notifySafely('reimbursement_submitted', id);
       return NextResponse.json({ success: true, data: updated });
     }
 
@@ -85,6 +100,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (!canApprove.allowed) return forbiddenResponse();
       if (existing.pendingApproverId && existing.pendingApproverId !== permissionUser.id) return forbiddenResponse();
       const updated = await approveReimbursement(id, permissionUser.id, typeof comment === 'string' ? comment : null);
+      await notifySafely('reimbursement_approved', id);
       return NextResponse.json({ success: true, data: updated });
     }
 
@@ -94,6 +110,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (existing.pendingApproverId && existing.pendingApproverId !== permissionUser.id) return forbiddenResponse();
       if (typeof reason !== 'string' || !reason.trim()) return badRequestResponse('驳回原因不能为空');
       const updated = await rejectReimbursement(id, permissionUser.id, reason.trim());
+      await notifySafely('reimbursement_rejected', id);
       return NextResponse.json({ success: true, data: updated });
     }
 
@@ -102,6 +119,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (!canPay.allowed) return forbiddenResponse();
       if (!canPayByOrg(permissionUser.primaryRole, existing.organizationType)) return forbiddenResponse();
       const updated = await payReimbursement(id, permissionUser.id, typeof note === 'string' ? note : null);
+      await notifySafely('reimbursement_paid', id);
       return NextResponse.json({ success: true, data: updated });
     }
 
@@ -114,4 +132,3 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ success: false, error: '服务器错误' }, { status: 500 });
   }
 }
-

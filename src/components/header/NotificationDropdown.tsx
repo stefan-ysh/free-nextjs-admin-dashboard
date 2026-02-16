@@ -43,6 +43,7 @@ type ApprovalListResponse = {
 
 type UiNotificationItem = {
   id: string;
+  eventType: string;
   title: string;
   subtitle: string;
   time: string;
@@ -66,21 +67,39 @@ function timeAgo(dateValue: string): string {
 
 function mapType(eventType: string): UiNotificationItem["type"] {
   if (eventType === "purchase_submitted") return "approval";
-  if (eventType === "purchase_approved" || eventType === "purchase_paid") return "applicant";
+  if (eventType === "purchase_approved" || eventType === "purchase_rejected" || eventType === "purchase_paid") return "applicant";
+  if (eventType === "purchase_transferred") return "approval";
   if (eventType === "reimbursement_submitted") return "finance";
+  if (eventType === "reimbursement_approved" || eventType === "reimbursement_paid") return "finance";
+  if (eventType === "reimbursement_rejected") return "applicant";
   if (eventType === "payment_issue_marked" || eventType === "payment_issue_resolved") return "finance";
   return "other";
 }
 
 function toWorkbenchLink(eventType: string, linkUrl: string | null): string {
-  if (eventType === "purchase_submitted" || eventType === "reimbursement_submitted") return "/workflow/todo";
+  if (eventType === "purchase_submitted" || eventType === "purchase_transferred" || eventType === "reimbursement_submitted") return "/workflow/todo";
+  if (eventType === "reimbursement_approved" || eventType === "reimbursement_rejected" || eventType === "reimbursement_paid") return "/reimbursements";
   if (eventType === "payment_issue_marked" || eventType === "payment_issue_resolved") return "/workflow/notifications";
-  if (eventType === "purchase_paid" || eventType === "purchase_approved") return "/workflow/notifications";
+  if (eventType === "purchase_paid" || eventType === "purchase_approved" || eventType === "purchase_rejected") return "/workflow/notifications";
   if (!linkUrl) return "/workflow/notifications";
   if (linkUrl.startsWith("/m/tasks")) return "/workflow/todo";
   if (linkUrl.startsWith("/m/history")) return "/workflow/done";
   if (linkUrl.startsWith("/m/notifications")) return "/workflow/notifications";
   return linkUrl;
+}
+
+function getNextActionLabel(eventType: string, type: UiNotificationItem["type"]): string {
+  if (eventType === "purchase_submitted" || eventType === "purchase_transferred") return "去审批";
+  if (eventType === "reimbursement_submitted") return "去打款";
+  if (eventType === "reimbursement_approved") return "去打款";
+  if (eventType === "reimbursement_rejected") return "去修改";
+  if (eventType === "reimbursement_paid") return "看结果";
+  if (eventType === "purchase_rejected") return "去修改";
+  if (eventType === "payment_issue_marked") return "去处理";
+  if (eventType === "payment_issue_resolved") return "看进度";
+  if (eventType === "purchase_approved") return "去采购";
+  if (eventType === "purchase_paid") return "看结果";
+  return type === "approval" ? "去处理" : "查看";
 }
 
 export default function NotificationDropdown() {
@@ -129,6 +148,7 @@ export default function NotificationDropdown() {
             }
             normalized.push({
               id: item.id,
+              eventType: item.eventType,
               title: item.title,
               subtitle: item.content.split("\n")[0] ?? item.content,
               time: timeAgo(item.createdAt),
@@ -150,6 +170,7 @@ export default function NotificationDropdown() {
             }
             normalized.push({
               id: `fallback-${item.id}`,
+              eventType: "purchase_submitted",
               title: `采购待审批：${item.itemName}`,
               subtitle: `单号 ${item.purchaseNumber}`,
               time: timeAgo(item.updatedAt),
@@ -345,9 +366,9 @@ export default function NotificationDropdown() {
                     <p className="line-clamp-1 text-xs text-muted-foreground">{item.subtitle}</p>
                     <div className="mt-1 flex items-center justify-between gap-2">
                       <p className="text-[11px] text-muted-foreground">{item.time}</p>
-                      {item.source === "pending_approval" ? (
-                        <span className="text-[11px] text-primary">实时待办</span>
-                      ) : null}
+                      <span className="text-[11px] font-medium text-primary">
+                        {getNextActionLabel(item.eventType, item.type)}
+                      </span>
                     </div>
                   </Link>
                 </li>
