@@ -148,7 +148,6 @@ type RawPurchaseRow = RowDataPacket & {
 type RawPaymentQueueRow = RawPurchaseRow & {
   paid_amount: number | null;
   purchaser_display_name?: string | null;
-  purchaser_department?: string | null;
   purchaser_employee_code?: string | null;
 };
 
@@ -226,6 +225,10 @@ type RawMonitorStuckRow = RowDataPacket & {
   submitted_at: string | null;
   pending_hours: number | null;
   due_amount: number | null;
+};
+
+type RawAutoApproverRow = RowDataPacket & {
+  id: string;
 };
 
 function parseJsonArray(value: unknown): string[] {
@@ -361,7 +364,6 @@ function mapPaymentQueueItem(row: RawPaymentQueueRow): PurchasePaymentQueueItem 
     paidAmount,
     remainingAmount,
     purchaserName: row.purchaser_display_name ?? null,
-    purchaserDepartment: row.purchaser_department ?? null,
     purchaserEmployeeCode: row.purchaser_employee_code ?? null,
   };
 }
@@ -430,11 +432,9 @@ function buildPurchaseFilterClause(params: ListPurchasesParams = {}, tableAlias 
     values.push(params.purchaserId);
   }
 
-  if (params.purchaserDepartment) {
-    conditions.push(
-      `EXISTS (SELECT 1 FROM hr_employees he_scope WHERE he_scope.id = ${column('purchaser_id')} AND he_scope.department = ?)`
-    );
-    values.push(params.purchaserDepartment);
+  if (params.hideOthersDrafts && params.currentUserId) {
+    conditions.push(`(${column('status')} <> 'draft' OR ${column('created_by')} = ? OR ${column('purchaser_id')} = ?)`);
+    values.push(params.currentUserId, params.currentUserId);
   }
 
   if (params.organizationType) {
@@ -530,6 +530,37 @@ async function generatePurchaseNumber(): Promise<string> {
   `;
   const seq = (result.rows[0]?.count || 0) + 1;
   return `${prefix}${String(seq).padStart(4, '0')}`;
+}
+
+async function pickAutoApproverId(): Promise<string> {
+  const [rows] = await pool.query<RawAutoApproverRow[]>(
+    `
+      SELECT e.id
+      FROM hr_employees e
+      LEFT JOIN (
+        SELECT pending_approver_id, COUNT(*) AS pending_count
+        FROM purchases
+        WHERE is_deleted = 0
+          AND status = 'pending_approval'
+          AND pending_approver_id IS NOT NULL
+        GROUP BY pending_approver_id
+      ) approver_load ON approver_load.pending_approver_id = e.id
+      WHERE e.is_active = 1
+        AND (
+          e.primary_role = 'finance'
+          OR JSON_CONTAINS(COALESCE(e.roles, JSON_ARRAY()), JSON_QUOTE('finance'), '$')
+        )
+      ORDER BY
+        COALESCE(approver_load.pending_count, 0) ASC,
+        e.updated_at DESC,
+        e.id ASC
+      LIMIT 1
+    `
+  );
+
+  const approverId = rows[0]?.id?.trim();
+  if (!approverId) throw new Error('APPROVER_NOT_FOUND');
+  return approverId;
 }
 
 async function insertLog(
@@ -865,6 +896,7 @@ type PaymentQueueFilters = {
   search?: string;
   status?: PaymentQueueStatus;
   ids?: string[];
+  organizationType?: 'school' | 'company';
   page?: number;
   pageSize?: number;
 };
@@ -890,6 +922,11 @@ function buildPaymentQueueFilterClause(params: PaymentQueueFilters = {}) {
       '(LOWER(p.purchase_number) LIKE ? OR LOWER(p.item_name) LIKE ? OR LOWER(p.purpose) LIKE ?)'
     );
     values.push(search, search, search);
+  }
+
+  if (params.organizationType) {
+    conditions.push('p.organization_type = ?');
+    values.push(params.organizationType);
   }
 
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -928,7 +965,6 @@ export async function listPaymentQueue(filters: PaymentQueueFilters = {}) {
       SELECT
         ${PURCHASE_SELECT_FIELDS},
         he.display_name AS purchaser_display_name,
-        he.department AS purchaser_department,
         he.employee_code AS purchaser_employee_code,
         ${paidAmountExpr} AS paid_amount
       ${PURCHASE_FROM_CLAUSE}
@@ -1166,7 +1202,13 @@ export async function updatePurchase(id: string, input: UpdatePurchaseInput): Pr
   await ensurePurchasesSchema();
   const existing = await findPurchaseById(id);
   if (!existing) throw new Error('PURCHASE_NOT_FOUND');
-  if (!(existing.status === 'draft' || existing.status === 'rejected')) throw new Error('NOT_EDITABLE');
+  const editableInCurrentStatus =
+    existing.status === 'draft' ||
+    existing.status === 'rejected' ||
+    (existing.status === 'approved' &&
+      (existing.reimbursementStatus === 'invoice_pending' ||
+        existing.reimbursementStatus === 'reimbursement_rejected'));
+  if (!editableInCurrentStatus) throw new Error('NOT_EDITABLE');
 
   const updates: string[] = [];
   const values: unknown[] = [];
@@ -1302,9 +1344,7 @@ export async function submitPurchase(purchaseId: string, operatorId: string): Pr
   const existing = await findPurchaseById(purchaseId);
   if (!existing) throw new Error('PURCHASE_NOT_FOUND');
   if (!(existing.status === 'draft' || existing.status === 'rejected')) throw new Error('NOT_SUBMITTABLE');
-
-  // Hardcoded: No dynamic workflow. Set pending_approver_id to null for now.
-  // This means any admin/manager can approve.
+  const approverId = await pickAutoApproverId();
   await mysqlQuery`
     UPDATE purchases
     SET status = 'pending_approval',
@@ -1314,7 +1354,7 @@ export async function submitPurchase(purchaseId: string, operatorId: string): Pr
         rejected_at = NULL,
         rejected_by = NULL,
         rejection_reason = NULL,
-        pending_approver_id = NULL,
+        pending_approver_id = ${approverId},
         workflow_step_index = NULL,
         workflow_nodes = NULL,
         updated_at = NOW()
@@ -1556,9 +1596,11 @@ export async function markAsPaid(
   
   // NOTE: Auto-finance-record creation and auto-inbound logic removed due to project module removal cleanup.
 
+  const beforeRemaining = Number((dueAmount - paidAmount).toFixed(2));
+  const afterRemaining = Math.max(0, Number((dueAmount - nextPaidAmount).toFixed(2)));
   const comment = isFullyPaid
-    ? null
-    : `部分打款：${normalizedAmount}，累计${nextPaidAmount}/${dueAmount}`;
+    ? `全额打款：本次${normalizedAmount.toFixed(2)}，累计${nextPaidAmount.toFixed(2)}/${dueAmount.toFixed(2)}，待付 ${beforeRemaining.toFixed(2)} -> ${afterRemaining.toFixed(2)}`
+    : `部分打款：本次${normalizedAmount.toFixed(2)}，累计${nextPaidAmount.toFixed(2)}/${dueAmount.toFixed(2)}，待付 ${beforeRemaining.toFixed(2)} -> ${afterRemaining.toFixed(2)}`;
   await insertLog(purchaseId, 'pay', 'approved', isFullyPaid ? 'paid' : 'approved', operatorId, comment);
   return (await findPurchaseById(purchaseId))!;
 }

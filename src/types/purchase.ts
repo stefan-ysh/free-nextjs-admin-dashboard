@@ -252,7 +252,8 @@ export interface ListPurchasesParams {
   search?: string;
   status?: PurchaseStatus | 'all';
   purchaserId?: string;
-  purchaserDepartment?: string;
+  currentUserId?: string;
+  hideOthersDrafts?: boolean;
   organizationType?: PurchaseOrganization;
   financeOrgType?: 'school' | 'company';
   pendingApproverId?: string;
@@ -398,7 +399,6 @@ export type PurchasePaymentQueueItem = PurchaseRecord & {
   paidAmount: number;
   remainingAmount: number;
   purchaserName?: string | null;
-  purchaserDepartment?: string | null;
   purchaserEmployeeCode?: string | null;
 };
 
@@ -590,13 +590,16 @@ export function isPurchaseSubmittable(status: PurchaseStatus): boolean {
 }
 
 /**
- * 判断是否具备报销所需的发票凭证
+ * 判断是否具备报销所需的凭证（发票或收款凭证）
  */
-export function hasInvoiceEvidence(purchase: Pick<PurchaseRecord, 'invoiceImages' | 'invoiceStatus' | 'invoiceType'>): boolean {
+export function hasInvoiceEvidence(
+  purchase: Pick<PurchaseRecord, 'invoiceImages' | 'receiptImages' | 'invoiceStatus' | 'invoiceType'>
+): boolean {
   if (purchase.invoiceType === 'none') return true;
   if (purchase.invoiceStatus === InvoiceStatus.NOT_REQUIRED) return true;
-  const files = Array.isArray(purchase.invoiceImages) ? purchase.invoiceImages.filter(Boolean) : [];
-  return files.length > 0;
+  const invoiceFiles = Array.isArray(purchase.invoiceImages) ? purchase.invoiceImages.filter(Boolean) : [];
+  const receiptFiles = Array.isArray(purchase.receiptImages) ? purchase.receiptImages.filter(Boolean) : [];
+  return invoiceFiles.length > 0 || receiptFiles.length > 0;
 }
 
 /**

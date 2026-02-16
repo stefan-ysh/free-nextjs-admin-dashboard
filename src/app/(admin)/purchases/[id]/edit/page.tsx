@@ -74,6 +74,7 @@ export default function PurchaseEditPage() {
 		return canEditPurchase(permissionUser, {
 			createdBy: purchase.createdBy,
 			status: purchase.status,
+			reimbursementStatus: purchase.reimbursementStatus,
 		});
 	}, [permissionUser, purchase]);
 

@@ -53,7 +53,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!purchase) return notFoundResponse();
 
     // check editable
-    if (!canEditPurchase(permissionUser, { createdBy: purchase.createdBy, status: purchase.status })) {
+    if (
+      !canEditPurchase(permissionUser, {
+        createdBy: purchase.createdBy,
+        status: purchase.status,
+        reimbursementStatus: purchase.reimbursementStatus,
+      })
+    ) {
       return forbiddenResponse();
     }
 

@@ -42,6 +42,7 @@ import {
   isPurchaseApprovable,
   isPurchasePayable,
   isReimbursementSubmittable,
+  hasInvoiceEvidence,
   getPurchaseStatusText,
 } from '@/types/purchase';
 import { canDeletePurchase, canEditPurchase } from '@/lib/permissions';
@@ -167,7 +168,7 @@ type PurchaseActionResponse = {
 
 type PermissionSnapshot = {
   canViewAll: boolean;
-  canViewDepartment: boolean;
+  // canViewDepartment: boolean;
   canCreate: boolean;
   canUpdate: boolean;
   canApprove: boolean;
@@ -229,7 +230,7 @@ export default function PurchasesClient() {
   const permissions: PermissionSnapshot = useMemo(
     () => ({
       canViewAll: hasPermission('PURCHASE_VIEW_ALL'),
-      canViewDepartment: hasPermission('PURCHASE_VIEW_DEPARTMENT'),
+      // canViewDepartment: hasPermission('PURCHASE_VIEW_DEPARTMENT'),
       canCreate: hasPermission('PURCHASE_CREATE'),
       canUpdate: hasPermission('PURCHASE_UPDATE'),
       canApprove: hasPermission('PURCHASE_APPROVE'),
@@ -240,7 +241,7 @@ export default function PurchasesClient() {
     [hasPermission]
   );
 
-  const canViewPurchases = permissions.canViewAll || permissions.canViewDepartment || permissions.canCreate;
+  const canViewPurchases = permissions.canViewAll || permissions.canCreate;
 
   const handleFilterChange = useCallback((patch: Partial<PurchaseFilters>) => {
     startTransition(() => {
@@ -603,7 +604,16 @@ export default function PurchasesClient() {
     setPayDialog({ open: true, purchase });
   };
 
-  const handleSubmitReimbursement = async (purchase: PurchaseRecord) => {
+  const handleSubmitReimbursement = async (purchase: PurchaseRecord | PurchaseDetail) => {
+    if (!hasInvoiceEvidence(purchase)) {
+      toast.error('请先上传发票或收款凭证后再提交报销', {
+        action: {
+          label: '去编辑',
+          onClick: () => router.push(`/purchases/${purchase.id}/edit`),
+        },
+      });
+      return;
+    }
     const confirmed = await confirm({
       title: '确认提交报销申请？',
       description: '提交后将通知财务进入待办队列。',
@@ -722,7 +732,11 @@ export default function PurchasesClient() {
 
       const isOwner = permissionUser.id === purchase.createdBy;
       return {
-        canEdit: canEditPurchase(permissionUser, { createdBy: purchase.createdBy, status: purchase.status }),
+        canEdit: canEditPurchase(permissionUser, {
+          createdBy: purchase.createdBy,
+          status: purchase.status,
+          reimbursementStatus: purchase.reimbursementStatus,
+        }),
         canDelete: canDeletePurchase(permissionUser, { createdBy: purchase.createdBy, status: purchase.status }),
         canDuplicate: permissions.canCreate && (isOwner || permissions.canViewAll),
         canSubmit: isOwner && isPurchaseSubmittable(purchase.status),
@@ -792,7 +806,7 @@ export default function PurchasesClient() {
   if (!canViewPurchases) {
     return (
       <div className="alert-box alert-danger p-6 text-sm">
-        当前账户无权访问采购模块。需要 PURCHASE_CREATE、PURCHASE_VIEW_ALL 或 PURCHASE_VIEW_DEPARTMENT 权限，请联系管理员开通。
+        当前账户无权访问采购模块。需要 PURCHASE_CREATE 或 PURCHASE_VIEW_ALL 权限，请联系管理员开通。
       </div>
     );
   }

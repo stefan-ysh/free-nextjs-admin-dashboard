@@ -1,4 +1,4 @@
-import { UserProfile, UserRole, hasRole, hasAnyRole, hasAllRoles, isAdmin, isFinance } from '@/types/user';
+import { UserProfile, UserRole } from '@/types/user';
 
 /**
  * 权限检查结果
@@ -20,6 +20,21 @@ export interface PermissionConfig {
   customCheck?: (user: UserProfile) => boolean | Promise<boolean>;
 }
 
+function resolveActiveRole(user: UserProfile): UserRole {
+  if (user.primaryRole) return user.primaryRole;
+  return user.roles[0] ?? UserRole.EMPLOYEE;
+}
+
+function hasAnyActiveRole(user: UserProfile, roles: UserRole[]): boolean {
+  const activeRole = resolveActiveRole(user);
+  return roles.includes(activeRole);
+}
+
+function hasAllActiveRoles(user: UserProfile, roles: UserRole[]): boolean {
+  const activeRole = resolveActiveRole(user);
+  return roles.every((role) => role === activeRole);
+}
+
 /**
  * 检查用户权限
  */
@@ -27,14 +42,15 @@ export async function checkPermission(
   user: UserProfile,
   config: PermissionConfig
 ): Promise<PermissionCheckResult> {
+  const activeRole = resolveActiveRole(user);
   // 超级管理员拥有所有权限
-  if (hasRole(user, UserRole.SUPER_ADMIN)) {
+  if (activeRole === UserRole.SUPER_ADMIN) {
     return { allowed: true };
   }
   
   // 检查 anyRoles（满足任一即可）
   if (config.anyRoles && config.anyRoles.length > 0) {
-    if (!hasAnyRole(user, config.anyRoles)) {
+    if (!hasAnyActiveRole(user, config.anyRoles)) {
       return {
         allowed: false,
         reason: `需要以下任一角色: ${config.anyRoles.join(', ')}`,
@@ -44,7 +60,7 @@ export async function checkPermission(
   
   // 检查 allRoles（必须全部满足）
   if (config.allRoles && config.allRoles.length > 0) {
-    if (!hasAllRoles(user, config.allRoles)) {
+    if (!hasAllActiveRoles(user, config.allRoles)) {
       return {
         allowed: false,
         reason: `需要以下所有角色: ${config.allRoles.join(', ')}`,
@@ -72,37 +88,35 @@ export async function checkPermission(
 export const Permissions = {
   // ============ 用户管理 ============
   USER_VIEW_ALL: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.HR],
+    anyRoles: [UserRole.SUPER_ADMIN],
   } as PermissionConfig,
   
   USER_CREATE: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.HR],
+    anyRoles: [UserRole.SUPER_ADMIN],
   } as PermissionConfig,
   
   USER_UPDATE: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.HR],
+    anyRoles: [UserRole.SUPER_ADMIN],
   } as PermissionConfig,
   
   USER_DELETE: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN],
+    anyRoles: [UserRole.SUPER_ADMIN],
   } as PermissionConfig,
   
   USER_ASSIGN_ROLES: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN],
+    anyRoles: [UserRole.SUPER_ADMIN],
   } as PermissionConfig,
   
   // ============ 采购管理 ============
   PURCHASE_VIEW_ALL: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
   
-  PURCHASE_VIEW_DEPARTMENT: {
-    anyRoles: [UserRole.DEPARTMENT_MANAGER],
-  } as PermissionConfig,
+
   
   PURCHASE_CREATE: {
-    // 所有角色都可以创建采购记录
-    customCheck: () => true,
+    // 超级管理员只读，不参与流程创建
+    customCheck: (user: UserProfile) => resolveActiveRole(user) !== UserRole.SUPER_ADMIN,
   } as PermissionConfig,
   
   PURCHASE_UPDATE: {
@@ -121,90 +135,68 @@ export const Permissions = {
   } as PermissionConfig,
   
   PURCHASE_APPROVE: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY, UserRole.DEPARTMENT_MANAGER],
+    anyRoles: [UserRole.FINANCE],
   } as PermissionConfig,
   
   PURCHASE_REJECT: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY, UserRole.DEPARTMENT_MANAGER],
+    anyRoles: [UserRole.FINANCE],
   } as PermissionConfig,
   
   PURCHASE_PAY: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
+    anyRoles: [UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
   
   // ============ 财务管理 ============
   FINANCE_VIEW_ALL: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
   
   FINANCE_MANAGE: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
+    anyRoles: [UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
 
   // ============ 进销存管理 ============
   INVENTORY_VIEW_DASHBOARD: {
-    anyRoles: [
-      UserRole.SUPER_ADMIN,
-      UserRole.ADMIN,
-      UserRole.INVENTORY_MANAGER,
-      UserRole.INVENTORY_OPERATOR,
-    ],
+    anyRoles: [UserRole.SUPER_ADMIN],
   } as PermissionConfig,
 
   INVENTORY_MANAGE_ITEMS: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.INVENTORY_MANAGER],
+    anyRoles: [UserRole.SUPER_ADMIN],
   } as PermissionConfig,
 
   INVENTORY_MANAGE_WAREHOUSE: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.INVENTORY_MANAGER],
+    anyRoles: [UserRole.SUPER_ADMIN],
   } as PermissionConfig,
 
   INVENTORY_OPERATE_INBOUND: {
-    anyRoles: [
-      UserRole.SUPER_ADMIN,
-      UserRole.ADMIN,
-      UserRole.INVENTORY_OPERATOR,
-      UserRole.INVENTORY_MANAGER,
-    ],
+    anyRoles: [UserRole.SUPER_ADMIN],
   } as PermissionConfig,
 
   INVENTORY_OPERATE_OUTBOUND: {
-    anyRoles: [
-      UserRole.SUPER_ADMIN,
-      UserRole.ADMIN,
-      UserRole.INVENTORY_OPERATOR,
-      UserRole.INVENTORY_MANAGER,
-    ],
+    anyRoles: [UserRole.SUPER_ADMIN],
   } as PermissionConfig,
 
   INVENTORY_VIEW_ALL: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.AUDITOR],
+    anyRoles: [UserRole.SUPER_ADMIN],
   } as PermissionConfig,
 
   // ============ 客户管理 ============
   CLIENT_VIEW: {
     anyRoles: [
       UserRole.SUPER_ADMIN,
-      UserRole.ADMIN,
-      UserRole.FINANCE,
       UserRole.FINANCE_SCHOOL,
       UserRole.FINANCE_COMPANY,
-      UserRole.INVENTORY_MANAGER,
-      UserRole.INVENTORY_OPERATOR,
     ],
   } as PermissionConfig,
 
   CLIENT_MANAGE: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.INVENTORY_MANAGER],
+    anyRoles: [UserRole.SUPER_ADMIN],
   } as PermissionConfig,
 
   // ============ 日程管理 ============
   CALENDAR_VIEW: {
     anyRoles: [
       UserRole.SUPER_ADMIN,
-      UserRole.ADMIN,
-      UserRole.HR,
-      UserRole.DEPARTMENT_MANAGER,
       UserRole.FINANCE,
       UserRole.FINANCE_SCHOOL,
       UserRole.FINANCE_COMPANY,
@@ -213,12 +205,7 @@ export const Permissions = {
   } as PermissionConfig,
 
   CALENDAR_MANAGE: {
-    anyRoles: [
-      UserRole.SUPER_ADMIN,
-      UserRole.ADMIN,
-      UserRole.HR,
-      UserRole.DEPARTMENT_MANAGER,
-    ],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE],
   } as PermissionConfig,
 };
 
@@ -236,21 +223,14 @@ export function canAccessUserData(
   currentUser: UserProfile,
   targetUserId: string
 ): boolean {
-  // 超级管理员、管理员、HR 可以访问所有用户数据
-  if (hasAnyRole(currentUser, [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.HR])) {
+  // 超级管理员、管理员可以访问所有用户数据
+  if (resolveActiveRole(currentUser) === UserRole.SUPER_ADMIN) {
     return true;
   }
   
   // 可以访问自己的数据
   if (currentUser.id === targetUserId) {
     return true;
-  }
-  
-  // 部门经理可以访问本部门员工数据
-  if (hasRole(currentUser, UserRole.DEPARTMENT_MANAGER) && currentUser.department) {
-    // 这里需要查询目标用户的部门，在实际使用时需要传入 targetUser
-    // 暂时返回 false，在具体业务逻辑中处理
-    return false;
   }
   
   return false;
@@ -263,21 +243,16 @@ export function canAccessDepartmentData(
   user: UserProfile,
   department: string
 ): boolean {
-  // 管理员可以访问所有部门
-  if (isAdmin(user)) {
+  // 超级管理员可以访问所有部门
+  if (resolveActiveRole(user) === UserRole.SUPER_ADMIN) {
     return true;
   }
-  
-  // 财务可以访问所有部门
-  if (isFinance(user)) {
+
+  // 财务角色可访问全部部门数据（用于审批与打款）
+  if (hasAnyActiveRole(user, [UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY])) {
     return true;
   }
-  
-  // 部门经理可以访问自己的部门
-  if (hasRole(user, UserRole.DEPARTMENT_MANAGER) && user.department === department) {
-    return true;
-  }
-  
+
   // 员工只能访问自己的部门
   if (user.department === department) {
     return true;
@@ -292,16 +267,16 @@ export function canAccessDepartmentData(
  */
 export function canEditPurchase(
   user: UserProfile,
-  purchase: { createdBy: string; status: string }
+  purchase: { createdBy: string; status: string; reimbursementStatus?: string | null }
 ): boolean {
   // 已打款记录不允许继续编辑
   if (purchase.status === 'paid') {
     return false;
   }
 
-  // 管理员可以编辑非已打款记录
-  if (isAdmin(user)) {
-    return true;
+  // 超级管理员只读，不参与流程编辑
+  if (resolveActiveRole(user) === UserRole.SUPER_ADMIN) {
+    return false;
   }
   
   // 只能编辑自己的记录
@@ -309,8 +284,21 @@ export function canEditPurchase(
     return false;
   }
   
-  // 只能编辑草稿和被驳回的记录
-  return purchase.status === 'draft' || purchase.status === 'rejected';
+  // 草稿/驳回始终可编辑
+  if (purchase.status === 'draft' || purchase.status === 'rejected') {
+    return true;
+  }
+
+  // 已批准但仍处于报销补录阶段时，允许申请人补充发票后再提交报销
+  if (
+    purchase.status === 'approved' &&
+    (purchase.reimbursementStatus === 'invoice_pending' ||
+      purchase.reimbursementStatus === 'reimbursement_rejected')
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -320,9 +308,9 @@ export function canDeletePurchase(
   user: UserProfile,
   purchase: { createdBy: string; status: string }
 ): boolean {
-  // 管理员可以删除（除了已打款的）
-  if (isAdmin(user) && purchase.status !== 'paid') {
-    return true;
+  // 超级管理员只读，不参与流程删除
+  if (resolveActiveRole(user) === UserRole.SUPER_ADMIN) {
+    return false;
   }
   
   // 只能删除自己的记录

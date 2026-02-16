@@ -20,6 +20,8 @@ import {
 } from '@/lib/db/purchases';
 import { checkPermission, Permissions } from '@/lib/permissions';
 import { mapPurchaseValidationError } from '@/lib/purchases/error-messages';
+import { getWorkflowActionBlockedMessage, isWorkflowActionStatusAllowed } from '@/lib/purchases/workflow-rules';
+import { isReimbursementV2Enabled } from '@/lib/features/gates';
 import { isAdmin, UserRole } from '@/types/user';
 import { getEmployeeById } from '@/lib/hr/employees';
 import { ensureDepartmentBudgetWithinLimit } from '@/lib/purchases/budget-guard';
@@ -64,6 +66,21 @@ function forbiddenResponse() {
   return NextResponse.json({ success: false, error: '无权访问' }, { status: 403 });
 }
 
+function flowRoleForbiddenResponse() {
+  return NextResponse.json({ success: false, error: '超级管理员不参与审批/打款流程' }, { status: 403 });
+}
+
+function financeOrgForbiddenResponse() {
+  return NextResponse.json({ success: false, error: '无权处理该组织采购单' }, { status: 403 });
+}
+
+function canHandleFinanceByOrg(role: UserRole | undefined, orgType: 'school' | 'company'): boolean {
+  if (!role) return false;
+  if (role === UserRole.FINANCE_SCHOOL) return orgType === 'school';
+  if (role === UserRole.FINANCE_COMPANY) return orgType === 'company';
+  return false;
+}
+
 function notFoundResponse() {
   return NextResponse.json({ success: false, error: '未找到' }, { status: 404 });
 }
@@ -97,6 +114,8 @@ async function notifySafely(
   event:
     | 'purchase_submitted'
     | 'purchase_approved'
+    | 'purchase_rejected'
+    | 'purchase_transferred'
     | 'reimbursement_submitted'
     | 'purchase_paid'
     | 'payment_issue_marked'
@@ -125,12 +144,18 @@ export async function handlePurchaseWorkflowAction(
     const { id } = await params;
     const context = await requireCurrentUser();
     const permissionUser = await toPermissionUser(context.user);
+    if (permissionUser.primaryRole === UserRole.SUPER_ADMIN && action !== 'logs') {
+      return flowRoleForbiddenResponse();
+    }
     const purchase = await findPurchaseById(id);
     if (!purchase) return notFoundResponse();
 
     switch (action) {
       case 'submit': {
         if (context.user.id !== purchase.createdBy) return forbiddenResponse();
+        if (!isWorkflowActionStatusAllowed('submit', purchase)) {
+          return badRequestResponse(getWorkflowActionBlockedMessage('submit'));
+        }
         await ensureDepartmentBudgetWithinLimit({
           purchaserId: purchase.purchaserId,
           purchaseDate: purchase.purchaseDate,
@@ -142,8 +167,12 @@ export async function handlePurchaseWorkflowAction(
         return respondWithDetail(id);
       }
       case 'approve': {
+        if (permissionUser.primaryRole === UserRole.SUPER_ADMIN) return flowRoleForbiddenResponse();
         const perm = await checkPermission(permissionUser, Permissions.PURCHASE_APPROVE);
         if (!perm.allowed) return forbiddenResponse();
+        if (!isWorkflowActionStatusAllowed('approve', purchase)) {
+          return badRequestResponse(getWorkflowActionBlockedMessage('approve'));
+        }
         if (purchase.pendingApproverId && purchase.pendingApproverId !== context.user.id && !isAdmin(permissionUser)) {
           return forbiddenResponse();
         }
@@ -158,19 +187,28 @@ export async function handlePurchaseWorkflowAction(
         return respondWithDetail(id);
       }
       case 'reject': {
+        if (permissionUser.primaryRole === UserRole.SUPER_ADMIN) return flowRoleForbiddenResponse();
         const perm = await checkPermission(permissionUser, Permissions.PURCHASE_REJECT);
         if (!perm.allowed) return forbiddenResponse();
+        if (!isWorkflowActionStatusAllowed('reject', purchase)) {
+          return badRequestResponse(getWorkflowActionBlockedMessage('reject'));
+        }
         if (purchase.pendingApproverId && purchase.pendingApproverId !== context.user.id && !isAdmin(permissionUser)) {
           return forbiddenResponse();
         }
         const reason = options.reason?.trim();
         if (!reason) return badRequestResponse('驳回原因不能为空');
         await rejectPurchase(id, context.user.id, reason);
+        await notifySafely('purchase_rejected', id);
         return respondWithDetail(id);
       }
       case 'transfer': {
+        if (permissionUser.primaryRole === UserRole.SUPER_ADMIN) return flowRoleForbiddenResponse();
         const perm = await checkPermission(permissionUser, Permissions.PURCHASE_APPROVE);
         if (!perm.allowed) return forbiddenResponse();
+        if (!isWorkflowActionStatusAllowed('transfer', purchase)) {
+          return badRequestResponse(getWorkflowActionBlockedMessage('transfer'));
+        }
         if (purchase.pendingApproverId && purchase.pendingApproverId !== context.user.id && !isAdmin(permissionUser)) {
           return forbiddenResponse();
         }
@@ -181,17 +219,24 @@ export async function handlePurchaseWorkflowAction(
         if (!comment) return badRequestResponse('转审说明不能为空');
         const approver = await getEmployeeById(toApproverId);
         if (!approver) return badRequestResponse('转审对象不存在');
-        const approverRoles = new Set(approver.userRoles ?? []);
-        if (approver.userPrimaryRole) approverRoles.add(approver.userPrimaryRole);
+        const approverRole = approver.userPrimaryRole;
         const APPROVAL_ROLES: readonly string[] = Permissions.PURCHASE_APPROVE.anyRoles ?? [];
-        const hasApprovalRole = APPROVAL_ROLES.some((role) => approverRoles.has(role as UserRole));
+        const hasApprovalRole = !!approverRole && APPROVAL_ROLES.includes(approverRole as UserRole);
         if (!hasApprovalRole) return badRequestResponse('该用户没有审批权限，无法作为转审对象');
         await transferPurchaseApprover(id, context.user.id, toApproverId, comment);
+        await notifySafely('purchase_transferred', id);
         return respondWithDetail(id);
       }
       case 'pay': {
+        if (permissionUser.primaryRole === UserRole.SUPER_ADMIN) return flowRoleForbiddenResponse();
         const perm = await checkPermission(permissionUser, Permissions.PURCHASE_PAY);
         if (!perm.allowed) return forbiddenResponse();
+        if (!canHandleFinanceByOrg(permissionUser.primaryRole, purchase.organizationType)) {
+          return financeOrgForbiddenResponse();
+        }
+        if (!isWorkflowActionStatusAllowed('pay', purchase)) {
+          return badRequestResponse(getWorkflowActionBlockedMessage('pay'));
+        }
         const rawAmount = typeof options.amount === 'string' || typeof options.amount === 'number' ? Number(options.amount) : NaN;
         if (!Number.isFinite(rawAmount)) return badRequestResponse('打款金额无效');
         const note = typeof options.note === 'string' ? options.note.trim() : undefined;
@@ -200,15 +245,28 @@ export async function handlePurchaseWorkflowAction(
         return respondWithDetail(id);
       }
       case 'submit_reimbursement': {
+        if (isReimbursementV2Enabled()) {
+          return badRequestResponse('当前已启用独立报销，请前往“报销中心”发起报销申请');
+        }
         const isApplicant = context.user.id === purchase.purchaserId || context.user.id === purchase.createdBy;
         if (!isApplicant) return forbiddenResponse();
+        if (!isWorkflowActionStatusAllowed('submit_reimbursement', purchase)) {
+          return badRequestResponse(getWorkflowActionBlockedMessage('submit_reimbursement'));
+        }
         await submitReimbursement(id, context.user.id);
         await notifySafely('reimbursement_submitted', id);
         return respondWithDetail(id);
       }
       case 'issue': {
+        if (permissionUser.primaryRole === UserRole.SUPER_ADMIN) return flowRoleForbiddenResponse();
         const perm = await checkPermission(permissionUser, Permissions.PURCHASE_PAY);
         if (!perm.allowed) return forbiddenResponse();
+        if (!canHandleFinanceByOrg(permissionUser.primaryRole, purchase.organizationType)) {
+          return financeOrgForbiddenResponse();
+        }
+        if (!isWorkflowActionStatusAllowed('issue', purchase)) {
+          return badRequestResponse(getWorkflowActionBlockedMessage('issue'));
+        }
         const comment = options.comment?.trim();
         if (!comment) return badRequestResponse('异常说明不能为空');
         await markPurchasePaymentIssue(id, context.user.id, comment);
@@ -216,8 +274,15 @@ export async function handlePurchaseWorkflowAction(
         return respondWithDetail(id);
       }
       case 'resolve_issue': {
+        if (permissionUser.primaryRole === UserRole.SUPER_ADMIN) return flowRoleForbiddenResponse();
         const perm = await checkPermission(permissionUser, Permissions.PURCHASE_PAY);
         if (!perm.allowed) return forbiddenResponse();
+        if (!canHandleFinanceByOrg(permissionUser.primaryRole, purchase.organizationType)) {
+          return financeOrgForbiddenResponse();
+        }
+        if (!isWorkflowActionStatusAllowed('resolve_issue', purchase)) {
+          return badRequestResponse(getWorkflowActionBlockedMessage('resolve_issue'));
+        }
         const comment = options.comment?.trim();
         await resolvePurchasePaymentIssue(id, context.user.id, comment);
         await notifySafely('payment_issue_resolved', id);
@@ -225,6 +290,9 @@ export async function handlePurchaseWorkflowAction(
       }
       case 'withdraw': {
         if (context.user.id !== purchase.createdBy) return forbiddenResponse();
+        if (!isWorkflowActionStatusAllowed('withdraw', purchase)) {
+          return badRequestResponse(getWorkflowActionBlockedMessage('withdraw'));
+        }
         const reason = options.reason?.trim();
         if (!reason) return badRequestResponse('撤回原因不能为空');
         await withdrawPurchase(id, context.user.id, reason);

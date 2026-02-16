@@ -4,30 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, Pencil, Trash2, RefreshCw, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useConfirm } from '@/hooks/useConfirm';
-import type { InventoryItem, InventoryItemPayload, InventorySpecField } from '@/types/inventory';
+import InventoryItemFormDialog from '@/components/inventory/InventoryItemFormDialog';
+import type { InventoryItem } from '@/types/inventory';
 
-/* ─── helpers ─── */
 const fmt = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: 2 });
-
-function emptyPayload(): InventoryItemPayload {
-  return { sku: '', name: '', unit: '', unitPrice: 0, category: '原材料', safetyStock: 0, specFields: [] };
-}
-
-function emptySpecField(): InventorySpecField {
-  return { key: '', label: '', options: [], defaultValue: '' };
-}
 
 /* ─── Main Component ─── */
 export default function InventoryItemsPage() {
@@ -42,9 +25,6 @@ export default function InventoryItemsPage() {
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
-  const [form, setForm] = useState<InventoryItemPayload>(emptyPayload());
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -72,45 +52,12 @@ export default function InventoryItemsPage() {
   /* ─── Dialog handlers ─── */
   const openCreate = () => {
     setEditingItem(null);
-    setForm(emptyPayload());
-    setError('');
     setDialogOpen(true);
   };
 
   const openEdit = (item: InventoryItem) => {
     setEditingItem(item);
-    setForm({
-      sku: item.sku,
-      name: item.name,
-      unit: item.unit,
-      unitPrice: item.unitPrice,
-      category: item.category,
-      safetyStock: item.safetyStock,
-      barcode: item.barcode,
-      specFields: item.specFields ?? [],
-    });
-    setError('');
     setDialogOpen(true);
-  };
-
-  const handleSave = async () => {
-    if (!form.name.trim()) { setError('商品名称不能为空'); return; }
-    if (!form.unit.trim()) { setError('计量单位不能为空'); return; }
-    setSaving(true);
-    setError('');
-    try {
-      const url = editingItem ? `/api/inventory/items/${editingItem.id}` : '/api/inventory/items';
-      const method = editingItem ? 'PATCH' : 'POST';
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
-      const json = await res.json();
-      if (!res.ok) { setError(json.error || '操作失败'); return; }
-      setDialogOpen(false);
-      fetchItems();
-    } catch {
-      setError('网络错误');
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleDelete = async (item: InventoryItem) => {
@@ -128,20 +75,6 @@ export default function InventoryItemsPage() {
     } catch {
       alert('网络错误');
     }
-  };
-
-  /* ─── Spec fields editor ─── */
-  const specFields = form.specFields ?? [];
-  const updateSpecField = (idx: number, patch: Partial<InventorySpecField>) => {
-    const next = [...specFields];
-    next[idx] = { ...next[idx], ...patch };
-    setForm((f) => ({ ...f, specFields: next }));
-  };
-  const addSpecField = () => {
-    setForm((f) => ({ ...f, specFields: [...(f.specFields ?? []), emptySpecField()] }));
-  };
-  const removeSpecField = (idx: number) => {
-    setForm((f) => ({ ...f, specFields: (f.specFields ?? []).filter((_, i) => i !== idx) }));
   };
 
   /* ─── Permission gate ─── */
@@ -258,98 +191,19 @@ export default function InventoryItemsPage() {
         </div>
       </div>
 
-      {/* Create / Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>{editingItem ? '编辑商品' : '新增商品'}</DialogTitle>
-            <DialogDescription>
-              {editingItem ? `修改「${editingItem.name}」的信息` : '填写商品基本信息和规格参数'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex-1 overflow-y-auto space-y-5 py-4 px-1">
-            {error && <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{error}</div>}
-
-            <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-              <div className="space-y-2">
-                <Label>商品名称 *</Label>
-                <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="例：电致发光丝" />
-              </div>
-              <div className="space-y-2">
-                <Label>SKU</Label>
-                <Input value={form.sku} onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))} placeholder="留空自动生成" />
-              </div>
-              <div className="space-y-2">
-                <Label>分类</Label>
-                <Input value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} placeholder="原材料" />
-              </div>
-              <div className="space-y-2">
-                <Label>单位 *</Label>
-                <Input value={form.unit} onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))} placeholder="米 / 升 / 个" />
-              </div>
-              <div className="space-y-2">
-                <Label>单价 (¥)</Label>
-                <Input type="number" min={0} step={0.01} value={form.unitPrice} onChange={(e) => setForm((f) => ({ ...f, unitPrice: Number(e.target.value) }))} />
-              </div>
-              <div className="space-y-2">
-                <Label>安全库存</Label>
-                <Input type="number" min={0} value={form.safetyStock} onChange={(e) => setForm((f) => ({ ...f, safetyStock: Number(e.target.value) }))} />
-              </div>
-              <div className="col-span-2 space-y-2">
-                <Label>条码</Label>
-                <Input value={form.barcode ?? ''} onChange={(e) => setForm((f) => ({ ...f, barcode: e.target.value }))} placeholder="可选" />
-              </div>
-            </div>
-
-            {/* Spec Fields */}
-            <div className="space-y-3 pt-4 border-t border-border">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium">规格参数</Label>
-                <Button type="button" variant="outline" size="sm" onClick={addSpecField} className="h-7 text-xs">
-                  <Plus className="mr-1 h-3 w-3" />添加规格
-                </Button>
-              </div>
-              {specFields.length === 0 && (
-                <p className="text-xs text-muted-foreground">暂无规格参数，点击「添加规格」新增</p>
-              )}
-              {specFields.map((sf, idx) => (
-                <div key={idx} className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-muted-foreground">规格 #{idx + 1}</span>
-                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeSpecField(idx)}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input placeholder="字段 key" value={sf.key} onChange={(e) => updateSpecField(idx, { key: e.target.value })} className="h-8 text-xs" />
-                    <Input placeholder="显示名称" value={sf.label} onChange={(e) => updateSpecField(idx, { label: e.target.value })} className="h-8 text-xs" />
-                  </div>
-                  <Input
-                    placeholder="选项（逗号分隔），如：蓝,绿,红"
-                    value={(sf.options ?? []).join(',')}
-                    onChange={(e) => updateSpecField(idx, { options: e.target.value ? e.target.value.split(',').map((s) => s.trim()) : [] })}
-                    className="h-8 text-xs"
-                  />
-                  <Input
-                    placeholder="默认值"
-                    value={sf.defaultValue ?? ''}
-                    onChange={(e) => updateSpecField(idx, { defaultValue: e.target.value })}
-                    className="h-8 text-xs"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>取消</Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? '保存中...' : editingItem ? '保存修改' : '创建商品'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <InventoryItemFormDialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) setEditingItem(null);
+        }}
+        item={editingItem}
+        onSuccess={() => {
+          setDialogOpen(false);
+          setEditingItem(null);
+          void fetchItems();
+        }}
+      />
     </div>
   );
 }
