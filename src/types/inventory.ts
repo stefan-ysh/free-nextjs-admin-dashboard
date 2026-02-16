@@ -57,6 +57,7 @@ export interface InventoryMovement {
   itemId: string;
   warehouseId: string;
   relatedOrderId?: string;
+  relatedPurchaseId?: string;
   clientId?: string;
   clientType?: ClientType;
   clientName?: string;
@@ -130,6 +131,7 @@ export interface InventoryInboundPayload {
   warehouseId: string;
   quantity: number;
   type: Extract<InventoryMovementType, 'purchase' | 'adjust' | 'return'>;
+  relatedPurchaseId?: string;
   unitCost?: number;
   occurredAt?: string;
   attributes?: Record<string, string>;

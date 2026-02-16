@@ -394,6 +394,9 @@ export async function ensureInventorySchema() {
     'CREATE INDEX idx_inventory_movements_direction ON inventory_movements(direction, occurred_at DESC)'
   );
   await safeCreateIndex(
+    'CREATE INDEX idx_inventory_movements_related_purchase ON inventory_movements(related_purchase_id, direction, occurred_at DESC)'
+  );
+  await safeCreateIndex(
     'CREATE INDEX idx_inventory_alerts_resolved ON inventory_alerts(resolved, level)'
   );
 
@@ -403,6 +406,7 @@ export async function ensureInventorySchema() {
   await ensureColumn('inventory_movements', 'client_contact', 'VARCHAR(120) NULL');
   await ensureColumn('inventory_movements', 'client_phone', 'VARCHAR(64) NULL');
   await ensureColumn('inventory_movements', 'client_address', 'VARCHAR(255) NULL');
+  await ensureColumn('inventory_movements', 'related_purchase_id', 'CHAR(36) NULL');
   await ensureColumn('inventory_items', 'is_deleted', 'TINYINT(1) NOT NULL DEFAULT 0');
   await ensureColumn('inventory_items', 'deleted_at', 'DATETIME NULL');
   await ensureColumn('inventory_warehouses', 'is_deleted', 'TINYINT(1) NOT NULL DEFAULT 0');

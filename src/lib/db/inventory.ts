@@ -4,6 +4,7 @@ import type { PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/prom
 import { mysqlPool, mysqlQuery } from '@/lib/mysql';
 import { ensureInventorySchema } from '@/lib/schema/inventory';
 import { specFieldsToDefaultRecord } from '@/lib/inventory/spec';
+import { normalizeInventoryCategory } from '@/lib/inventory/catalog';
 import type {
   InventoryInboundPayload,
   InventoryItem,
@@ -66,6 +67,7 @@ type MovementRow = RowDataPacket & {
   item_id: string;
   warehouse_id: string;
   related_order_id: string | null;
+  related_purchase_id: string | null;
   client_id: string | null;
   client_type: InventoryMovement['clientType'] | null;
   client_name: string | null;
@@ -175,7 +177,7 @@ function mapInventoryItem(row: InventoryItemRow): InventoryItem {
     name: row.name,
     unit: row.unit,
     unitPrice: Number(row.unit_price ?? 0),
-    category: row.category,
+    category: normalizeInventoryCategory(row.category),
     safetyStock: Number(row.safety_stock ?? 0),
     barcode: row.barcode ?? undefined,
     imageUrl: row.image_url ?? undefined,
@@ -207,6 +209,7 @@ function mapMovement(row: MovementRow): InventoryMovement {
     itemId: row.item_id,
     warehouseId: row.warehouse_id,
     relatedOrderId: row.related_order_id ?? undefined,
+    relatedPurchaseId: row.related_purchase_id ?? undefined,
     clientId: row.client_id ?? undefined,
     clientType: row.client_type ?? undefined,
     clientName: row.client_name ?? undefined,
@@ -406,7 +409,7 @@ export async function createInventoryItem(payload: InventoryItemPayload): Promis
       payload.name,
       payload.unit,
       payload.unitPrice,
-      payload.category,
+      normalizeInventoryCategory(payload.category),
       payload.safetyStock,
       payload.barcode ?? null,
       payload.imageUrl ?? null,
@@ -450,7 +453,7 @@ export async function updateInventoryItem(
   }
   if (payload.category !== undefined) {
     updates.push('category = ?');
-    values.push(payload.category);
+    values.push(normalizeInventoryCategory(payload.category));
   }
   if (payload.safetyStock !== undefined) {
     updates.push('safety_stock = ?');
@@ -750,16 +753,17 @@ export async function createInboundRecord(
 
     await connection.query(
       `INSERT INTO inventory_movements (
-        id, direction, type, item_id, warehouse_id, related_order_id,
+        id, direction, type, item_id, warehouse_id, related_order_id, related_purchase_id,
         quantity, unit_cost, amount, operator_id, occurred_at,
         attributes_json, notes
-      ) VALUES (?, 'inbound', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, 'inbound', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         movementId,
         payload.type,
         payload.itemId,
         payload.warehouseId,
         null,
+        payload.relatedPurchaseId ?? null,
         payload.quantity,
         unitCost || null,
         unitCost ? unitCost * payload.quantity : null,

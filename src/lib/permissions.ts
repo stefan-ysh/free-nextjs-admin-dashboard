@@ -145,6 +145,36 @@ export const Permissions = {
   PURCHASE_PAY: {
     anyRoles: [UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
+
+  // ============ 报销管理 ============
+  REIMBURSEMENT_VIEW_ALL: {
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
+  } as PermissionConfig,
+
+  REIMBURSEMENT_CREATE: {
+    // 超级管理员只读，不参与流程创建
+    customCheck: (user: UserProfile) => resolveActiveRole(user) !== UserRole.SUPER_ADMIN,
+  } as PermissionConfig,
+
+  REIMBURSEMENT_UPDATE: {
+    customCheck: () => true, // 在业务逻辑层进一步检查
+  } as PermissionConfig,
+
+  REIMBURSEMENT_SUBMIT: {
+    customCheck: () => true, // 在业务逻辑层进一步检查
+  } as PermissionConfig,
+
+  REIMBURSEMENT_APPROVE: {
+    anyRoles: [UserRole.FINANCE],
+  } as PermissionConfig,
+
+  REIMBURSEMENT_REJECT: {
+    anyRoles: [UserRole.FINANCE],
+  } as PermissionConfig,
+
+  REIMBURSEMENT_PAY: {
+    anyRoles: [UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
+  } as PermissionConfig,
   
   // ============ 财务管理 ============
   FINANCE_VIEW_ALL: {
@@ -351,6 +381,13 @@ export const can = {
   approvePurchase: (user: UserProfile) => checkPermission(user, Permissions.PURCHASE_APPROVE),
   rejectPurchase: (user: UserProfile) => checkPermission(user, Permissions.PURCHASE_REJECT),
   payPurchase: (user: UserProfile) => checkPermission(user, Permissions.PURCHASE_PAY),
+
+  // 报销管理
+  viewAllReimbursements: (user: UserProfile) => checkPermission(user, Permissions.REIMBURSEMENT_VIEW_ALL),
+  createReimbursement: (user: UserProfile) => checkPermission(user, Permissions.REIMBURSEMENT_CREATE),
+  approveReimbursement: (user: UserProfile) => checkPermission(user, Permissions.REIMBURSEMENT_APPROVE),
+  rejectReimbursement: (user: UserProfile) => checkPermission(user, Permissions.REIMBURSEMENT_REJECT),
+  payReimbursement: (user: UserProfile) => checkPermission(user, Permissions.REIMBURSEMENT_PAY),
   
   // 财务管理
   viewFinanceData: (user: UserProfile) => checkPermission(user, Permissions.FINANCE_VIEW_ALL),
