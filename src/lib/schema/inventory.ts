@@ -387,19 +387,6 @@ export async function ensureInventorySchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
-  await safeCreateIndex(
-    'CREATE INDEX idx_inventory_movements_item ON inventory_movements(item_id, occurred_at DESC)'
-  );
-  await safeCreateIndex(
-    'CREATE INDEX idx_inventory_movements_direction ON inventory_movements(direction, occurred_at DESC)'
-  );
-  await safeCreateIndex(
-    'CREATE INDEX idx_inventory_movements_related_purchase ON inventory_movements(related_purchase_id, direction, occurred_at DESC)'
-  );
-  await safeCreateIndex(
-    'CREATE INDEX idx_inventory_alerts_resolved ON inventory_alerts(resolved, level)'
-  );
-
   await ensureColumn('inventory_movements', 'client_id', 'VARCHAR(64) NULL');
   await ensureColumn('inventory_movements', 'client_type', "ENUM('personal','company') NULL");
   await ensureColumn('inventory_movements', 'client_name', 'VARCHAR(255) NULL');
@@ -412,6 +399,19 @@ export async function ensureInventorySchema() {
   await ensureColumn('inventory_warehouses', 'is_deleted', 'TINYINT(1) NOT NULL DEFAULT 0');
   await ensureColumn('inventory_warehouses', 'deleted_at', 'DATETIME NULL');
   await ensureColumn('inventory_items', 'image_url', 'VARCHAR(512) NULL');
+
+  await safeCreateIndex(
+    'CREATE INDEX idx_inventory_movements_item ON inventory_movements(item_id, occurred_at DESC)'
+  );
+  await safeCreateIndex(
+    'CREATE INDEX idx_inventory_movements_direction ON inventory_movements(direction, occurred_at DESC)'
+  );
+  await safeCreateIndex(
+    'CREATE INDEX idx_inventory_movements_related_purchase ON inventory_movements(related_purchase_id, direction, occurred_at DESC)'
+  );
+  await safeCreateIndex(
+    'CREATE INDEX idx_inventory_alerts_resolved ON inventory_alerts(resolved, level)'
+  );
 
 
 
