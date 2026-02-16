@@ -627,6 +627,41 @@ export async function checkPurchaseEligibilityForReimbursement(purchaseId: strin
     if (error instanceof Error && error.message === 'SOURCE_PURCHASE_INBOUND_REQUIRED') {
       return { eligible: false, reason: '该采购单尚未入库，暂不可关联报销' };
     }
-    return { eligible: false, reason: '采购关联校验失败' };
+    const sqlCode = typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: unknown }).code ?? '')
+      : '';
+    const sqlMessage = typeof error === 'object' && error !== null && 'sqlMessage' in error
+      ? String((error as { sqlMessage?: unknown }).sqlMessage ?? '')
+      : '';
+    console.error('[reimbursements] purchase eligibility unexpected error', {
+      purchaseId,
+      sqlCode,
+      sqlMessage,
+      error,
+    });
+
+    if (sqlCode === 'ER_BAD_FIELD_ERROR') {
+      return {
+        eligible: false,
+        reason: '数据库字段缺失（inventory_movements.related_purchase_id），请执行最新迁移',
+      };
+    }
+    if (sqlCode === 'ER_NO_SUCH_TABLE') {
+      return {
+        eligible: false,
+        reason: '库存流水表不存在（inventory_movements），请先初始化库存模块',
+      };
+    }
+    if (sqlCode === 'ER_PARSE_ERROR') {
+      return {
+        eligible: false,
+        reason: '数据库语法校验失败，请检查当前 MySQL 版本与表结构',
+      };
+    }
+
+    if (error instanceof Error && error.message.trim()) {
+      return { eligible: false, reason: `采购关联校验异常：${error.message.trim()}` };
+    }
+    return { eligible: false, reason: '采购关联校验失败（未知异常）' };
   }
 }
