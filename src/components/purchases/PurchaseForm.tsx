@@ -154,11 +154,11 @@ export default function PurchaseForm({
       invoiceType,
       invoiceStatus: initialData?.invoiceStatus ?? (hasInvoice ? InvoiceStatus.PENDING : InvoiceStatus.NOT_REQUIRED),
       invoiceNumber: initialData?.invoiceNumber ?? '',
-      invoiceIssueDate: toDateInputValue(initialData?.invoiceIssueDate),
-      invoiceImages: initialData?.invoiceImages ?? [],
-      receiptImages: initialData?.receiptImages ?? [],
-      notes: initialData?.notes ?? '',
-      attachments: initialData?.attachments ?? [],
+        invoiceIssueDate: toDateInputValue(initialData?.invoiceIssueDate),
+        invoiceImages: [],
+        receiptImages: [],
+        notes: initialData?.notes ?? '',
+        attachments: initialData?.attachments ?? [],
     };
   }, [initialData, currentUserId]);
 
@@ -238,8 +238,8 @@ export default function PurchaseForm({
           effectiveInvoiceStatus === InvoiceStatus.ISSUED && data.invoiceIssueDate?.trim()
             ? data.invoiceIssueDate.trim()
             : null,
-        invoiceImages: effectiveInvoiceType === InvoiceType.NONE ? [] : data.invoiceImages.filter(Boolean),
-        receiptImages: effectiveInvoiceType === InvoiceType.NONE ? [] : data.receiptImages.filter(Boolean),
+        invoiceImages: [],
+        receiptImages: [],
         notes: data.notes?.trim() || null,
         attachments: data.attachments.filter(Boolean),
       };
@@ -658,29 +658,9 @@ export default function PurchaseForm({
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="receiptImages"
-                  render={({ field }) => (
-                    <FormItem className={`${FIELD_FULL} lg:col-span-3 xl:col-span-5`}>
-                      <FormLabel className="text-sm font-medium text-foreground">收款凭证</FormLabel>
-                      <FormControl>
-                        <FileUpload
-                          files={field.value || []}
-                          onChange={field.onChange}
-                          maxFiles={5}
-                          folder="purchases/receipts"
-                          prefix="receipt"
-                          buttonLabel="上传收款凭证"
-                          uploadingLabel="上传中..."
-                          helperText="支持 JPG/PNG/PDF，每个文件 ≤5MB"
-                          disabled={isSubmitting}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className={`${FIELD_FULL} lg:col-span-3 xl:col-span-5 rounded-lg border border-dashed border-border/70 bg-muted/20 p-3 text-xs text-muted-foreground`}>
+                  采购阶段无需上传发票或收款凭证，报销时请在“报销中心”上传。
+                </div>
               </div>
             ) : null}
           </div>
@@ -758,7 +738,7 @@ export default function PurchaseForm({
             </Button>
           ) : null}
           <Button type="submit" disabled={isSubmitting} className="min-w-[120px]">
-            {isSubmitting ? '保存中...' : mode === 'create' ? '保存采购单' : '保存修改'}
+            {isSubmitting ? (mode === 'create' ? '提交中...' : '保存中...') : mode === 'create' ? '提交采购申请' : '保存修改'}
           </Button>
         </div>
       </form>
