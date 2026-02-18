@@ -82,6 +82,7 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
 export type PurchaseStatus = 
   | 'draft'             // 草稿
   | 'pending_approval'  // 待审批
+  | 'pending_inbound'   // 待入库
   | 'approved'          // 已批准
   | 'rejected'          // 已驳回
   | 'paid'              // 已打款
@@ -128,6 +129,7 @@ export interface PurchaseRecord {
   payerName: string | null;
   transactionNo: string | null;
   purchaserId: string;
+  purchaserName?: string | null;
 
   // 发票信息
   invoiceType: InvoiceType;
@@ -146,6 +148,9 @@ export interface PurchaseRecord {
   reimbursementRejectedBy: string | null;
   reimbursementRejectedReason: string | null;
   pendingApproverId?: string | null;
+  pendingApproverName?: string | null;
+  inboundQuantity?: number;
+  hasInboundRecord?: boolean;
 
   paymentIssueOpen?: boolean;
   paymentIssueReason?: string | null;
@@ -156,11 +161,14 @@ export interface PurchaseRecord {
   submittedAt: string | null;
   approvedAt: string | null;
   approvedBy: string | null;
+  approvedByName?: string | null;
   rejectedAt: string | null;
   rejectedBy: string | null;
+  rejectedByName?: string | null;
   rejectionReason: string | null;
   paidAt: string | null;
   paidBy: string | null;
+  paidByName?: string | null;
   
   // 其他
   notes: string | null;
@@ -252,6 +260,7 @@ export interface ListPurchasesParams {
   search?: string;
   status?: PurchaseStatus | 'all';
   purchaserId?: string;
+  relatedUserId?: string;
   currentUserId?: string;
   hideOthersDrafts?: boolean;
   organizationType?: PurchaseOrganization;
@@ -500,7 +509,15 @@ export interface DepartmentPurchaseStats {
   employeeCount: number;
 }
 
-export const PURCHASE_STATUSES: readonly PurchaseStatus[] = ['draft', 'pending_approval', 'approved', 'rejected', 'paid', 'cancelled'] as const;
+export const PURCHASE_STATUSES: readonly PurchaseStatus[] = [
+  'draft',
+  'pending_approval',
+  'pending_inbound',
+  'approved',
+  'rejected',
+  'paid',
+  'cancelled',
+] as const;
 export const REIMBURSEMENT_STATUSES: readonly ReimbursementStatus[] = [
   'none',
   'invoice_pending',
@@ -636,9 +653,10 @@ export function getPurchaseStatusText(status: PurchaseStatus): string {
   const statusMap: Record<PurchaseStatus, string> = {
     draft: '草稿',
     pending_approval: '待审批',
-    approved: '已批准',
+    pending_inbound: '待入库',
+    approved: '已入库',
     rejected: '已驳回',
-    paid: '已打款',
+    paid: '已完成',
     cancelled: '已取消',
   };
   return statusMap[status];

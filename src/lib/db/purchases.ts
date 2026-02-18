@@ -36,10 +36,6 @@ import {
   isReimbursementAction,
   isReimbursementStatus,
   hasInvoiceEvidence,
-  PurchasePayment,
-  PurchasePaymentDetail,
-  PurchasePaymentQueueItem,
-  PaymentQueueStatus,
 } from '@/types/purchase';
 import { findUserById, ensureBusinessUserRecord } from '@/lib/users';
 import { normalizeDateInput, formatDateOnly } from '@/lib/dates';
@@ -77,7 +73,50 @@ const pool = mysqlPool();
 
 const PURCHASE_SELECT_FIELDS = `
   p.*,
-  p.inventory_item_id
+  p.inventory_item_id,
+  (
+    SELECT COALESCE(u.display_name, u.email)
+    FROM hr_employees u
+    WHERE u.id = p.purchaser_id
+    LIMIT 1
+  ) AS purchaser_display_name,
+  (
+    SELECT COALESCE(u.display_name, u.email)
+    FROM hr_employees u
+    WHERE u.id = p.approved_by
+    LIMIT 1
+  ) AS approved_by_name,
+  (
+    SELECT COALESCE(u.display_name, u.email)
+    FROM hr_employees u
+    WHERE u.id = p.rejected_by
+    LIMIT 1
+  ) AS rejected_by_name,
+  (
+    SELECT COALESCE(u.display_name, u.email)
+    FROM hr_employees u
+    WHERE u.id = p.pending_approver_id
+    LIMIT 1
+  ) AS pending_approver_name,
+  (
+    SELECT COALESCE(u.display_name, u.email)
+    FROM hr_employees u
+    WHERE u.id = p.paid_by
+    LIMIT 1
+  ) AS paid_by_name,
+  COALESCE((
+    SELECT SUM(im.quantity)
+    FROM inventory_movements im
+    WHERE im.direction = 'inbound'
+      AND im.related_purchase_id = p.id
+  ), 0) AS inbound_quantity,
+  EXISTS (
+    SELECT 1
+    FROM inventory_movements im
+    WHERE im.direction = 'inbound'
+      AND im.related_purchase_id = p.id
+    LIMIT 1
+  ) AS has_inbound_record
 `;
 
 const PURCHASE_FROM_CLAUSE = `
@@ -107,6 +146,11 @@ type RawPurchaseRow = RowDataPacket & {
   payment_type: string;
   payment_channel: string | null;
   payer_name: string | null;
+  purchaser_display_name: string | null;
+  approved_by_name: string | null;
+  rejected_by_name: string | null;
+  pending_approver_name: string | null;
+  paid_by_name: string | null;
   transaction_no: string | null;
   purchaser_id: string;
   invoice_type: string;
@@ -117,6 +161,8 @@ type RawPurchaseRow = RowDataPacket & {
   reimbursement_rejected_at: string | null;
   reimbursement_rejected_by: string | null;
   reimbursement_rejected_reason: string | null;
+  inbound_quantity: number | null;
+  has_inbound_record: number | null;
   invoice_number: string | null;
   invoice_issue_date: string | null;
   invoice_images: string | null;
@@ -145,12 +191,6 @@ type RawPurchaseRow = RowDataPacket & {
   deleted_at: string | null;
 };
 
-type RawPaymentQueueRow = RawPurchaseRow & {
-  paid_amount: number | null;
-  purchaser_display_name?: string | null;
-  purchaser_employee_code?: string | null;
-};
-
 type RawLogRow = RowDataPacket & {
   id: string;
   purchase_id: string;
@@ -159,16 +199,6 @@ type RawLogRow = RowDataPacket & {
   to_status: string;
   operator_id: string;
   comment: string | null;
-  created_at: string;
-};
-
-type RawPaymentRow = RowDataPacket & {
-  id: string;
-  purchase_id: string;
-  amount: number;
-  paid_at: string;
-  paid_by: string;
-  note: string | null;
   created_at: string;
 };
 
@@ -317,6 +347,7 @@ function mapPurchase(row: RawPurchaseRow | undefined): PurchaseRecord | null {
     payerName: row.payer_name,
     transactionNo: row.transaction_no,
     purchaserId: row.purchaser_id,
+    purchaserName: row.purchaser_display_name ?? null,
     invoiceType: normalizeInvoiceType(row.invoice_type),
     invoiceStatus: normalizeInvoiceStatus(row.invoice_status),
     reimbursementStatus: normalizeReimbursementStatus(row.reimbursement_status),
@@ -325,12 +356,15 @@ function mapPurchase(row: RawPurchaseRow | undefined): PurchaseRecord | null {
     reimbursementRejectedAt: safeIsoString(row.reimbursement_rejected_at),
     reimbursementRejectedBy: row.reimbursement_rejected_by ?? null,
     reimbursementRejectedReason: row.reimbursement_rejected_reason ?? null,
+    inboundQuantity: Number(row.inbound_quantity ?? 0),
+    hasInboundRecord: Boolean(row.has_inbound_record),
     invoiceNumber: row.invoice_number,
     invoiceIssueDate: safeDateString(row.invoice_issue_date),
     invoiceImages: parseJsonArray(row.invoice_images),
     receiptImages: parseJsonArray(row.receipt_images),
     status: normalizePurchaseStatus(row.status),
     pendingApproverId: row.pending_approver_id ?? null,
+    pendingApproverName: row.pending_approver_name ?? null,
 
     paymentIssueOpen: Boolean(row.payment_issue_open),
     paymentIssueReason: row.payment_issue_reason ?? null,
@@ -339,11 +373,14 @@ function mapPurchase(row: RawPurchaseRow | undefined): PurchaseRecord | null {
     submittedAt: safeIsoString(row.submitted_at),
     approvedAt: safeIsoString(row.approved_at),
     approvedBy: row.approved_by,
+    approvedByName: row.approved_by_name ?? null,
     rejectedAt: safeIsoString(row.rejected_at),
     rejectedBy: row.rejected_by,
+    rejectedByName: row.rejected_by_name ?? null,
     rejectionReason: row.rejection_reason,
     paidAt: safeIsoString(row.paid_at),
     paidBy: row.paid_by,
+    paidByName: row.paid_by_name ?? null,
     notes: row.notes,
     attachments: parseJsonArray(row.attachments),
     createdAt: safeIsoString(row.created_at) ?? '',
@@ -351,33 +388,6 @@ function mapPurchase(row: RawPurchaseRow | undefined): PurchaseRecord | null {
     createdBy: row.created_by,
     isDeleted: row.is_deleted === 1,
     deletedAt: safeIsoString(row.deleted_at),
-  };
-}
-
-function mapPaymentQueueItem(row: RawPaymentQueueRow): PurchasePaymentQueueItem {
-  const base = mapPurchase(row)!;
-  const dueAmount = Number(base.totalAmount ?? 0) + Number(base.feeAmount ?? 0);
-  const paidAmount = Number(row.paid_amount ?? 0);
-  const remainingAmount = Math.max(0, Number((dueAmount - paidAmount).toFixed(2)));
-  return {
-    ...base,
-    paidAmount,
-    remainingAmount,
-    purchaserName: row.purchaser_display_name ?? null,
-    purchaserEmployeeCode: row.purchaser_employee_code ?? null,
-  };
-}
-
-function mapPurchasePayment(row: RawPaymentRow | undefined): PurchasePayment | null {
-  if (!row) return null;
-  return {
-    id: row.id,
-    purchaseId: row.purchase_id,
-    amount: Number(row.amount ?? 0),
-    paidAt: row.paid_at,
-    paidBy: row.paid_by,
-    note: row.note ?? null,
-    createdAt: row.created_at,
   };
 }
 
@@ -430,6 +440,13 @@ function buildPurchaseFilterClause(params: ListPurchasesParams = {}, tableAlias 
   if (params.purchaserId) {
     conditions.push(`${column('purchaser_id')} = ?`);
     values.push(params.purchaserId);
+  }
+
+  if (params.relatedUserId) {
+    conditions.push(
+      `(${column('created_by')} = ? OR ${column('purchaser_id')} = ? OR ${column('approved_by')} = ? OR ${column('rejected_by')} = ?)`
+    );
+    values.push(params.relatedUserId, params.relatedUserId, params.relatedUserId, params.relatedUserId);
   }
 
   if (params.hideOthersDrafts && params.currentUserId) {
@@ -587,50 +604,6 @@ async function insertLog(
     INSERT INTO reimbursement_logs (id, purchase_id, action, from_status, to_status, operator_id, comment)
     VALUES (${id}, ${purchaseId}, ${action}, ${fromStatus}, ${toStatus}, ${operatorId}, ${comment ?? null})
   `;
-}
-
-async function listPurchasePayments(purchaseId: string): Promise<PurchasePaymentDetail[]> {
-  await ensurePurchasesSchema();
-  const result = await mysqlQuery<RawPaymentRow>`
-    SELECT * FROM purchase_payments
-    WHERE purchase_id = ${purchaseId}
-    ORDER BY paid_at ASC, created_at ASC
-  `;
-  const payments = result.rows.map((row) => mapPurchasePayment(row)!).filter(Boolean);
-  if (!payments.length) return [];
-  const payerIds = Array.from(new Set(payments.map((payment) => payment.paidBy)));
-  const payerEntries = await Promise.all(
-    payerIds.map(async (id) => [id, await findUserById(id)] as const)
-  );
-  const payerMap = new Map(payerEntries);
-  return payments.map((payment) => ({
-    ...payment,
-    payer: buildBasicUserProfile(payerMap.get(payment.paidBy) ?? null),
-  }));
-}
-
-async function getPurchasePaidAmount(purchaseId: string): Promise<number> {
-  await ensurePurchasesSchema();
-  const result = await mysqlQuery<RowDataPacket & { total: number }>`
-    SELECT COALESCE(SUM(amount), 0) AS total FROM purchase_payments WHERE purchase_id = ${purchaseId}
-  `;
-  return Number(result.rows[0]?.total ?? 0);
-}
-
-async function createPurchasePayment(
-  purchaseId: string,
-  amount: number,
-  operatorId: string,
-  note?: string | null
-): Promise<{ id: string; paidAt: string }> {
-  await ensurePurchasesSchema();
-  const id = randomUUID();
-  const paidAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
-  await mysqlQuery`
-    INSERT INTO purchase_payments (id, purchase_id, amount, paid_at, paid_by, note)
-    VALUES (${id}, ${purchaseId}, ${amount}, ${paidAt}, ${operatorId}, ${note ?? null})
-  `;
-  return { id, paidAt };
 }
 
 export async function createPurchase(
@@ -813,19 +786,17 @@ export async function getPurchaseDetail(id: string): Promise<PurchaseDetail | nu
   const rejecterPromise = purchase.rejectedBy ? findUserById(purchase.rejectedBy) : Promise.resolve(null);
   const payerPromise = purchase.paidBy ? findUserById(purchase.paidBy) : Promise.resolve(null);
   const logsPromise = getPurchaseLogs(purchase.id);
-  const paymentsPromise = listPurchasePayments(purchase.id);
-  const [purchaserUser, approverUser, pendingApproverUser, rejecterUser, payerUser, logs, payments] = await Promise.all([
+  const [purchaserUser, approverUser, pendingApproverUser, rejecterUser, payerUser, logs] = await Promise.all([
     purchaserPromise,
     approverPromise,
     pendingApproverPromise,
     rejecterPromise,
     payerPromise,
     logsPromise,
-    paymentsPromise,
   ]);
 
   const dueAmount = Number(purchase.totalAmount ?? 0) + Number(purchase.feeAmount ?? 0);
-  const paidAmount = payments.reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0);
+  const paidAmount = purchase.paidAt ? dueAmount : 0;
   const remainingAmount = Math.max(0, Number((dueAmount - paidAmount).toFixed(2)));
 
   return {
@@ -835,7 +806,7 @@ export async function getPurchaseDetail(id: string): Promise<PurchaseDetail | nu
     pendingApprover: buildBasicUserProfile(pendingApproverUser),
     rejecter: buildBasicUserProfile(rejecterUser),
     payer: buildBasicUserProfile(payerUser),
-    payments,
+    payments: [],
     paidAmount,
     remainingAmount,
     dueAmount,
@@ -892,6 +863,14 @@ export async function listPurchases(params: ListPurchasesParams = {}): Promise<L
   };
 }
 
+type PaymentQueueStatus = 'all' | 'pending' | 'processing' | 'paid' | 'issue';
+type PurchasePaymentQueueItem = PurchaseRecord & {
+  paidAmount: number;
+  remainingAmount: number;
+  purchaserName?: string | null;
+  purchaserEmployeeCode?: string | null;
+};
+
 type PaymentQueueFilters = {
   search?: string;
   status?: PaymentQueueStatus;
@@ -901,16 +880,28 @@ type PaymentQueueFilters = {
   pageSize?: number;
 };
 
+function mapPaymentQueueItem(row: RawPurchaseRow): PurchasePaymentQueueItem {
+  const base = mapPurchase(row)!;
+  const dueAmount = Number(base.totalAmount ?? 0) + Number(base.feeAmount ?? 0);
+  const paidAmount = base.paidAt ? dueAmount : 0;
+  const remainingAmount = Math.max(0, Number((dueAmount - paidAmount).toFixed(2)));
+  return {
+    ...base,
+    paidAmount,
+    remainingAmount,
+    purchaserName: row.purchaser_display_name ?? null,
+    purchaserEmployeeCode: null,
+  };
+}
+
 function buildPaymentQueueFilterClause(params: PaymentQueueFilters = {}) {
   const conditions: string[] = [];
   const values: unknown[] = [];
-  const paidAmountExpr = 'COALESCE((SELECT SUM(pp2.amount) FROM purchase_payments pp2 WHERE pp2.purchase_id = p.id), 0)';
 
   conditions.push('p.is_deleted = 0');
-  conditions.push("p.status IN ('approved','paid')");
-  conditions.push("p.reimbursement_status IN ('reimbursement_pending','reimbursed')");
+  conditions.push("p.status IN ('pending_inbound','approved','paid')");
 
-  if (params.ids && params.ids.length) {
+  if (params.ids?.length) {
     const placeholders = params.ids.map(() => '?').join(',');
     conditions.push(`p.id IN (${placeholders})`);
     values.push(...params.ids);
@@ -918,9 +909,7 @@ function buildPaymentQueueFilterClause(params: PaymentQueueFilters = {}) {
 
   if (params.search) {
     const search = `%${params.search.trim().toLowerCase()}%`;
-    conditions.push(
-      '(LOWER(p.purchase_number) LIKE ? OR LOWER(p.item_name) LIKE ? OR LOWER(p.purpose) LIKE ?)'
-    );
+    conditions.push('(LOWER(p.purchase_number) LIKE ? OR LOWER(p.item_name) LIKE ? OR LOWER(p.purpose) LIKE ?)');
     values.push(search, search, search);
   }
 
@@ -934,22 +923,22 @@ function buildPaymentQueueFilterClause(params: PaymentQueueFilters = {}) {
   let statusClause = '';
   switch (params.status) {
     case 'pending':
-      statusClause = `AND p.reimbursement_status = 'reimbursement_pending' AND p.status = 'approved' AND ${paidAmountExpr} = 0 AND p.payment_issue_open = 0`;
+      statusClause = "AND p.paid_at IS NULL";
       break;
     case 'processing':
-      statusClause = `AND p.reimbursement_status = 'reimbursement_pending' AND p.status = 'approved' AND ${paidAmountExpr} > 0 AND ${paidAmountExpr} < (p.total_amount + COALESCE(p.fee_amount, 0)) AND p.payment_issue_open = 0`;
+      statusClause = "AND 1 = 0";
       break;
     case 'paid':
-      statusClause = "AND (p.status = 'paid' OR p.reimbursement_status = 'reimbursed')";
+      statusClause = "AND p.paid_at IS NOT NULL";
       break;
     case 'issue':
-      statusClause = "AND p.reimbursement_status = 'reimbursement_pending' AND p.status = 'approved' AND p.payment_issue_open = 1";
+      statusClause = 'AND p.payment_issue_open = 1';
       break;
     default:
       statusClause = '';
   }
 
-  return { whereClause, statusClause, values, paidAmountExpr };
+  return { whereClause, statusClause, values };
 }
 
 export async function listPaymentQueue(filters: PaymentQueueFilters = {}) {
@@ -957,18 +946,12 @@ export async function listPaymentQueue(filters: PaymentQueueFilters = {}) {
   const pageSize = filters.pageSize && filters.pageSize > 0 ? Math.min(filters.pageSize, 200) : 50;
   const page = filters.page && filters.page > 0 ? filters.page : 1;
   const offset = (page - 1) * pageSize;
+  const { whereClause, statusClause, values } = buildPaymentQueueFilterClause(filters);
 
-  const { whereClause, statusClause, values, paidAmountExpr } = buildPaymentQueueFilterClause(filters);
-
-  const [rows] = await pool.query<RawPaymentQueueRow[]>(
+  const [rows] = await pool.query<RawPurchaseRow[]>(
     `
-      SELECT
-        ${PURCHASE_SELECT_FIELDS},
-        he.display_name AS purchaser_display_name,
-        he.employee_code AS purchaser_employee_code,
-        ${paidAmountExpr} AS paid_amount
+      SELECT ${PURCHASE_SELECT_FIELDS}
       ${PURCHASE_FROM_CLAUSE}
-      LEFT JOIN hr_employees he ON he.id = p.purchaser_id
       ${whereClause}
       ${statusClause}
       ORDER BY p.updated_at DESC, p.created_at DESC
@@ -978,21 +961,13 @@ export async function listPaymentQueue(filters: PaymentQueueFilters = {}) {
   );
 
   const [countRows] = await pool.query<Array<RowDataPacket & { total: number }>>(
-    `
-      SELECT COUNT(*) AS total
-      ${PURCHASE_FROM_CLAUSE}
-      LEFT JOIN hr_employees he ON he.id = p.purchaser_id
-      ${whereClause}
-      ${statusClause}
-    `,
+    `SELECT COUNT(*) AS total ${PURCHASE_FROM_CLAUSE} ${whereClause} ${statusClause}`,
     values
   );
 
-  const total = countRows[0]?.total ?? 0;
-
   return {
     items: rows.map((row) => mapPaymentQueueItem(row)),
-    total: Number(total),
+    total: Number(countRows[0]?.total ?? 0),
     page,
     pageSize,
   };
@@ -1119,7 +1094,7 @@ export async function getPurchaseMonitorData(
         p.purchase_number AS purchase_number,
         p.item_name AS item_name,
         p.purchaser_id AS purchaser_id,
-        COALESCE(purchaser.display_name, purchaser.email, p.purchaser_id) AS purchaser_name,
+        COALESCE(purchaser.display_name, purchaser.email) AS purchaser_name,
         p.pending_approver_id AS pending_approver_id,
         COALESCE(pending_approver.display_name, pending_approver.email, '未分配') AS pending_approver_name,
         p.submitted_at AS submitted_at,
@@ -1170,7 +1145,7 @@ export async function getPurchaseMonitorData(
     purchaseNumber: row.purchase_number,
     itemName: row.item_name,
     purchaserId: row.purchaser_id,
-    purchaserName: row.purchaser_name?.trim() || row.purchaser_id,
+    purchaserName: row.purchaser_name?.trim() || '未知用户',
     pendingApproverId: row.pending_approver_id ?? null,
     pendingApproverName: row.pending_approver_name?.trim() || '未分配',
     submittedAt: row.submitted_at ?? null,
@@ -1181,7 +1156,7 @@ export async function getPurchaseMonitorData(
   return {
     generatedAt: new Date().toISOString(),
     overdueHours: normalizedOverdueHours,
-    activeCount: statusCount('pending_approval') + statusCount('approved'),
+    activeCount: statusCount('pending_approval') + statusCount('pending_inbound') + statusCount('approved'),
     pendingApprovalCount: Number(pendingStatsRow?.pending_count ?? 0),
     pendingPaymentCount: statusCount('approved'),
     overdueApprovalCount: Number(pendingStatsRow?.overdue_count ?? 0),
@@ -1204,10 +1179,7 @@ export async function updatePurchase(id: string, input: UpdatePurchaseInput): Pr
   if (!existing) throw new Error('PURCHASE_NOT_FOUND');
   const editableInCurrentStatus =
     existing.status === 'draft' ||
-    existing.status === 'rejected' ||
-    (existing.status === 'approved' &&
-      (existing.reimbursementStatus === 'invoice_pending' ||
-        existing.reimbursementStatus === 'reimbursement_rejected'));
+    existing.status === 'rejected';
   if (!editableInCurrentStatus) throw new Error('NOT_EDITABLE');
 
   const updates: string[] = [];
@@ -1380,14 +1352,16 @@ export async function approvePurchase(
     await connection.beginTransaction();
 
     const approvedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const dueAmount = Number(existing.totalAmount ?? 0) + Number(existing.feeAmount ?? 0);
+    const nextReimbursementStatus = existing.paymentMethod === 'corporate_transfer' ? 'none' : 'invoice_pending';
 
-    // Hardcoded: Approval -> Approved
-    // No multi-step workflow anymore.
+    // Single-step payment policy: approval implies payment is complete,
+    // but workflow status enters pending_inbound until applicant finishes inbound.
 
     await connection.query(
       `UPDATE purchases
-       SET status = 'approved',
-           reimbursement_status = 'invoice_pending',
+       SET status = 'pending_inbound',
+           reimbursement_status = ?,
            reimbursement_submitted_at = NULL,
            reimbursement_submitted_by = NULL,
            reimbursement_rejected_at = NULL,
@@ -1395,15 +1369,19 @@ export async function approvePurchase(
            reimbursement_rejected_reason = NULL,
            approved_by = ?,
            approved_at = ?,
+           paid_by = ?,
+           paid_at = ?,
            pending_approver_id = NULL,
            workflow_step_index = NULL,
            workflow_nodes = NULL,
            updated_at = NOW(3)
        WHERE id = ?`,
-      [operatorId, approvedAt, purchaseId]
+      [nextReimbursementStatus, operatorId, approvedAt, operatorId, approvedAt, purchaseId]
     );
 
-    await insertLog(purchaseId, 'approve', existing.status, 'approved', operatorId, comment ?? null, connection);
+    const approveComment =
+      comment?.trim() || `审批通过，进入待入库（已默认完成付款）：${dueAmount.toFixed(2)} 元`;
+    await insertLog(purchaseId, 'approve', existing.status, 'pending_inbound', operatorId, approveComment, connection);
     await connection.commit();
   } catch (error) {
     await connection.rollback();
@@ -1434,53 +1412,6 @@ export async function transferPurchaseApprover(
     WHERE id = ${purchaseId}
   `;
   await insertLog(purchaseId, 'transfer', 'pending_approval', 'pending_approval', operatorId, comment);
-  return (await findPurchaseById(purchaseId))!;
-}
-
-export async function markPurchasePaymentIssue(
-  purchaseId: string,
-  operatorId: string,
-  reason: string
-): Promise<PurchaseRecord> {
-  await ensurePurchasesSchema();
-  const existing = await findPurchaseById(purchaseId);
-  if (!existing) throw new Error('PURCHASE_NOT_FOUND');
-  if (existing.status !== 'approved') throw new Error('NOT_PAYABLE');
-
-  await mysqlQuery`
-    UPDATE purchases
-    SET payment_issue_open = 1,
-        payment_issue_reason = ${reason},
-        payment_issue_at = NOW(),
-        payment_issue_by = ${operatorId},
-        updated_at = NOW()
-    WHERE id = ${purchaseId}
-  `;
-  await insertLog(purchaseId, 'issue', 'approved', 'approved', operatorId, reason);
-  return (await findPurchaseById(purchaseId))!;
-}
-
-export async function resolvePurchasePaymentIssue(
-  purchaseId: string,
-  operatorId: string,
-  comment?: string | null
-): Promise<PurchaseRecord> {
-  await ensurePurchasesSchema();
-  const existing = await findPurchaseById(purchaseId);
-  if (!existing) throw new Error('PURCHASE_NOT_FOUND');
-  if (existing.status !== 'approved') throw new Error('NOT_PAYABLE');
-  if (!existing.paymentIssueOpen) return existing;
-
-  await mysqlQuery`
-    UPDATE purchases
-    SET payment_issue_open = 0,
-        payment_issue_reason = NULL,
-        payment_issue_at = NULL,
-        payment_issue_by = NULL,
-        updated_at = NOW()
-    WHERE id = ${purchaseId}
-  `;
-  await insertLog(purchaseId, 'resolve', 'approved', 'approved', operatorId, comment ?? null);
   return (await findPurchaseById(purchaseId))!;
 }
 
@@ -1546,65 +1477,6 @@ export async function submitReimbursement(
 }
 
 // mark as paid
-export async function markAsPaid(
-  purchaseId: string,
-  operatorId: string,
-  amount: number,
-  note?: string | null
-): Promise<PurchaseRecord> {
-  await ensurePurchasesSchema();
-  const existing = await findPurchaseById(purchaseId);
-  if (!existing) throw new Error('PURCHASE_NOT_FOUND');
-  if (existing.status !== 'approved') throw new Error('NOT_PAYABLE');
-  if (existing.reimbursementStatus !== 'reimbursement_pending') {
-    throw new Error('REIMBURSEMENT_NOT_SUBMITTED');
-  }
-
-  const normalizedAmount = Number(amount);
-  if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
-    throw new Error('INVALID_PAYMENT_AMOUNT');
-  }
-
-  const dueAmount = Number(existing.totalAmount ?? 0) + Number(existing.feeAmount ?? 0);
-  const paidAmount = await getPurchasePaidAmount(purchaseId);
-  const remaining = Number((dueAmount - paidAmount).toFixed(2));
-  if (remaining <= 0) throw new Error('ALREADY_PAID');
-  if (normalizedAmount > remaining + 0.01) throw new Error('PAYMENT_EXCEEDS_REMAINING');
-
-  await createPurchasePayment(purchaseId, normalizedAmount, operatorId, note);
-  const nextPaidAmount = Number((paidAmount + normalizedAmount).toFixed(2));
-  const isFullyPaid = nextPaidAmount + 0.01 >= dueAmount;
-
-  if (isFullyPaid) {
-    const paidAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    await mysqlQuery`
-      UPDATE purchases
-      SET status = 'paid',
-          reimbursement_status = 'reimbursed',
-          paid_at = ${paidAt},
-          paid_by = ${operatorId},
-          updated_at = NOW()
-      WHERE id = ${purchaseId}
-    `;
-  } else {
-    await mysqlQuery`
-      UPDATE purchases
-      SET updated_at = NOW()
-      WHERE id = ${purchaseId}
-    `;
-  }
-  
-  // NOTE: Auto-finance-record creation and auto-inbound logic removed due to project module removal cleanup.
-
-  const beforeRemaining = Number((dueAmount - paidAmount).toFixed(2));
-  const afterRemaining = Math.max(0, Number((dueAmount - nextPaidAmount).toFixed(2)));
-  const comment = isFullyPaid
-    ? `全额打款：本次${normalizedAmount.toFixed(2)}，累计${nextPaidAmount.toFixed(2)}/${dueAmount.toFixed(2)}，待付 ${beforeRemaining.toFixed(2)} -> ${afterRemaining.toFixed(2)}`
-    : `部分打款：本次${normalizedAmount.toFixed(2)}，累计${nextPaidAmount.toFixed(2)}/${dueAmount.toFixed(2)}，待付 ${beforeRemaining.toFixed(2)} -> ${afterRemaining.toFixed(2)}`;
-  await insertLog(purchaseId, 'pay', 'approved', isFullyPaid ? 'paid' : 'approved', operatorId, comment);
-  return (await findPurchaseById(purchaseId))!;
-}
-
 // withdraw (pending_approval -> cancelled)
 export async function withdrawPurchase(
   purchaseId: string,
@@ -1743,7 +1615,7 @@ export async function listPurchaseAuditLogs(params: {
          rl.from_status,
          rl.to_status,
          rl.operator_id,
-         COALESCE(op.display_name, op.email, rl.operator_id) AS operator_name,
+         COALESCE(op.display_name, op.email) AS operator_name,
          rl.comment,
          rl.created_at
        FROM reimbursement_logs rl
@@ -1772,7 +1644,7 @@ export async function listPurchaseAuditLogs(params: {
     fromStatus: normalizePurchaseStatus(row.from_status),
     toStatus: normalizePurchaseStatus(row.to_status),
     operatorId: row.operator_id,
-    operatorName: row.operator_name ?? row.operator_id,
+    operatorName: row.operator_name?.trim() || '未知用户',
     comment: row.comment ?? null,
     createdAt: row.created_at,
   }));

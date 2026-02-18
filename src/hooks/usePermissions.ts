@@ -8,9 +8,6 @@ import { PermissionConfig, Permissions } from '@/lib/permissions';
 import {
   UserProfile,
   UserRole,
-  hasRole,
-  hasAnyRole,
-  hasAllRoles,
 } from '@/types/user';
 
 export type PermissionName = keyof typeof Permissions;
@@ -70,18 +67,22 @@ function buildPermissionUser(user: AuthUser): UserProfile {
 }
 
 function evaluatePermission(user: UserProfile, config: PermissionConfig): boolean {
-  if (hasRole(user, UserRole.SUPER_ADMIN)) {
+  const activeRole = user.primaryRole ?? user.roles[0] ?? UserRole.EMPLOYEE;
+
+  if (activeRole === UserRole.SUPER_ADMIN) {
+    if (!config.anyRoles?.includes(UserRole.SUPER_ADMIN)) return false;
+    if (config.customCheck) return false;
     return true;
   }
 
   if (config.anyRoles?.length) {
-    if (!hasAnyRole(user, config.anyRoles)) {
+    if (!config.anyRoles.includes(activeRole)) {
       return false;
     }
   }
 
   if (config.allRoles?.length) {
-    if (!hasAllRoles(user, config.allRoles)) {
+    if (!config.allRoles.every((role) => role === activeRole)) {
       return false;
     }
   }

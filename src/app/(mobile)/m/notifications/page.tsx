@@ -1,7 +1,5 @@
-import { requireCurrentUser } from '@/lib/auth/current-user';
-import MobileNotificationsClient from '@/components/mobile-workflow/MobileNotificationsClient';
+import { redirect } from 'next/navigation';
 
 export default async function MobileNotificationsPage() {
-  await requireCurrentUser();
-  return <MobileNotificationsClient />;
+  redirect('/workflow/notifications');
 }

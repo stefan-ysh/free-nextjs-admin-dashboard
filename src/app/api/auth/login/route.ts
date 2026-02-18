@@ -80,7 +80,7 @@ export async function POST(request: Request) {
         email: user.email,
         role: user.role,
         displayName: user.display_name,
-        jobTitle: user.job_title,
+        jobTitle: null,
         expiresAt,
       },
     });

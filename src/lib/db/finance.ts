@@ -6,6 +6,7 @@ import { mysqlPool } from '@/lib/mysql';
 import { ensureFinanceSchema } from '@/lib/schema/finance';
 import { normalizeDateInput } from '@/lib/dates';
 import {
+  BudgetAdjustmentRecord,
   FinanceRecord,
   TransactionType,
   FinanceStats,
@@ -58,7 +59,7 @@ type FinanceRecordRow = RowDataPacket & {
   source_type: FinanceSourceType;
   status: FinanceRecordStatus;
   purchase_id: string | null;
-  purchase_payment_id: string | null;
+  reimbursement_id: string | null;
   metadata_json: string | null;
   created_at: Date | string;
   updated_at: Date | string;
@@ -75,6 +76,18 @@ type CategoryRow = RowDataPacket & {
   type: TransactionType;
   amount: number;
   count: number;
+};
+
+type RawBudgetAdjustmentRow = RowDataPacket & {
+  id: string;
+  organization_type: 'school' | 'company';
+  adjustment_type: 'increase' | 'decrease';
+  amount: number;
+  title: string;
+  note: string | null;
+  occurred_at: Date | string;
+  created_by: string;
+  created_at: Date | string;
 };
 
 function toIsoString(value: Date | string): string {
@@ -125,7 +138,7 @@ function mapFinanceRecord(row: FinanceRecordRow): FinanceRecord {
     createdBy: row.created_by ?? undefined,
     sourceType: row.source_type ?? 'manual',
     purchaseId: row.purchase_id ?? undefined,
-    purchasePaymentId: row.purchase_payment_id ?? undefined,
+    reimbursementId: row.reimbursement_id ?? undefined,
     inventoryMovementId: row.inventory_movement_id ?? undefined,
     metadata,
     createdAt: toIsoString(row.created_at),
@@ -139,6 +152,20 @@ function formatDateForDb(value: string): string {
     throw new Error('INVALID_DATE');
   }
   return normalized;
+}
+
+function mapBudgetAdjustment(row: RawBudgetAdjustmentRow): BudgetAdjustmentRecord {
+  return {
+    id: row.id,
+    organizationType: row.organization_type,
+    adjustmentType: row.adjustment_type,
+    amount: Number(row.amount ?? 0),
+    title: row.title,
+    note: row.note ?? null,
+    occurredAt: toIsoString(row.occurred_at),
+    createdBy: row.created_by,
+    createdAt: toIsoString(row.created_at),
+  };
 }
 
 function normalizeDateRange(startDate?: string, endDate?: string): [string, string] {
@@ -291,7 +318,7 @@ export async function createRecord(
   const sourceType: FinanceSourceType = record.sourceType ?? 'manual';
   const status: FinanceRecordStatus = record.status ?? 'draft';
   const purchaseId = record.purchaseId ?? null;
-  const purchasePaymentId = record.purchasePaymentId ?? null;
+  const reimbursementId = record.reimbursementId ?? null;
   const inventoryMovementId = record.inventoryMovementId ?? null;
   const quantity = record.quantity ?? 1;
   const paymentChannel = record.paymentChannel ?? null;
@@ -308,7 +335,7 @@ export async function createRecord(
       contract_amount, fee, total_amount, payment_type,
       quantity, payment_channel, payer, transaction_no,
       invoice_json, description, tags_json, created_by,
-      source_type, status, purchase_id, purchase_payment_id,
+      source_type, status, purchase_id, reimbursement_id,
       inventory_movement_id, metadata_json
     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
@@ -332,7 +359,7 @@ export async function createRecord(
       sourceType,
       status,
       purchaseId,
-      purchasePaymentId,
+      reimbursementId,
       inventoryMovementId,
       metadataJson,
     ]
@@ -372,14 +399,14 @@ export async function findRecordByPurchaseId(purchaseId: string): Promise<Financ
   return mapFinanceRecord(rows[0]);
 }
 
-export async function findRecordByPurchasePaymentId(paymentId: string): Promise<FinanceRecord | null> {
+export async function findRecordByReimbursementId(reimbursementId: string): Promise<FinanceRecord | null> {
   await ensureFinanceSchema();
-  if (!paymentId) {
+  if (!reimbursementId) {
     return null;
   }
   const [rows] = await pool.query<FinanceRecordRow[]>(
-    'SELECT * FROM finance_records WHERE purchase_payment_id = ? LIMIT 1',
-    [paymentId]
+    'SELECT * FROM finance_records WHERE reimbursement_id = ? LIMIT 1',
+    [reimbursementId]
   );
   if (!rows.length) {
     return null;
@@ -442,7 +469,7 @@ export async function updateRecord(
   }
   merged.sourceType = updates.sourceType ?? existing.sourceType;
   merged.purchaseId = updates.purchaseId ?? existing.purchaseId;
-  merged.purchasePaymentId = updates.purchasePaymentId ?? existing.purchasePaymentId;
+  merged.reimbursementId = updates.reimbursementId ?? existing.reimbursementId;
   merged.inventoryMovementId = updates.inventoryMovementId ?? existing.inventoryMovementId;
   merged.status = updates.status ?? existing.status ?? 'draft';
   merged.metadata = updates.metadata ?? existing.metadata;
@@ -470,7 +497,7 @@ export async function updateRecord(
       status = ?,
       source_type = ?,
       purchase_id = ?,
-      purchase_payment_id = ?,
+      reimbursement_id = ?,
       inventory_movement_id = ?,
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ?`,
@@ -494,7 +521,7 @@ export async function updateRecord(
       merged.status ?? 'draft',
       merged.sourceType ?? 'manual',
       merged.purchaseId ?? null,
-      merged.purchasePaymentId ?? null,
+      merged.reimbursementId ?? null,
       merged.inventoryMovementId ?? null,
       id,
     ]
@@ -614,4 +641,204 @@ export async function addCategory(type: TransactionType, category: string): Prom
     [type, name]
   );
   revalidateTag('finance-categories', 'default');
+}
+
+export async function createBudgetAdjustment(input: {
+  organizationType: 'school' | 'company';
+  adjustmentType: 'increase' | 'decrease';
+  amount: number;
+  title: string;
+  note?: string | null;
+  occurredAt: string;
+  createdBy: string;
+}): Promise<BudgetAdjustmentRecord> {
+  await ensureFinanceSchema();
+  const id = randomUUID();
+  const amount = Number(input.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('INVALID_BUDGET_ADJUSTMENT_AMOUNT');
+  }
+  const title = input.title.trim();
+  if (!title) {
+    throw new Error('BUDGET_ADJUSTMENT_TITLE_REQUIRED');
+  }
+  const dateValue = formatDateForDb(input.occurredAt);
+  const note = input.note?.trim() || null;
+
+  await pool.query(
+    `INSERT INTO finance_budget_adjustments
+      (id, organization_type, adjustment_type, amount, title, note, occurred_at, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, input.organizationType, input.adjustmentType, amount, title, note, dateValue, input.createdBy]
+  );
+
+  await createRecord({
+    name: `${title}${input.adjustmentType === 'increase' ? '（预算增加）' : '（预算扣减）'}`,
+    type: input.adjustmentType === 'increase' ? TransactionType.INCOME : TransactionType.EXPENSE,
+    category: '预算调整',
+    date: dateValue,
+    contractAmount: amount,
+    fee: 0,
+    paymentType: PaymentType.OTHER,
+    quantity: 1,
+    sourceType: 'budget_adjustment',
+    description: note ?? undefined,
+    createdBy: input.createdBy,
+    status: 'cleared',
+    metadata: {
+      budgetAdjustmentId: id,
+      organizationType: input.organizationType,
+      adjustmentType: input.adjustmentType,
+    },
+  });
+
+  const [rows] = await pool.query<RawBudgetAdjustmentRow[]>(
+    'SELECT * FROM finance_budget_adjustments WHERE id = ? LIMIT 1',
+    [id]
+  );
+  if (!rows.length) {
+    throw new Error('FAILED_TO_CREATE_BUDGET_ADJUSTMENT');
+  }
+  return mapBudgetAdjustment(rows[0]);
+}
+
+export async function listBudgetAdjustments(params: {
+  organizationType?: 'school' | 'company';
+  page?: number;
+  pageSize?: number;
+} = {}): Promise<{ items: BudgetAdjustmentRecord[]; total: number; page: number; pageSize: number }> {
+  await ensureFinanceSchema();
+  const page = Math.max(1, params.page ?? 1);
+  const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20));
+  const offset = (page - 1) * pageSize;
+  const where: string[] = [];
+  const values: unknown[] = [];
+
+  if (params.organizationType) {
+    where.push('organization_type = ?');
+    values.push(params.organizationType);
+  }
+
+  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const [rows] = await pool.query<RawBudgetAdjustmentRow[]>(
+    `SELECT * FROM finance_budget_adjustments ${whereClause} ORDER BY occurred_at DESC, created_at DESC LIMIT ? OFFSET ?`,
+    [...values, pageSize, offset]
+  );
+  const [countRows] = await pool.query<Array<RowDataPacket & { total: number }>>(
+    `SELECT COUNT(*) AS total FROM finance_budget_adjustments ${whereClause}`,
+    values
+  );
+
+  return {
+    items: rows.map(mapBudgetAdjustment),
+    total: Number(countRows[0]?.total ?? 0),
+    page,
+    pageSize,
+  };
+}
+
+export async function updateBudgetAdjustment(
+  id: string,
+  input: {
+    organizationType: 'school' | 'company';
+    adjustmentType: 'increase' | 'decrease';
+    amount: number;
+    title: string;
+    note?: string | null;
+    occurredAt: string;
+  }
+): Promise<BudgetAdjustmentRecord | null> {
+  await ensureFinanceSchema();
+  const amount = Number(input.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('INVALID_BUDGET_ADJUSTMENT_AMOUNT');
+  }
+  const title = input.title.trim();
+  if (!title) {
+    throw new Error('BUDGET_ADJUSTMENT_TITLE_REQUIRED');
+  }
+  const dateValue = formatDateForDb(input.occurredAt);
+  const note = input.note?.trim() || null;
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [existsRows] = await connection.query<RawBudgetAdjustmentRow[]>(
+      'SELECT * FROM finance_budget_adjustments WHERE id = ? LIMIT 1',
+      [id]
+    );
+    if (!existsRows.length) {
+      await connection.rollback();
+      return null;
+    }
+
+    await connection.query(
+      `UPDATE finance_budget_adjustments
+       SET organization_type = ?, adjustment_type = ?, amount = ?, title = ?, note = ?, occurred_at = ?
+       WHERE id = ?`,
+      [input.organizationType, input.adjustmentType, amount, title, note, dateValue, id]
+    );
+
+    const [financeRows] = await connection.query<Array<RowDataPacket & { id: string }>>(
+      `SELECT id
+         FROM finance_records
+        WHERE source_type = 'budget_adjustment'
+          AND JSON_UNQUOTE(JSON_EXTRACT(metadata_json, '$.budgetAdjustmentId')) = ?
+        LIMIT 1`,
+      [id]
+    );
+    if (financeRows.length) {
+      await connection.query(
+        `UPDATE finance_records
+         SET name = ?,
+             type = ?,
+             category = '预算调整',
+             date_value = ?,
+             contract_amount = ?,
+             fee = 0,
+             total_amount = ?,
+             payment_type = ?,
+             description = ?,
+             source_type = 'budget_adjustment',
+             status = 'cleared',
+             metadata_json = JSON_OBJECT(
+               'budgetAdjustmentId', ?,
+               'organizationType', ?,
+               'adjustmentType', ?
+             ),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [
+          `${title}${input.adjustmentType === 'increase' ? '（预算增加）' : '（预算扣减）'}`,
+          input.adjustmentType === 'increase' ? TransactionType.INCOME : TransactionType.EXPENSE,
+          dateValue,
+          amount,
+          amount,
+          PaymentType.OTHER,
+          note,
+          id,
+          input.organizationType,
+          input.adjustmentType,
+          financeRows[0].id,
+        ]
+      );
+    }
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+
+  const [rows] = await pool.query<RawBudgetAdjustmentRow[]>(
+    'SELECT * FROM finance_budget_adjustments WHERE id = ? LIMIT 1',
+    [id]
+  );
+  if (!rows.length) {
+    return null;
+  }
+  return mapBudgetAdjustment(rows[0]);
 }

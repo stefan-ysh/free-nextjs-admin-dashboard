@@ -227,7 +227,7 @@ useEffect(() => {
 		};
 
 		const triggerLabel = selectedEmployee ? getEmployeeName(selectedEmployee) : value ? `用户 ID：${value}` : '请选择负责人';
-		const triggerSubLabel = selectedEmployee?.jobTitle ?? selectedEmployee?.department ?? '';
+		const triggerSubLabel = selectedEmployee?.location ?? selectedEmployee?.email ?? '';
 
 		return (
 			<div className="space-y-3">
@@ -303,14 +303,14 @@ useEffect(() => {
 															<AvatarFallback>{name.slice(0, 2).toUpperCase()}</AvatarFallback>
 														</Avatar>
 														<div className="flex flex-1 flex-col">
-															<div className="flex flex-wrap items-center gap-2">
-																<p className="text-sm font-medium">{name}</p>
-																{employee.jobTitle && <span className="text-xs text-muted-foreground">{employee.jobTitle}</span>}
-															</div>
-															<p className="text-xs text-muted-foreground">
-																{employee.department || '未分配部门'}
-																{employee.email ? ` · ${employee.email}` : ''}
-															</p>
+																<div className="flex flex-wrap items-center gap-2">
+																	<p className="text-sm font-medium">{name}</p>
+																	{employee.location && <span className="text-xs text-muted-foreground">{employee.location}</span>}
+																</div>
+																<p className="text-xs text-muted-foreground">
+																	{employee.email || '未填写邮箱'}
+																	{employee.employeeCode ? ` · ${employee.employeeCode}` : ''}
+																</p>
 														</div>
 														<div className="flex flex-col items-end gap-1 text-xs">
 															<span className={`rounded-full px-2 py-0.5 ${statusClasses[employee.employmentStatus]}`}>
@@ -343,18 +343,18 @@ useEffect(() => {
 
 			{showSelectionSummary && selectedEmployee && (
 				<div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 text-sm text-primary">
-					<div className="flex flex-wrap items-center justify-between gap-2">
-						<div>
-							<p className="font-semibold text-foreground">{getEmployeeName(selectedEmployee)}</p>
-							{selectedEmployee.jobTitle && <p className="text-xs text-muted-foreground">{selectedEmployee.jobTitle}</p>}
-						</div>
+						<div className="flex flex-wrap items-center justify-between gap-2">
+							<div>
+								<p className="font-semibold text-foreground">{getEmployeeName(selectedEmployee)}</p>
+								{selectedEmployee.location && <p className="text-xs text-muted-foreground">{selectedEmployee.location}</p>}
+							</div>
 						<span className={`rounded-full px-2 py-0.5 text-xs ${statusClasses[selectedEmployee.employmentStatus]}`}>
 							{statusLabels[selectedEmployee.employmentStatus]}
 						</span>
 					</div>
-					<p className="mt-2 text-xs text-muted-foreground">
-						部门：{selectedEmployee.department || '未分配'} · 用户 ID：{selectedEmployee.userId ?? '未绑定'}
-					</p>
+						<p className="mt-2 text-xs text-muted-foreground">
+							邮箱：{selectedEmployee.email || '未填写'} · 用户 ID：{selectedEmployee.userId ?? '未绑定'}
+						</p>
 				</div>
 			)}
 

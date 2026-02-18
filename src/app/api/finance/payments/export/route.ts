@@ -2,12 +2,23 @@ import { NextResponse } from 'next/server';
 
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { toPermissionUser } from '@/lib/auth/permission-user';
-import { listPaymentQueue } from '@/lib/db/purchases';
+import { listReimbursements } from '@/lib/db/reimbursements';
 import { checkPermission, Permissions } from '@/lib/permissions';
-import { isPaymentQueueStatus } from '@/types/purchase';
+import { isReimbursementStatus, type ReimbursementStatus } from '@/types/reimbursement';
+import { UserRole } from '@/types/user';
 
 const EXPORT_PAGE_SIZE = 200;
 const MAX_EXPORT_ROWS = 5000;
+
+function normalizeStatusParam(value: string | null): ReimbursementStatus | undefined {
+  if (!value) return undefined;
+  if (isReimbursementStatus(value)) return value;
+  if (value === 'all') return undefined;
+  if (value === 'pending' || value === 'processing') return 'pending_approval';
+  if (value === 'paid') return 'paid';
+  if (value === 'issue') return 'rejected';
+  return undefined;
+}
 
 function escapeCsvValue(value: string | number | null | undefined): string {
   if (value == null) return '';
@@ -18,45 +29,35 @@ function escapeCsvValue(value: string | number | null | undefined): string {
   return text;
 }
 
-function buildCsv(records: Awaited<ReturnType<typeof listPaymentQueue>>['items']) {
-  const paymentMethodLabels: Record<string, string> = {
-    wechat: '微信',
-    alipay: '支付宝',
-    bank_transfer: '银行转账',
-    corporate_transfer: '对公转账',
-    cash: '现金',
-  };
-
+function buildCsv(records: Awaited<ReturnType<typeof listReimbursements>>['items']) {
   const header = [
-    '采购单号',
-    '采购物品',
+    '报销单号',
+    '标题',
     '申请人',
-    '部门',
-    '工号',
-    '采购日期',
-    '付款方式',
+    '组织',
+    '发生日期',
+    '来源',
+    '分类',
     '状态',
-    '总金额',
-    '已付款',
-    '待付款',
-    '付款异常',
-    '异常说明',
+    '金额',
+    '关联采购单',
+    '打款人',
+    '打款备注',
   ];
 
   const rows = records.map((item) => [
-    item.purchaseNumber,
-    item.itemName,
-    item.purchaserName ?? '',
-    item.purchaserDepartment ?? '',
-    item.purchaserEmployeeCode ?? '',
-    item.purchaseDate,
-    paymentMethodLabels[item.paymentMethod] ?? item.paymentMethod,
+    item.reimbursementNumber,
+    item.title,
+    item.applicantName ?? item.applicantId,
+    item.organizationType === 'school' ? '学校' : '单位',
+    item.occurredAt,
+    item.sourceType === 'purchase' ? '关联采购' : '直接报销',
+    String(item.category),
     item.status,
-    (item.totalAmount + (item.feeAmount ?? 0)).toFixed(2),
-    item.paidAmount.toFixed(2),
-    item.remainingAmount.toFixed(2),
-    item.paymentIssueOpen ? '是' : '否',
-    item.paymentIssueReason ?? '',
+    item.amount.toFixed(2),
+    item.sourcePurchaseNumber ?? '',
+    item.paidByName ?? item.paidBy ?? '',
+    item.paymentNote ?? '',
   ]);
 
   const csvLines = [header, ...rows].map((row) => row.map(escapeCsvValue).join(','));
@@ -68,28 +69,32 @@ export async function GET(request: Request) {
     const context = await requireCurrentUser();
     const permissionUser = await toPermissionUser(context.user);
 
-    const [canPay, canViewFinance] = await Promise.all([
-      checkPermission(permissionUser, Permissions.PURCHASE_PAY),
-      checkPermission(permissionUser, Permissions.FINANCE_VIEW_ALL),
-    ]);
+    const canPay = await checkPermission(permissionUser, Permissions.REIMBURSEMENT_PAY);
 
-    if (!canPay.allowed && !canViewFinance.allowed) {
+    if (!canPay.allowed) {
       return NextResponse.json({ success: false, error: '无权访问' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') ?? undefined;
-    const statusParam = searchParams.get('status');
-    const idsParam = searchParams.get('ids');
-    const ids = idsParam
-      ? idsParam
-          .split(',')
-          .map((id) => id.trim())
-          .filter(Boolean)
-      : undefined;
-    const status = isPaymentQueueStatus(statusParam) ? statusParam : 'all';
+    const status = normalizeStatusParam(searchParams.get('status'));
+    const activeRole = permissionUser.primaryRole;
+    const financeOrgType =
+      activeRole === UserRole.FINANCE_SCHOOL
+        ? 'school'
+        : activeRole === UserRole.FINANCE_COMPANY
+          ? 'company'
+          : null;
 
-    const firstPage = await listPaymentQueue({ search, status, ids, page: 1, pageSize: EXPORT_PAGE_SIZE });
+    const firstPage = await listReimbursements({
+      scope: 'pay',
+      currentUserId: permissionUser.id,
+      financeOrgType,
+      search,
+      status,
+      page: 1,
+      pageSize: EXPORT_PAGE_SIZE,
+    });
     if (firstPage.total > MAX_EXPORT_ROWS) {
       return NextResponse.json(
         {
@@ -105,7 +110,15 @@ export async function GET(request: Request) {
 
     while (records.length < firstPage.total) {
       currentPage += 1;
-      const nextPage = await listPaymentQueue({ search, status, ids, page: currentPage, pageSize: EXPORT_PAGE_SIZE });
+      const nextPage = await listReimbursements({
+        scope: 'pay',
+        currentUserId: permissionUser.id,
+        financeOrgType,
+        search,
+        status,
+        page: currentPage,
+        pageSize: EXPORT_PAGE_SIZE,
+      });
       if (!nextPage.items.length) break;
       records.push(...nextPage.items);
     }

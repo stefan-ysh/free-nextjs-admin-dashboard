@@ -12,7 +12,6 @@ import RoleAssignmentDialog, { type RoleAssignmentPayload } from './RoleAssignme
 import ResetPasswordDialog from './ResetPasswordDialog';
 import CredentialsDialog from './CredentialsDialog';
 import {
-  DepartmentOption,
   Employee,
   EmployeeFilters,
   EmployeeFormSubmitPayload,
@@ -20,7 +19,6 @@ import {
   EmployeeMutationResponse,
   EmploymentStatus,
   EMPLOYMENT_STATUS_LABELS,
-  JobGradeOption,
   EmployeeBulkImportResponse,
   EmployeeBulkImportResult,
   EmployeeImportRow,
@@ -67,9 +65,6 @@ import {
 
 const DEFAULT_FILTERS: EmployeeFilters = {
   search: '',
-  department: null,
-  departmentId: null,
-  jobGradeId: null,
   status: 'all',
   sortBy: 'updatedAt',
   sortOrder: 'desc',
@@ -81,9 +76,6 @@ const IMPORT_TEMPLATE = `[
     "displayName": "王晓华",
     "email": "xiaohua@example.com",
     "initialPassword": "Welcome123",
-    "departmentCode": "ENG",
-    "jobTitle": "前端工程师",
-    "jobGradeCode": "L3",
     "employmentStatus": "active",
     "hireDate": "2024-04-01"
   }
@@ -116,24 +108,6 @@ const CSV_HEADER_ALIASES: Record<string, keyof EmployeeImportRow> = {
   'initial password': 'initialPassword',
   '初始密码': 'initialPassword',
   '默认密码': 'initialPassword',
-  'department': 'department',
-  'department_name': 'department',
-  '部门': 'department',
-  '部门名称': 'department',
-  'department_id': 'departmentId',
-  '部门id': 'departmentId',
-  'department code': 'departmentCode',
-  'department_code': 'departmentCode',
-  '部门编码': 'departmentCode',
-  'job_title': 'jobTitle',
-  'job title': 'jobTitle',
-  '职位': 'jobTitle',
-  'job_grade_id': 'jobGradeId',
-  'job grade id': 'jobGradeId',
-  'job_grade_code': 'jobGradeCode',
-  'job grade code': 'jobGradeCode',
-  '职级编码': 'jobGradeCode',
-  '职级id': 'jobGradeId',
   'employment_status': 'employmentStatus',
   'status': 'employmentStatus',
   '员工状态': 'employmentStatus',
@@ -144,10 +118,6 @@ const CSV_HEADER_ALIASES: Record<string, keyof EmployeeImportRow> = {
   'termination_date': 'terminationDate',
   'termination date': 'terminationDate',
   '离职日期': 'terminationDate',
-  'manager_id': 'managerId',
-  'manager id': 'managerId',
-  'manager': 'managerId',
-  '直属主管id': 'managerId',
   'location': 'location',
   '工作地点': 'location',
   '自定义字段': 'customFields',
@@ -302,9 +272,6 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50];
 function buildQuery(filters: EmployeeFilters, page: number, pageSize: number) {
   const params = new URLSearchParams();
   if (filters.search.trim()) params.set('search', filters.search.trim());
-  if (filters.department?.trim()) params.set('department', filters.department.trim());
-  if (filters.departmentId?.trim()) params.set('departmentId', filters.departmentId.trim());
-  if (filters.jobGradeId?.trim()) params.set('jobGradeId', filters.jobGradeId.trim());
   if (filters.status !== 'all') params.set('status', filters.status);
       if (filters.sortBy !== 'updatedAt') params.set('sortBy', filters.sortBy);
   if (filters.sortOrder !== 'desc') params.set('sortOrder', filters.sortOrder);
@@ -316,9 +283,6 @@ function buildQuery(filters: EmployeeFilters, page: number, pageSize: number) {
 function buildExportQuery(filters: EmployeeFilters) {
   const params = new URLSearchParams();
   if (filters.search.trim()) params.set('search', filters.search.trim());
-  if (filters.department?.trim()) params.set('department', filters.department.trim());
-  if (filters.departmentId?.trim()) params.set('departmentId', filters.departmentId.trim());
-  if (filters.jobGradeId?.trim()) params.set('jobGradeId', filters.jobGradeId.trim());
   if (filters.status !== 'all') params.set('status', filters.status);
       if (filters.sortBy !== 'updatedAt') params.set('sortBy', filters.sortBy);
   if (filters.sortOrder !== 'desc') params.set('sortOrder', filters.sortOrder);
@@ -344,8 +308,6 @@ export default function EmployeeClient({
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [departmentOptions, setDepartmentOptions] = useState<DepartmentOption[]>([]);
-  const [jobGradeOptions, setJobGradeOptions] = useState<JobGradeOption[]>([]);
   const [statusHistoryRefreshSignal, setStatusHistoryRefreshSignal] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -431,42 +393,6 @@ export default function EmployeeClient({
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (!canViewEmployees) return;
-    async function fetchDepartments() {
-      try {
-        const response = await fetch('/api/employees/departments');
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && Array.isArray(data.data)) {
-            setDepartmentOptions(data.data);
-          }
-        }
-      } catch (err) {
-        console.error('获取部门列表失败', err);
-      }
-    }
-    fetchDepartments();
-  }, [canViewEmployees]);
-
-  useEffect(() => {
-    if (!canViewEmployees) return;
-    async function fetchJobGrades() {
-      try {
-        const response = await fetch('/api/employees/job-grades');
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && Array.isArray(data.data)) {
-            setJobGradeOptions(data.data);
-          }
-        }
-      } catch (err) {
-        console.error('获取职级列表失败', err);
-      }
-    }
-    fetchJobGrades();
-  }, [canViewEmployees]);
 
   const refreshList = useCallback(
     async (nextPage: number = page, nextPageSize: number = pageSize, nextFilters: EmployeeFilters = filters) => {
@@ -655,7 +581,7 @@ export default function EmployeeClient({
     } finally {
       setImporting(false);
     }
-  }, [canCreateEmployee, canUpdateEmployee, importText, refreshList]);
+  }, [canCreateEmployee, canUpdateEmployee, importText, refreshList, importDefaultPassword, importUseCodePassword]);
 
   const handleSearch = useCallback(
     (nextFilters: Partial<EmployeeFilters>) => {
@@ -1110,22 +1036,6 @@ export default function EmployeeClient({
         },
       });
     }
-    if (filters.departmentId) {
-      const label = departmentOptions.find((dept) => dept.id === filters.departmentId)?.name ?? filters.departmentId;
-      chips.push({
-        key: 'department',
-        label: `部门：${label}`,
-        onRemove: () => handleSearch({ departmentId: null, department: null }),
-      });
-    }
-    if (filters.jobGradeId) {
-      const label = jobGradeOptions.find((grade) => grade.id === filters.jobGradeId)?.name ?? filters.jobGradeId;
-      chips.push({
-        key: 'jobGrade',
-        label: `职级：${label}`,
-        onRemove: () => handleSearch({ jobGradeId: null }),
-      });
-    }
     if (filters.status !== 'all') {
       chips.push({
         key: 'status',
@@ -1138,7 +1048,6 @@ export default function EmployeeClient({
         updatedAt: '按更新时间',
         createdAt: '按创建时间',
         displayName: '按姓名',
-        department: '按部门',
         status: '按状态',
       };
       chips.push({
@@ -1148,7 +1057,7 @@ export default function EmployeeClient({
       });
     }
     return chips;
-  }, [departmentOptions, filters, handleSearch, jobGradeOptions]);
+  }, [filters, handleSearch]);
 
   const activeFilterCount = activeFilterChips.length;
 
@@ -1235,56 +1144,6 @@ export default function EmployeeClient({
                 </DrawerHeader>
                 <DrawerBody className="space-y-4">
                   <div className="space-y-2">
-                    <span className="text-xs font-medium text-muted-foreground">部门</span>
-                    <Select
-                      value={filters.departmentId ?? 'all'}
-                      onValueChange={(value) =>
-                        handleSearch({
-                          departmentId: value === 'all' ? null : value,
-                          department: null,
-                        })
-                      }
-                    >
-                      <SelectTrigger className="h-10">
-                        <SelectValue placeholder="全部部门" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">全部部门</SelectItem>
-                        {departmentOptions.map((dept) => (
-                          <SelectItem key={dept.id} value={dept.id}>
-                            {dept.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <span className="text-xs font-medium text-muted-foreground">职级</span>
-                    <Select
-                      value={filters.jobGradeId ?? 'all'}
-                      onValueChange={(value) =>
-                        handleSearch({
-                          jobGradeId: value === 'all' ? null : value,
-                        })
-                      }
-                    >
-                      <SelectTrigger className="h-10">
-                        <SelectValue placeholder="全部职级" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">全部职级</SelectItem>
-                        {jobGradeOptions.map((grade) => (
-                          <SelectItem key={grade.id} value={grade.id}>
-                            {grade.name}
-                            {grade.level != null ? ` (L${grade.level})` : ''}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
                     <span className="text-xs font-medium text-muted-foreground">状态</span>
                     <Select value={filters.status} onValueChange={(value) => handleSearch({ status: value as EmployeeFilters['status'] })}>
                       <SelectTrigger className="h-10">
@@ -1312,7 +1171,6 @@ export default function EmployeeClient({
                         <SelectItem value="updatedAt">按更新时间</SelectItem>
                         <SelectItem value="createdAt">按创建时间</SelectItem>
                         <SelectItem value="displayName">按姓名</SelectItem>
-                        <SelectItem value="department">按部门</SelectItem>
                         <SelectItem value="status">按状态</SelectItem>
                       </SelectContent>
                     </Select>
@@ -1529,8 +1387,6 @@ export default function EmployeeClient({
                   initialData={selectedEmployee}
                   onSubmit={selectedEmployee ? handleUpdate : handleCreate}
                   onCancel={handleDialogClose}
-                  departmentOptions={departmentOptions}
-                  jobGradeOptions={jobGradeOptions}
                   formId="employee-details-form"
                   hideActions
                 />
@@ -1563,8 +1419,7 @@ export default function EmployeeClient({
           <DrawerHeader>
             <DrawerTitle>批量导入员工</DrawerTitle>
             <DrawerDescription>
-              支持粘贴 JSON 数组或上传 CSV 文件，字段与单条新增员工一致，支持通过 departmentId 或 departmentCode、jobGradeId 或
-              jobGradeCode 进行关联。
+              支持粘贴 JSON 数组或上传 CSV 文件，字段与单条新增员工一致。
             </DrawerDescription>
           </DrawerHeader>
           <DrawerBody className="space-y-4">
@@ -1572,7 +1427,7 @@ export default function EmployeeClient({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="space-y-1 text-xs text-muted-foreground">
                 <p className="text-sm font-medium text-foreground">上传 CSV 文件</p>
-                <p>首行必须包含字段名，系统会匹配常见列名并自动转换状态、日期、部门等字段。</p>
+                <p>首行必须包含字段名，系统会匹配常见列名并自动转换状态、日期等字段。</p>
               </div>
               <div className="flex items-center gap-2">
                 <input

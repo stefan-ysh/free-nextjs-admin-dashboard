@@ -4,6 +4,7 @@ import { mysqlPool } from '@/lib/mysql';
 import { ensureColumn, ensureForeignKey } from '@/lib/schema/mysql-utils';
 import { ensurePurchasesSchema } from '@/lib/schema/purchases';
 import { ensureInventorySchema } from '@/lib/schema/inventory';
+import { ensureReimbursementsSchema } from '@/lib/schema/reimbursements';
 import { getDefaultCategoryLabels } from '@/constants/finance-categories';
 import { TransactionType } from '@/types/finance';
 
@@ -94,6 +95,7 @@ export async function ensureFinanceSchema() {
 
   await ensurePurchasesSchema();
   await ensureInventorySchema();
+  await ensureReimbursementsSchema();
   const pool = mysqlPool();
 
   await pool.query(`
@@ -115,10 +117,10 @@ export async function ensureFinanceSchema() {
       description TEXT,
       tags_json JSON NULL,
       created_by VARCHAR(64),
-      source_type ENUM('manual','purchase','import','inventory') NOT NULL DEFAULT 'manual',
+      source_type ENUM('manual','reimbursement','budget_adjustment','inventory') NOT NULL DEFAULT 'manual',
       status ENUM('draft','cleared') NOT NULL DEFAULT 'draft',
       purchase_id CHAR(36) NULL,
-      purchase_payment_id CHAR(36) NULL,
+      reimbursement_id CHAR(36) NULL,
       inventory_movement_id VARCHAR(64) NULL,
       metadata_json JSON NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -129,13 +131,13 @@ export async function ensureFinanceSchema() {
   await ensureColumn(
     'finance_records',
     'source_type',
-    "ENUM('manual','purchase','import','inventory') NOT NULL DEFAULT 'manual'"
+    "ENUM('manual','reimbursement','budget_adjustment','inventory') NOT NULL DEFAULT 'manual'"
   );
   await pool.query(
-    "ALTER TABLE `finance_records` MODIFY COLUMN `source_type` ENUM('manual','purchase','import','inventory') NOT NULL DEFAULT 'manual'"
+    "ALTER TABLE `finance_records` MODIFY COLUMN `source_type` ENUM('manual','reimbursement','budget_adjustment','inventory') NOT NULL DEFAULT 'manual'"
   );
   await ensureColumn('finance_records', 'purchase_id', 'CHAR(36) NULL');
-  await ensureColumn('finance_records', 'purchase_payment_id', 'CHAR(36) NULL');
+  await ensureColumn('finance_records', 'reimbursement_id', 'CHAR(36) NULL');
   await ensureColumn('finance_records', 'inventory_movement_id', 'VARCHAR(64) NULL');
   await ensureColumn('finance_records', 'quantity', 'DECIMAL(16,2) NOT NULL DEFAULT 1');
   await ensureColumn('finance_records', 'payment_channel', 'VARCHAR(120) NULL');
@@ -166,12 +168,29 @@ export async function ensureFinanceSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS finance_budget_adjustments (
+      id CHAR(36) NOT NULL PRIMARY KEY,
+      organization_type ENUM('school','company') NOT NULL,
+      adjustment_type ENUM('increase','decrease') NOT NULL DEFAULT 'increase',
+      amount DECIMAL(16,2) NOT NULL,
+      title VARCHAR(255) NOT NULL,
+      note TEXT NULL,
+      occurred_at DATE NOT NULL,
+      created_by CHAR(36) NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT chk_finance_budget_adjustment_amount CHECK (amount > 0),
+      CONSTRAINT fk_finance_budget_adjustments_creator FOREIGN KEY (created_by) REFERENCES hr_employees(id) ON DELETE RESTRICT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
   await createIndex(pool, 'CREATE INDEX idx_finance_date ON finance_records(date_value)');
   await createIndex(pool, 'CREATE INDEX idx_finance_type ON finance_records(type)');
   await createIndex(pool, 'CREATE INDEX idx_finance_category ON finance_records(category)');
   await createIndex(pool, 'CREATE INDEX idx_finance_purchase ON finance_records(purchase_id)');
-  await createIndex(pool, 'CREATE INDEX idx_finance_purchase_payment ON finance_records(purchase_payment_id)');
+  await createIndex(pool, 'CREATE INDEX idx_finance_reimbursement ON finance_records(reimbursement_id)');
   await createIndex(pool, 'CREATE INDEX idx_finance_inventory_movement ON finance_records(inventory_movement_id)');
+  await createIndex(pool, 'CREATE INDEX idx_finance_budget_adjust_org_date ON finance_budget_adjustments(organization_type, occurred_at)');
   await ensureForeignKey(
     'finance_records',
     'fk_finance_purchase',
@@ -179,14 +198,18 @@ export async function ensureFinanceSchema() {
   );
   await ensureForeignKey(
     'finance_records',
-    'fk_finance_purchase_payment',
-    'FOREIGN KEY (purchase_payment_id) REFERENCES purchase_payments(id) ON DELETE SET NULL'
+    'fk_finance_reimbursement',
+    'FOREIGN KEY (reimbursement_id) REFERENCES reimbursements(id) ON DELETE SET NULL'
   );
   await ensureForeignKey(
     'finance_records',
     'fk_finance_inventory_movement',
     'FOREIGN KEY (inventory_movement_id) REFERENCES inventory_movements(id) ON DELETE SET NULL'
   );
+
+  await dropForeignKeyIfExists(pool, 'finance_records', 'fk_finance_purchase_payment');
+  await dropIndexIfExists(pool, 'finance_records', 'idx_finance_purchase_payment');
+  await dropColumnIfExists(pool, 'finance_records', 'purchase_payment_id');
 
   await seedDefaultCategories(pool);
 

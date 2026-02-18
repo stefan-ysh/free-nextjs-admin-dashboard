@@ -52,7 +52,7 @@
 
 ## 🔧 本地数据库模式
 
-- MySQL: `finance_records / finance_categories / projects / purchases / auth_users / reimbursement_logs` 已通过 `ensure*Schema` 自动创建
+- MySQL: `finance_records / finance_categories / purchases / auth_users / reimbursement_logs` 已通过 `ensure*Schema` 自动创建
 - 附件: 写入 `LOCAL_STORAGE_ROOT` (默认 `~/Documents/admin_cosmorigin-storage`)
 
 > 若数据库不可用,API 会抛出 `ECONNREFUSED` 或 `ER_NO_SUCH_TABLE`,请先确认 `.env.local` 与服务状态。
@@ -65,14 +65,14 @@
    - 默认展示数据库中的最新记录
    - 可验证所有字段(合同金额、手续费、总金额、发票状态等)
 
-2. **添加新记录**
-   - 点击"添加记录"按钮
-   - 填写表单(使用新的DatePicker组件)
-   - 选择"已开票"查看文件上传功能
+2. **预算调整**
+   - 点击"预算调整"按钮
+   - 填写预算调整表单并保存
+   - 自动同步生成收支流水
 
-3. **编辑记录**
-   - 点击表格中的"编辑"按钮
-   - 修改数据后保存
+3. **编辑预算调整**
+   - 点击预算调整对应的流水记录“编辑”
+   - 使用同一预算调整表单更新
 
 4. **删除记录**
    - 点击"删除"按钮确认删除，同时删除本地附件

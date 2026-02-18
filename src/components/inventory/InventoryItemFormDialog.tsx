@@ -11,12 +11,13 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/sonner';
+import { INVENTORY_CATEGORY_OPTIONS, normalizeInventoryCategory } from '@/lib/inventory/catalog';
 import type { InventoryItem } from '@/types/inventory';
 import { FORM_DRAWER_WIDTH_STANDARD } from '@/components/common/form-drawer-width';
 
 const Required = () => <span className="ml-1 text-destructive">*</span>;
 
-const BASE_CATEGORY_OPTIONS = ['原材料', '半成品', '成品', '配件', '耗材'];
+const BASE_CATEGORY_OPTIONS: string[] = Array.from(INVENTORY_CATEGORY_OPTIONS);
 const BASE_UNIT_OPTIONS = ['米', '升', '件', '套', 'kg', '箱'];
 
 type SpecFieldRow = { key: string; label: string; options: string; defaultValue: string };
@@ -36,7 +37,7 @@ const buildDefaultValues = (item?: InventoryItem | null): FormValues => ({
   name: item?.name ?? '',
   unit: item?.unit ?? BASE_UNIT_OPTIONS[0],
   unitPrice: item?.unitPrice != null ? String(item.unitPrice) : '',
-  category: item?.category ?? BASE_CATEGORY_OPTIONS[0],
+  category: normalizeInventoryCategory(item?.category) ?? BASE_CATEGORY_OPTIONS[0],
   safetyStock: item?.safetyStock != null ? String(item.safetyStock) : '',
   barcode: item?.barcode ?? '',
   imageUrl: item?.imageUrl ?? '',
@@ -102,7 +103,7 @@ export default function InventoryItemFormDialog({ open, onOpenChange, item, onSu
         name: values.name.trim(),
         unit: values.unit.trim(),
         unitPrice: Number(values.unitPrice),
-        category: values.category.trim() || '未分类',
+        category: normalizeInventoryCategory(values.category),
         safetyStock: Number(values.safetyStock),
       };
       if (values.barcode.trim()) {

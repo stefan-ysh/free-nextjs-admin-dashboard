@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { FinanceRecord, FinanceStats } from '@/types/finance';
 import FinanceTable from './FinanceTable';
-import FinanceForm, { FinanceFormSubmitPayload } from './FinanceForm';
 
 import FinanceStatsCards from './FinanceStatsCards';
 import { Button } from '@/components/ui/button';
@@ -22,12 +21,11 @@ import { Input } from '@/components/ui/input';
 import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 import { TransactionType } from '@/types/finance';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import DatePicker from '@/components/ui/DatePicker';
 import { getCategoryGroups, getPinnedCategoryLabels } from '@/constants/finance-categories';
 import UserSelect from '@/components/common/UserSelect';
 import { formatDateOnly } from '@/lib/dates';
-import {
-    FORM_DRAWER_WIDTH_WIDE,
-} from '@/components/common/form-drawer-width';
 
 interface FinanceClientProps {
     records: FinanceRecord[];
@@ -43,7 +41,6 @@ interface FinanceClientProps {
         canView: boolean;
         canManage: boolean;
     };
-    currentUserId: string;
 }
 
 export default function FinanceClient({
@@ -52,13 +49,21 @@ export default function FinanceClient({
     categories,
     pagination,
     permissions,
-    currentUserId,
 }: FinanceClientProps) {
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
-    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-    const [editingRecord, setEditingRecord] = useState<FinanceRecord | null>(null);
+    const [isBudgetDrawerOpen, setIsBudgetDrawerOpen] = useState(false);
+    const [editingBudgetAdjustmentId, setEditingBudgetAdjustmentId] = useState<string | null>(null);
+    const [budgetSubmitting, setBudgetSubmitting] = useState(false);
+    const [budgetForm, setBudgetForm] = useState({
+        organizationType: 'company' as 'school' | 'company',
+        adjustmentType: 'increase' as 'increase' | 'decrease',
+        amount: '',
+        title: '',
+        note: '',
+        occurredAt: formatDateOnly(new Date()) ?? '',
+    });
 
     const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
     const [keywordInput, setKeywordInput] = useState(searchParams.get('keyword') || '');
@@ -317,45 +322,6 @@ export default function FinanceClient({
         });
     };
 
-    const submitRecord = async (data: FinanceFormSubmitPayload, recordId?: string) => {
-        try {
-            const url = recordId
-                ? `/api/finance/records/${recordId}`
-                : '/api/finance/records';
-            const method = recordId ? 'PATCH' : 'POST';
-
-            const res = await fetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data),
-            });
-
-            if (!res.ok) {
-                const error = await res.json();
-                toast.error(error.error || '操作失败');
-                return;
-            }
-
-            toast.success(recordId ? '记录更新成功' : '记录添加成功');
-            router.refresh();
-            return true;
-        } catch (error) {
-            console.error(error);
-            toast.error('操作失败');
-            return false;
-        }
-    };
-
-    const handleSubmit = async (data: FinanceFormSubmitPayload) => {
-        const success = await submitRecord(data, editingRecord?.id);
-        if (success) {
-            setIsDrawerOpen(false);
-            setEditingRecord(null);
-        }
-    };
-
-
-
     const handleDelete = async (id: string) => {
         try {
             const res = await fetch(`/api/finance/records/${id}`, { method: 'DELETE' });
@@ -368,6 +334,95 @@ export default function FinanceClient({
         } catch (error) {
             console.error(error);
             toast.error('删除失败');
+        }
+    };
+
+    const resetBudgetForm = () => {
+        setEditingBudgetAdjustmentId(null);
+        setBudgetForm({
+            organizationType: 'company',
+            adjustmentType: 'increase',
+            amount: '',
+            title: '',
+            note: '',
+            occurredAt: formatDateOnly(new Date()) ?? '',
+        });
+    };
+
+    const extractBudgetEditMeta = (record: FinanceRecord) => {
+        const metadata = record.metadata as Record<string, unknown> | undefined;
+        const budgetAdjustmentId =
+            typeof metadata?.budgetAdjustmentId === 'string' ? metadata.budgetAdjustmentId : null;
+        const organizationType =
+            metadata?.organizationType === 'school' || metadata?.organizationType === 'company'
+                ? metadata.organizationType
+                : 'company';
+        const adjustmentType =
+            metadata?.adjustmentType === 'increase' || metadata?.adjustmentType === 'decrease'
+                ? metadata.adjustmentType
+                : record.type === TransactionType.EXPENSE
+                    ? 'decrease'
+                    : 'increase';
+        const normalizedTitle = record.name.replace(/（预算增加|预算扣减）$/, '');
+
+        return {
+            budgetAdjustmentId,
+            organizationType,
+            adjustmentType,
+            amount: String(Number(record.contractAmount ?? record.totalAmount ?? 0)),
+            title: normalizedTitle,
+            note: record.description ?? '',
+            occurredAt: formatDateOnly(record.date) ?? '',
+        } as const;
+    };
+
+    const handleBudgetSubmit = async () => {
+        if (budgetSubmitting) return;
+        const amount = Number(budgetForm.amount);
+        if (!budgetForm.title.trim()) {
+            toast.error('调整标题不能为空');
+            return;
+        }
+        if (!Number.isFinite(amount) || amount <= 0) {
+            toast.error('调整金额必须大于 0');
+            return;
+        }
+        if (!budgetForm.occurredAt) {
+            toast.error('调整日期不能为空');
+            return;
+        }
+
+        setBudgetSubmitting(true);
+        try {
+            const requestPath = editingBudgetAdjustmentId
+                ? `/api/finance/budget-adjustments/${editingBudgetAdjustmentId}`
+                : '/api/finance/budget-adjustments';
+            const requestMethod = editingBudgetAdjustmentId ? 'PATCH' : 'POST';
+            const res = await fetch(requestPath, {
+                method: requestMethod,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    organizationType: budgetForm.organizationType,
+                    adjustmentType: budgetForm.adjustmentType,
+                    amount,
+                    title: budgetForm.title.trim(),
+                    note: budgetForm.note.trim() || null,
+                    occurredAt: budgetForm.occurredAt,
+                }),
+            });
+            const payload = await res.json();
+            if (!res.ok || !payload?.success) {
+                throw new Error(payload?.error || '预算调整保存失败');
+            }
+            toast.success(editingBudgetAdjustmentId ? '预算调整已更新并同步到收支流水' : '预算调整已保存并同步到收支流水');
+            setIsBudgetDrawerOpen(false);
+            resetBudgetForm();
+            router.refresh();
+        } catch (error) {
+            console.error(error);
+            toast.error(error instanceof Error ? error.message : '预算调整保存失败');
+        } finally {
+            setBudgetSubmitting(false);
         }
     };
 
@@ -532,26 +587,114 @@ export default function FinanceClient({
                         </Button>
 
                         {permissions.canManage && (
-                            <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen} direction="right">
+                            <Drawer
+                                open={isBudgetDrawerOpen}
+                                onOpenChange={(open) => {
+                                    setIsBudgetDrawerOpen(open);
+                                    if (!open) {
+                                        resetBudgetForm();
+                                    }
+                                }}
+                                direction="right"
+                            >
                                 <DrawerTrigger asChild>
-                                    <span />
+                                    <Button
+                                        size="sm"
+                                        className="h-10 px-4"
+                                        onClick={() => {
+                                            setEditingBudgetAdjustmentId(null);
+                                            setBudgetForm({
+                                                organizationType: 'company',
+                                                adjustmentType: 'increase',
+                                                amount: '',
+                                                title: '',
+                                                note: '',
+                                                occurredAt: formatDateOnly(new Date()) ?? '',
+                                            });
+                                        }}
+                                    >
+                                        预算调整
+                                    </Button>
                                 </DrawerTrigger>
-                                <DrawerContent side="right" className={FORM_DRAWER_WIDTH_WIDE}>
+                                <DrawerContent side="right" className="w-full sm:max-w-xl">
                                     <DrawerHeader>
-                                        <DrawerTitle>{editingRecord ? '编辑记录' : '添加记录'}</DrawerTitle>
+                                        <DrawerTitle>{editingBudgetAdjustmentId ? '编辑预算调整' : '新增预算调整'}</DrawerTitle>
                                     </DrawerHeader>
-                                    <DrawerBody>
-                                        <FinanceForm
-                                            initialData={editingRecord || undefined}
-                                            onSubmit={handleSubmit}
-                                            onCancel={() => setIsDrawerOpen(false)}
-                                            incomeCategories={categories.income}
-                                            expenseCategories={categories.expense}
-                                            currentUserId={currentUserId}
-                                            formId="finance-record-form"
-                                            hideActions
-                                            layoutMode="wide"
-                                        />
+                                    <DrawerBody className="space-y-4">
+                                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                            <div className="space-y-2">
+                                                <span className="text-sm font-medium">组织</span>
+                                                <Select
+                                                    value={budgetForm.organizationType}
+                                                    onValueChange={(value) =>
+                                                        setBudgetForm((prev) => ({ ...prev, organizationType: value as 'school' | 'company' }))
+                                                    }
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="school">学校</SelectItem>
+                                                        <SelectItem value="company">单位</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <span className="text-sm font-medium">调整类型</span>
+                                                <Select
+                                                    value={budgetForm.adjustmentType}
+                                                    onValueChange={(value) =>
+                                                        setBudgetForm((prev) => ({ ...prev, adjustmentType: value as 'increase' | 'decrease' }))
+                                                    }
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="increase">增加</SelectItem>
+                                                        <SelectItem value="decrease">扣减</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <span className="text-sm font-medium">调整标题</span>
+                                            <Input
+                                                value={budgetForm.title}
+                                                onChange={(e) => setBudgetForm((prev) => ({ ...prev, title: e.target.value }))}
+                                                placeholder="例如：项目预算追加"
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                            <div className="space-y-2">
+                                                <span className="text-sm font-medium">金额（元）</span>
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    value={budgetForm.amount}
+                                                    onChange={(e) => setBudgetForm((prev) => ({ ...prev, amount: e.target.value }))}
+                                                    placeholder="请输入金额"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <span className="text-sm font-medium">调整日期</span>
+                                                <DatePicker
+                                                    value={budgetForm.occurredAt}
+                                                    onChange={(value) => setBudgetForm((prev) => ({ ...prev, occurredAt: value }))}
+                                                    required
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <span className="text-sm font-medium">备注</span>
+                                            <Textarea
+                                                value={budgetForm.note}
+                                                onChange={(e) => setBudgetForm((prev) => ({ ...prev, note: e.target.value }))}
+                                                placeholder="可选，说明调整原因"
+                                                rows={4}
+                                            />
+                                        </div>
                                     </DrawerBody>
                                     <DrawerFooter>
                                         <DrawerClose asChild>
@@ -559,20 +702,21 @@ export default function FinanceClient({
                                                 type="button"
                                                 variant="outline"
                                                 onClick={() => {
-                                                    setIsDrawerOpen(false);
-                                                    setEditingRecord(null);
+                                                    setIsBudgetDrawerOpen(false);
+                                                    resetBudgetForm();
                                                 }}
                                             >
                                                 取消
                                             </Button>
                                         </DrawerClose>
-                                        <Button type="submit" form="finance-record-form">
-                                            {editingRecord ? '更新记录' : '添加记录'}
+                                        <Button type="button" onClick={handleBudgetSubmit} disabled={budgetSubmitting}>
+                                            {budgetSubmitting ? '保存中...' : editingBudgetAdjustmentId ? '更新调整' : '保存调整'}
                                         </Button>
                                     </DrawerFooter>
                                 </DrawerContent>
                             </Drawer>
                         )}
+
                     </div>
                 </div>
                 {activeFilterChips.length > 0 && (
@@ -596,8 +740,25 @@ export default function FinanceClient({
             <FinanceTable
                 records={records}
                 onEdit={(record) => {
-                    setEditingRecord(record);
-                    setIsDrawerOpen(true);
+                    if (record.sourceType === 'budget_adjustment') {
+                        const budgetMeta = extractBudgetEditMeta(record);
+                        if (!budgetMeta.budgetAdjustmentId) {
+                            toast.error('预算调整记录缺少关联标识，暂时无法编辑');
+                            return;
+                        }
+                        setEditingBudgetAdjustmentId(budgetMeta.budgetAdjustmentId);
+                        setBudgetForm({
+                            organizationType: budgetMeta.organizationType,
+                            adjustmentType: budgetMeta.adjustmentType,
+                            amount: budgetMeta.amount,
+                            title: budgetMeta.title,
+                            note: budgetMeta.note,
+                            occurredAt: budgetMeta.occurredAt,
+                        });
+                        setIsBudgetDrawerOpen(true);
+                        return;
+                    }
+                    toast.error('自动生成的收支流水不支持手动编辑，请使用“预算调整”');
                 }}
                 onDelete={handleDelete}
                 canEdit={permissions.canManage}

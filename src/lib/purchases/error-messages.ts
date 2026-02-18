@@ -16,7 +16,7 @@ const PURCHASE_VALIDATION_MESSAGES: Record<string, string> = {
   INVALID_INVOICE_STATUS: '发票状态填写有误，请重新选择',
   APPROVER_REQUIRED: '请选择审批人',
   NOT_EDITABLE: '当前状态下不能修改采购信息',
-  NOT_SUBMITTABLE: '当前状态无法提交报销，请先确认记录为草稿或已驳回',
+  NOT_SUBMITTABLE: '当前状态无法提交采购，请先确认记录为草稿或已驳回',
   NOT_APPROVABLE: '只有待审批的采购记录才能进行审批',
   NOT_REJECTABLE: '只有待审批的采购记录才能驳回',
   NOT_PAYABLE: '请先完成审批，只有已审批的采购才能打款',

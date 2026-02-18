@@ -97,7 +97,7 @@ export default function FinanceTable({
 				<DataState
 					variant="empty"
 					title="暂无财务记录"
-					description="点击“添加记录”开始录入第一条数据"
+					description="当前还没有收支流水，可通过“预算调整”写入首条记录"
 					className="min-h-[200px]"
 				/>
 			</div>
@@ -114,6 +114,8 @@ export default function FinanceTable({
 							record.invoice?.status && record.invoice.status !== InvoiceStatus.NOT_REQUIRED
 								? getInvoiceStatusLabel(record.invoice.status)
 								: '—';
+						const canEditCurrent = canEdit && record.sourceType === 'budget_adjustment';
+						const canDeleteCurrent = canDelete && record.sourceType === 'budget_adjustment';
 						return (
 							<div key={record.id} className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm">
 								<div className="flex items-start justify-between gap-3">
@@ -150,14 +152,14 @@ export default function FinanceTable({
 										<span className="text-foreground">{invoiceStatus}</span>
 									</div>
 								</div>
-								{canEdit || canDelete ? (
+								{canEditCurrent || canDeleteCurrent ? (
 									<div className="mt-4 flex justify-end gap-2">
-										{canEdit && (
+										{canEditCurrent && (
 											<Button size="sm" variant="outline" onClick={() => onEdit(record)}>
 												编辑
 											</Button>
 										)}
-										{canDelete && (
+										{canDeleteCurrent && (
 											<Button size="sm" variant="ghost" onClick={() => handleDelete(record)} className="text-destructive">
 												删除
 											</Button>
@@ -190,6 +192,8 @@ export default function FinanceTable({
 					<TableBody className="[&_tr]:border-0">
 						{records.map((record) => {
 							const totalAmount = record.contractAmount + record.fee;
+							const canEditCurrent = canEdit && record.sourceType === 'budget_adjustment';
+							const canDeleteCurrent = canDelete && record.sourceType === 'budget_adjustment';
 							return (
 								<TableRow key={record.id}>
 									<TableCell className="px-4 py-3 text-muted-foreground">
@@ -259,9 +263,9 @@ export default function FinanceTable({
 										)}
 									</TableCell>
 									<TableCell className="px-4 py-3 text-right">
-										{canEdit || canDelete ? (
+										{canEditCurrent || canDeleteCurrent ? (
 											<div className="flex justify-end gap-2">
-												{canEdit && (
+												{canEditCurrent && (
 													<Button
 														variant="ghost"
 														size="sm"
@@ -271,7 +275,7 @@ export default function FinanceTable({
 														编辑
 													</Button>
 												)}
-												{canDelete && (
+												{canDeleteCurrent && (
 													<Button
 														variant="ghost"
 														size="sm"

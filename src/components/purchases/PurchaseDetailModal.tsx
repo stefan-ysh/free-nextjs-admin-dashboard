@@ -1,10 +1,11 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import ModalShell from '@/components/common/ModalShell';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
 import PurchaseApprovalFlow from './PurchaseApprovalFlow';
@@ -28,8 +29,6 @@ type PurchaseDetailModalProps = {
 	onReject?: (purchase: PurchaseRecord) => void;
 	onPay?: (purchase: PurchaseRecord) => void;
 	onSubmitReimbursement?: (purchase: PurchaseRecord) => void;
-	onReceive?: (purchase: PurchaseRecord) => void;
-	canReceive?: boolean;
 };
 
 const currencyFormatter = new Intl.NumberFormat('zh-CN', {
@@ -120,11 +119,11 @@ function formatDateTime(value: string | null): string {
 }
 
 function resolveUserName(user: PurchaseDetail['approver'] | PurchaseDetail['rejecter'] | PurchaseDetail['payer']): string {
-	return user?.displayName ?? user?.id ?? '—';
+	return user?.displayName ?? '未知用户';
 }
 
 function resolvePurchaser(purchase: PurchaseDetail): string {
-	return purchase.purchaser.displayName || purchase.purchaser.id;
+	return purchase.purchaser.displayName || '未知用户';
 }
 
 type InfoRow = { label: string; value: ReactNode };
@@ -171,12 +170,17 @@ export default function PurchaseDetailModal({
 	onReject,
 	onPay,
 	onSubmitReimbursement,
-	onReceive,
-	canReceive,
 	detailLoading,
 	detailError,
 	onReloadDetail,
 }: PurchaseDetailModalProps) {
+	const defaultTab: 'overview' | 'workflow' | 'finance' = 'workflow';
+	const [activeTab, setActiveTab] = useState<'overview' | 'workflow' | 'finance'>(defaultTab);
+
+	useEffect(() => {
+		setActiveTab(defaultTab);
+	}, [defaultTab, purchase?.id]);
+
 	if (!purchase) return null;
 
 	const statusUpdatedAt =
@@ -187,6 +191,11 @@ export default function PurchaseDetailModal({
 			label: '当前状态',
 			value: <PurchaseStatusBadge status={purchase.status} />,
 			hint: statusUpdatedAt ? `更新于 ${formatDateTime(statusUpdatedAt)}` : undefined,
+		},
+		{
+			label: '申请人',
+			value: resolvePurchaser(purchase),
+			hint: `工号 · ${purchase.purchaser.employeeCode ?? '—'}`,
 		},
 		{
 			label: '当前审批人',
@@ -325,12 +334,46 @@ export default function PurchaseDetailModal({
 							</div>
 						))}
 					</div>
-					<div className="grid gap-6 lg:grid-cols-12">
-						<div className="space-y-6 lg:col-span-7">
-							<InfoSection title="金额概览" rows={amountRows} columns={3} />
+					<Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'overview' | 'workflow' | 'finance')} className="space-y-4">
+						<TabsList className="grid h-auto w-full grid-cols-3">
+							<TabsTrigger value="overview">概览</TabsTrigger>
+							<TabsTrigger value="workflow">流程</TabsTrigger>
+							<TabsTrigger value="finance">资金与凭证</TabsTrigger>
+						</TabsList>
+
+						<TabsContent value="overview" className="space-y-6">
 							{infoSections.map((section) => (
 								<InfoSection key={section.title} {...section} />
 							))}
+						</TabsContent>
+
+						<TabsContent value="workflow" className="space-y-6">
+							<section className="surface-panel">
+								<div className="border-b px-5 py-4">
+									<p className="text-xs uppercase tracking-wide text-muted-foreground">审批流转</p>
+									<p className="mt-1 text-xs text-muted-foreground">自动根据流程节点更新</p>
+								</div>
+								<div className="space-y-3 px-5 py-5">
+									<PurchaseApprovalFlow
+										purchase={purchase}
+										permissions={permissions}
+										onSubmit={onSubmit}
+										onWithdraw={onWithdraw}
+										onApprove={onApprove}
+										onTransfer={onTransfer}
+										onReject={onReject}
+										onPay={onPay}
+										onSubmitReimbursement={onSubmitReimbursement}
+										busy={busy}
+									/>
+								</div>
+							</section>
+						</TabsContent>
+
+						<TabsContent value="finance" className="space-y-6">
+							<InfoSection title="金额概览" rows={amountRows} columns={3} />
+							<InfoSection title="付款与结算" rows={paymentRows} />
+
 							<section className="surface-panel">
 								<div className="border-b px-5 py-4">
 									<p className="text-xs uppercase tracking-wide text-muted-foreground">打款记录</p>
@@ -346,7 +389,7 @@ export default function PurchaseDetailModal({
 													</div>
 													<div className="text-right text-muted-foreground">
 														<p>{formatDateTime(payment.paidAt)}</p>
-														<p>{payment.payer?.displayName ?? payment.paidBy}</p>
+														<p>{payment.payer?.displayName ?? '未知用户'}</p>
 													</div>
 													{payment.note ? <p className="w-full text-muted-foreground">{payment.note}</p> : null}
 												</div>
@@ -357,6 +400,7 @@ export default function PurchaseDetailModal({
 									)}
 								</div>
 							</section>
+
 							{hasAnyAttachment ? (
 								<section className="surface-panel">
 									<div className="border-b px-5 py-4">
@@ -384,40 +428,8 @@ export default function PurchaseDetailModal({
 									</div>
 								</section>
 							) : null}
-						</div>
-						<div className="space-y-6 lg:col-span-5">
-							<section className="surface-panel">
-								<div className="border-b px-5 py-4">
-									<p className="text-xs uppercase tracking-wide text-muted-foreground">审批流转</p>
-									<p className="mt-1 text-xs text-muted-foreground">自动根据流程节点更新</p>
-								</div>
-								<div className="space-y-3 px-5 py-5">
-									{canReceive ? (
-										<Button
-											variant="outline"
-											size="sm"
-											onClick={() => onReceive?.(purchase)}
-											className="w-full justify-center"
-										>
-											到货入库
-										</Button>
-									) : null}
-						<PurchaseApprovalFlow
-							purchase={purchase}
-							permissions={permissions}
-							onSubmit={onSubmit}
-							onWithdraw={onWithdraw}
-							onApprove={onApprove}
-							onTransfer={onTransfer}
-							onReject={onReject}
-							onPay={onPay}
-							onSubmitReimbursement={onSubmitReimbursement}
-							busy={busy}
-						/>
-								</div>
-							</section>
-						</div>
-					</div>
+						</TabsContent>
+					</Tabs>
 				</ModalShell>
 			</DialogContent>
 		</Dialog>

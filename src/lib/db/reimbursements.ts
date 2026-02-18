@@ -4,14 +4,19 @@ import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { mysqlPool } from '@/lib/mysql';
 import { ensureReimbursementsSchema } from '@/lib/schema/reimbursements';
 import { ensureInventorySchema } from '@/lib/schema/inventory';
-import { ensureBusinessUserRecord, findUserById } from '@/lib/users';
+import { ensureBusinessUserRecord } from '@/lib/users';
 import { formatDateOnly, normalizeDateInput } from '@/lib/dates';
 import { findPurchaseById } from '@/lib/db/purchases';
+import { createRecord, findRecordByReimbursementId } from '@/lib/db/finance';
+import { PaymentType, TransactionType } from '@/types/finance';
 import type {
   CreateReimbursementInput,
   ListReimbursementsParams,
   ListReimbursementsResult,
   ReimbursementAction,
+  ReimbursementCategory,
+  ReimbursementDetailField,
+  ReimbursementDetails,
   ReimbursementLog,
   ReimbursementOrganizationType,
   ReimbursementRecord,
@@ -19,7 +24,12 @@ import type {
   ReimbursementStatus,
   UpdateReimbursementInput,
 } from '@/types/reimbursement';
-import { isReimbursementOrganizationType, isReimbursementSourceType, isReimbursementStatus } from '@/types/reimbursement';
+import {
+  isReimbursementOrganizationType,
+  isReimbursementSourceType,
+  isReimbursementStatus,
+  REIMBURSEMENT_CATEGORY_FIELDS,
+} from '@/types/reimbursement';
 
 const pool = mysqlPool();
 
@@ -35,6 +45,7 @@ type RawReimbursementRow = RowDataPacket & {
   amount: number;
   occurred_at: string;
   description: string | null;
+  details_json: string | null;
   invoice_images: string | null;
   receipt_images: string | null;
   attachments: string | null;
@@ -48,8 +59,13 @@ type RawReimbursementRow = RowDataPacket & {
   rejection_reason: string | null;
   paid_at: string | null;
   paid_by: string | null;
+  paid_by_name: string | null;
   payment_note: string | null;
   applicant_id: string;
+  applicant_name: string | null;
+  pending_approver_name: string | null;
+  approved_by_name: string | null;
+  rejected_by_name: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -67,18 +83,71 @@ type RawReimbursementLogRow = RowDataPacket & {
   created_at: string;
 };
 
-function parseJsonArray(value: string | null | undefined): string[] {
+function parseJsonArray(value: unknown): string[] {
   if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string' && !!item);
+  }
+  if (typeof value === 'object') {
+    if (Buffer.isBuffer(value)) {
+      const text = value.toString('utf-8');
+      if (!text.trim()) return [];
+      try {
+        const parsed = JSON.parse(text) as unknown;
+        return Array.isArray(parsed)
+          ? parsed.filter((item): item is string => typeof item === 'string' && !!item)
+          : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
   try {
-    const parsed = JSON.parse(value) as unknown;
+    const parsed = JSON.parse(String(value)) as unknown;
     return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string' && !!item) : [];
   } catch {
     return [];
   }
 }
 
+function parseJsonObject(value: unknown): ReimbursementDetails {
+  if (!value) return {};
+  if (typeof value === 'object' && !Buffer.isBuffer(value)) {
+    const record = value as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(record)
+        .filter(([key, item]) => key.trim() && typeof item === 'string')
+        .map(([key, item]) => [key, String(item)])
+    );
+  }
+  const text = Buffer.isBuffer(value) ? value.toString('utf-8') : String(value);
+  if (!text.trim()) return {};
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>)
+        .filter(([key, item]) => key.trim() && typeof item === 'string')
+        .map(([key, item]) => [key, String(item)])
+    );
+  } catch {
+    return {};
+  }
+}
+
 function serializeArray(list: string[] | null | undefined): string {
   return JSON.stringify((list ?? []).filter(Boolean));
+}
+
+function serializeDetails(details: ReimbursementDetails | null | undefined): string {
+  const source = details ?? {};
+  const normalized = Object.fromEntries(
+    Object.entries(source)
+      .map(([key, value]) => [key.trim(), String(value ?? '').trim()])
+      .filter(([key, value]) => key && value)
+  );
+  return JSON.stringify(normalized);
 }
 
 function requireDate(input: string | null | undefined): string {
@@ -91,6 +160,10 @@ function hasEvidence(input: Pick<ReimbursementRecord, 'invoiceImages' | 'receipt
   return input.invoiceImages.length > 0 || input.receiptImages.length > 0;
 }
 
+function hasInvoiceEvidence(input: Pick<ReimbursementRecord, 'invoiceImages'>): boolean {
+  return input.invoiceImages.length > 0;
+}
+
 function normalizeStatus(value: string): ReimbursementStatus {
   return isReimbursementStatus(value) ? value : 'draft';
 }
@@ -101,6 +174,45 @@ function normalizeSourceType(value: string): ReimbursementSourceType {
 
 function normalizeOrgType(value: string): ReimbursementOrganizationType {
   return isReimbursementOrganizationType(value) ? value : 'company';
+}
+
+function sanitizeReimbursementDetails(
+  category: ReimbursementCategory,
+  input: ReimbursementDetails | null | undefined
+): ReimbursementDetails {
+  const fields: ReimbursementDetailField[] = REIMBURSEMENT_CATEGORY_FIELDS[category] ?? [];
+  const source = input ?? {};
+  if (fields.length === 0) {
+    return Object.fromEntries(
+      Object.entries(source)
+        .map(([key, value]) => [key.trim(), String(value ?? '').trim()])
+        .filter(([key, value]) => key && value)
+    );
+  }
+  const allowedKeys = new Set(fields.map((field) => field.key));
+  const normalized: ReimbursementDetails = {};
+  for (const [key, raw] of Object.entries(source)) {
+    if (!allowedKeys.has(key)) continue;
+    const value = String(raw ?? '').trim();
+    if (!value) continue;
+    if (key.toLowerCase().includes('date')) {
+      const date = normalizeDateInput(value);
+      if (date) {
+        normalized[key] = date;
+      }
+      continue;
+    }
+    normalized[key] = value;
+  }
+
+  for (const field of fields) {
+    if (!field.required) continue;
+    const value = normalized[field.key]?.trim();
+    if (!value) {
+      throw new Error(`REIMBURSEMENT_DETAIL_REQUIRED:${field.key}`);
+    }
+  }
+  return normalized;
 }
 
 function mapReimbursement(row: RawReimbursementRow): ReimbursementRecord {
@@ -116,6 +228,7 @@ function mapReimbursement(row: RawReimbursementRow): ReimbursementRecord {
     amount: Number(row.amount ?? 0),
     occurredAt: formatDateOnly(row.occurred_at) ?? String(row.occurred_at),
     description: row.description ?? null,
+    details: parseJsonObject(row.details_json),
     invoiceImages: parseJsonArray(row.invoice_images),
     receiptImages: parseJsonArray(row.receipt_images),
     attachments: parseJsonArray(row.attachments),
@@ -129,8 +242,13 @@ function mapReimbursement(row: RawReimbursementRow): ReimbursementRecord {
     rejectionReason: row.rejection_reason,
     paidAt: row.paid_at,
     paidBy: row.paid_by,
+    paidByName: row.paid_by_name ?? null,
     paymentNote: row.payment_note,
     applicantId: row.applicant_id,
+    applicantName: row.applicant_name ?? null,
+    pendingApproverName: row.pending_approver_name ?? null,
+    approvedByName: row.approved_by_name ?? null,
+    rejectedByName: row.rejected_by_name ?? null,
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -174,7 +292,8 @@ async function generateReimbursementNumber(): Promise<string> {
   return `${prefix}${String(seq).padStart(4, '0')}`;
 }
 
-async function pickAutoApproverId(): Promise<string> {
+async function pickAutoApproverId(orgType: ReimbursementOrganizationType): Promise<string> {
+  const role = orgType === 'school' ? 'finance_school' : 'finance_company';
   const [rows] = await pool.query<Array<RowDataPacket & { id: string }>>(
     `
       SELECT e.id
@@ -189,15 +308,16 @@ async function pickAutoApproverId(): Promise<string> {
       ) approver_load ON approver_load.pending_approver_id = e.id
       WHERE e.is_active = 1
         AND (
-          e.primary_role = 'finance'
-          OR JSON_CONTAINS(COALESCE(e.roles, JSON_ARRAY()), JSON_QUOTE('finance'), '$')
+          e.primary_role = ?
+          OR JSON_CONTAINS(COALESCE(e.roles, JSON_ARRAY()), JSON_QUOTE(?), '$')
         )
       ORDER BY
         COALESCE(approver_load.pending_count, 0) ASC,
         e.updated_at DESC,
         e.id ASC
       LIMIT 1
-    `
+    `,
+    [role, role]
   );
   const id = rows[0]?.id?.trim();
   if (!id) throw new Error('APPROVER_NOT_FOUND');
@@ -211,6 +331,9 @@ async function assertLinkedPurchaseInboundReady(sourcePurchaseId: string) {
   if (!purchase || purchase.isDeleted) throw new Error('SOURCE_PURCHASE_NOT_FOUND');
   if (purchase.status !== 'approved' && purchase.status !== 'paid') {
     throw new Error('SOURCE_PURCHASE_NOT_APPROVED');
+  }
+  if (purchase.paymentMethod === 'corporate_transfer') {
+    throw new Error('SOURCE_PURCHASE_NOT_REIMBURSABLE');
   }
 
   const [rows] = await pool.query<Array<RowDataPacket & { total: number }>>(
@@ -230,6 +353,28 @@ async function assertLinkedPurchaseInboundReady(sourcePurchaseId: string) {
   }
 }
 
+async function assertPurchaseNotAlreadyLinked(
+  sourcePurchaseId: string,
+  options?: { excludeReimbursementId?: string | null }
+) {
+  const excludeReimbursementId = options?.excludeReimbursementId?.trim() || null;
+  const [rows] = await pool.query<Array<RowDataPacket & { total: number }>>(
+    `
+      SELECT COUNT(*) AS total
+      FROM reimbursements r
+      WHERE r.is_deleted = 0
+        AND r.source_type = 'purchase'
+        AND r.source_purchase_id = ?
+        AND (? IS NULL OR r.id <> ?)
+    `,
+    [sourcePurchaseId, excludeReimbursementId, excludeReimbursementId]
+  );
+
+  if (Number(rows[0]?.total ?? 0) > 0) {
+    throw new Error('SOURCE_PURCHASE_ALREADY_LINKED');
+  }
+}
+
 async function insertWorkflowLog(
   reimbursementId: string,
   action: ReimbursementAction,
@@ -246,6 +391,35 @@ async function insertWorkflowLog(
     `,
     [randomUUID(), reimbursementId, action, fromStatus, toStatus, operatorId, comment ?? null]
   );
+}
+
+async function syncFinanceExpenseRecordForReimbursement(reimbursement: ReimbursementRecord) {
+  const exists = await findRecordByReimbursementId(reimbursement.id);
+  if (exists) return;
+
+  await createRecord({
+    name: reimbursement.title,
+    type: TransactionType.EXPENSE,
+    category: String(reimbursement.category ?? '报销支出'),
+    date: reimbursement.occurredAt,
+    contractAmount: Number(reimbursement.amount ?? 0),
+    fee: 0,
+    paymentType: PaymentType.OTHER,
+    quantity: 1,
+    sourceType: 'reimbursement',
+    purchaseId: reimbursement.sourcePurchaseId,
+    reimbursementId: reimbursement.id,
+    description: reimbursement.description ?? '',
+    createdBy: reimbursement.paidBy ?? reimbursement.approvedBy ?? reimbursement.createdBy,
+    status: 'cleared',
+    metadata: {
+      reimbursementNumber: reimbursement.reimbursementNumber,
+      organizationType: reimbursement.organizationType,
+      sourceType: reimbursement.sourceType,
+      applicantId: reimbursement.applicantId,
+      paidAt: reimbursement.paidAt,
+    },
+  });
 }
 
 export async function listReimbursements(params: ListReimbursementsParams): Promise<ListReimbursementsResult> {
@@ -287,7 +461,8 @@ export async function listReimbursements(params: ListReimbursementsParams): Prom
     where.push("r.status = 'pending_approval' AND r.pending_approver_id = ?");
     values.push(params.currentUserId);
   } else if (scope === 'pay') {
-    where.push("r.status = 'approved'");
+    // Finance verifies and pays in one step: include pending_approval and approved.
+    where.push("r.status IN ('pending_approval', 'approved')");
     if (params.financeOrgType) {
       where.push('r.organization_type = ?');
       values.push(params.financeOrgType);
@@ -298,13 +473,23 @@ export async function listReimbursements(params: ListReimbursementsParams): Prom
   const fromClause = `
     FROM reimbursements r
     LEFT JOIN purchases p ON p.id = r.source_purchase_id
+    LEFT JOIN hr_employees applicant ON applicant.id = r.applicant_id
+    LEFT JOIN hr_employees pending_approver ON pending_approver.id = r.pending_approver_id
+    LEFT JOIN hr_employees approved_user ON approved_user.id = r.approved_by
+    LEFT JOIN hr_employees rejected_user ON rejected_user.id = r.rejected_by
+    LEFT JOIN hr_employees paid_user ON paid_user.id = r.paid_by
   `;
 
   const [rows] = await pool.query<RawReimbursementRow[]>(
     `
       SELECT
         r.*,
-        p.purchase_number AS source_purchase_number
+        p.purchase_number AS source_purchase_number,
+        COALESCE(applicant.display_name, applicant.email) AS applicant_name,
+        COALESCE(pending_approver.display_name, pending_approver.email) AS pending_approver_name,
+        COALESCE(approved_user.display_name, approved_user.email) AS approved_by_name,
+        COALESCE(rejected_user.display_name, rejected_user.email) AS rejected_by_name,
+        COALESCE(paid_user.display_name, paid_user.email) AS paid_by_name
       ${fromClause}
       ${whereClause}
       ORDER BY r.updated_at DESC, r.created_at DESC
@@ -330,9 +515,21 @@ export async function getReimbursementById(id: string): Promise<ReimbursementRec
   await ensureReimbursementsSchema();
   const [rows] = await pool.query<RawReimbursementRow[]>(
     `
-      SELECT r.*, p.purchase_number AS source_purchase_number
+      SELECT
+        r.*,
+        p.purchase_number AS source_purchase_number,
+        COALESCE(applicant.display_name, applicant.email) AS applicant_name,
+        COALESCE(pending_approver.display_name, pending_approver.email) AS pending_approver_name,
+        COALESCE(approved_user.display_name, approved_user.email) AS approved_by_name,
+        COALESCE(rejected_user.display_name, rejected_user.email) AS rejected_by_name,
+        COALESCE(paid_user.display_name, paid_user.email) AS paid_by_name
       FROM reimbursements r
       LEFT JOIN purchases p ON p.id = r.source_purchase_id
+      LEFT JOIN hr_employees applicant ON applicant.id = r.applicant_id
+      LEFT JOIN hr_employees pending_approver ON pending_approver.id = r.pending_approver_id
+      LEFT JOIN hr_employees approved_user ON approved_user.id = r.approved_by
+      LEFT JOIN hr_employees rejected_user ON rejected_user.id = r.rejected_by
+      LEFT JOIN hr_employees paid_user ON paid_user.id = r.paid_by
       WHERE r.id = ? AND r.is_deleted = 0
       LIMIT 1
     `,
@@ -378,20 +575,23 @@ export async function createReimbursement(
   if (sourceType === 'purchase' && sourcePurchaseId) {
     const purchase = await findPurchaseById(sourcePurchaseId);
     if (!purchase || purchase.isDeleted) throw new Error('SOURCE_PURCHASE_NOT_FOUND');
+    if (purchase.paymentMethod === 'corporate_transfer') throw new Error('SOURCE_PURCHASE_NOT_REIMBURSABLE');
+    await assertPurchaseNotAlreadyLinked(sourcePurchaseId);
     organizationType = purchase.organizationType;
   }
 
   const id = randomUUID();
   const number = await generateReimbursementNumber();
   const occurredAt = requireDate(input.occurredAt);
+  const details = sanitizeReimbursementDetails(input.category.trim(), input.details);
 
   await pool.query(
     `
       INSERT INTO reimbursements (
         id, reimbursement_number, source_type, source_purchase_id,
         organization_type, category, title, amount, occurred_at, description,
-        invoice_images, receipt_images, attachments, status, applicant_id, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)
+        details_json, invoice_images, receipt_images, attachments, status, applicant_id, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)
     `,
     [
       id,
@@ -404,6 +604,7 @@ export async function createReimbursement(
       Number(input.amount),
       occurredAt,
       input.description?.trim() || null,
+      serializeDetails(details),
       serializeArray(input.invoiceImages),
       serializeArray(input.receiptImages),
       serializeArray(input.attachments),
@@ -424,6 +625,9 @@ export async function updateReimbursement(
   const existing = await getReimbursementById(id);
   if (!existing) throw new Error('REIMBURSEMENT_NOT_FOUND');
   if (!(existing.status === 'draft' || existing.status === 'rejected')) throw new Error('REIMBURSEMENT_NOT_EDITABLE');
+  if (existing.sourceType === 'purchase' && existing.submittedAt) {
+    throw new Error('REIMBURSEMENT_LINKED_PURCHASE_LOCKED');
+  }
 
   const updates: string[] = [];
   const values: unknown[] = [];
@@ -436,12 +640,17 @@ export async function updateReimbursement(
   const nextSourceType = input.sourceType ?? existing.sourceType;
   const nextSourcePurchaseId =
     input.sourcePurchaseId !== undefined ? input.sourcePurchaseId?.trim() || null : existing.sourcePurchaseId;
+  const nextCategory = input.category !== undefined ? input.category.trim() : existing.category;
 
   if (!isReimbursementSourceType(nextSourceType)) throw new Error('REIMBURSEMENT_SOURCE_INVALID');
   if (nextSourceType === 'purchase' && !nextSourcePurchaseId) throw new Error('SOURCE_PURCHASE_REQUIRED');
   if (nextSourceType === 'purchase' && nextSourcePurchaseId) {
     const purchase = await findPurchaseById(nextSourcePurchaseId);
     if (!purchase || purchase.isDeleted) throw new Error('SOURCE_PURCHASE_NOT_FOUND');
+    if (purchase.paymentMethod === 'corporate_transfer') throw new Error('SOURCE_PURCHASE_NOT_REIMBURSABLE');
+    if (nextSourcePurchaseId !== (existing.sourcePurchaseId ?? '')) {
+      await assertPurchaseNotAlreadyLinked(nextSourcePurchaseId, { excludeReimbursementId: id });
+    }
     if (input.organizationType === undefined) {
       push('organization_type', purchase.organizationType);
     }
@@ -453,8 +662,8 @@ export async function updateReimbursement(
     push('organization_type', input.organizationType);
   }
   if (input.category !== undefined) {
-    if (!input.category.trim()) throw new Error('REIMBURSEMENT_CATEGORY_REQUIRED');
-    push('category', input.category.trim());
+    if (!nextCategory) throw new Error('REIMBURSEMENT_CATEGORY_REQUIRED');
+    push('category', nextCategory);
   }
   if (input.title !== undefined) {
     if (!input.title.trim()) throw new Error('REIMBURSEMENT_TITLE_REQUIRED');
@@ -468,6 +677,10 @@ export async function updateReimbursement(
     push('occurred_at', requireDate(input.occurredAt));
   }
   if (input.description !== undefined) push('description', input.description?.trim() || null);
+  if (input.details !== undefined || input.category !== undefined) {
+    const nextDetails = sanitizeReimbursementDetails(nextCategory, input.details ?? existing.details);
+    push('details_json', serializeDetails(nextDetails));
+  }
   if (input.invoiceImages !== undefined) push('invoice_images', serializeArray(input.invoiceImages));
   if (input.receiptImages !== undefined) push('receipt_images', serializeArray(input.receiptImages));
   if (input.attachments !== undefined) push('attachments', serializeArray(input.attachments));
@@ -484,12 +697,22 @@ export async function submitReimbursement(id: string, operatorId: string): Promi
   const existing = await getReimbursementById(id);
   if (!existing) throw new Error('REIMBURSEMENT_NOT_FOUND');
   if (!(existing.status === 'draft' || existing.status === 'rejected')) throw new Error('REIMBURSEMENT_NOT_SUBMITTABLE');
-  if (!hasEvidence(existing)) throw new Error('INVOICE_FILES_REQUIRED');
+  sanitizeReimbursementDetails(existing.category, existing.details);
+
   if (existing.sourceType === 'purchase') {
     if (!existing.sourcePurchaseId) throw new Error('SOURCE_PURCHASE_REQUIRED');
+    const sourcePurchase = await findPurchaseById(existing.sourcePurchaseId);
+    if (!sourcePurchase || sourcePurchase.isDeleted) throw new Error('SOURCE_PURCHASE_NOT_FOUND');
+    const purchaseNeedInvoice =
+      sourcePurchase.invoiceType !== 'none' && sourcePurchase.invoiceStatus !== 'not_required';
+    if (purchaseNeedInvoice && !hasInvoiceEvidence(existing)) {
+      throw new Error('REIMBURSEMENT_PURCHASE_INVOICE_REQUIRED');
+    }
     await assertLinkedPurchaseInboundReady(existing.sourcePurchaseId);
+  } else if (!hasEvidence(existing)) {
+    throw new Error('INVOICE_FILES_REQUIRED');
   }
-  const approverId = await pickAutoApproverId();
+  const approverId = await pickAutoApproverId(existing.organizationType);
 
   await pool.query(
     `
@@ -539,13 +762,16 @@ export async function rejectReimbursement(id: string, operatorId: string, reason
   await ensureReimbursementsSchema();
   const existing = await getReimbursementById(id);
   if (!existing) throw new Error('REIMBURSEMENT_NOT_FOUND');
-  if (existing.status !== 'pending_approval') throw new Error('REIMBURSEMENT_NOT_REJECTABLE');
+  if (existing.status !== 'pending_approval' && existing.status !== 'approved') throw new Error('REIMBURSEMENT_NOT_REJECTABLE');
   if (!reason.trim()) throw new Error('REIMBURSEMENT_REJECT_REASON_REQUIRED');
+  const fromStatus = existing.status;
 
   await pool.query(
     `
       UPDATE reimbursements
       SET status = 'rejected',
+          approved_at = NULL,
+          approved_by = NULL,
           rejected_at = NOW(),
           rejected_by = ?,
           rejection_reason = ?,
@@ -556,7 +782,7 @@ export async function rejectReimbursement(id: string, operatorId: string, reason
     [operatorId, reason.trim(), id]
   );
 
-  await insertWorkflowLog(id, 'reject', 'pending_approval', 'rejected', operatorId, reason.trim());
+  await insertWorkflowLog(id, 'reject', fromStatus, 'rejected', operatorId, reason.trim());
   return (await getReimbursementById(id))!;
 }
 
@@ -584,22 +810,45 @@ export async function payReimbursement(id: string, operatorId: string, note?: st
   await ensureReimbursementsSchema();
   const existing = await getReimbursementById(id);
   if (!existing) throw new Error('REIMBURSEMENT_NOT_FOUND');
-  if (existing.status !== 'approved') throw new Error('REIMBURSEMENT_NOT_PAYABLE');
+  if (existing.status !== 'approved' && existing.status !== 'pending_approval') throw new Error('REIMBURSEMENT_NOT_PAYABLE');
 
-  await pool.query(
-    `
-      UPDATE reimbursements
-      SET status = 'paid',
-          paid_at = NOW(),
-          paid_by = ?,
-          payment_note = ?,
-          updated_at = NOW()
-      WHERE id = ?
-    `,
-    [operatorId, note?.trim() || null, id]
-  );
-  await insertWorkflowLog(id, 'pay', 'approved', 'paid', operatorId, note?.trim() || '财务打款');
-  return (await getReimbursementById(id))!;
+  if (existing.status === 'pending_approval') {
+    await pool.query(
+      `
+        UPDATE reimbursements
+        SET status = 'paid',
+            approved_at = NOW(),
+            approved_by = ?,
+            pending_approver_id = NULL,
+            paid_at = NOW(),
+            paid_by = ?,
+            payment_note = ?,
+            updated_at = NOW()
+        WHERE id = ?
+      `,
+      [operatorId, operatorId, note?.trim() || null, id]
+    );
+    await insertWorkflowLog(id, 'approve', 'pending_approval', 'approved', operatorId, '财务核对通过并准备打款');
+    await insertWorkflowLog(id, 'pay', 'approved', 'paid', operatorId, note?.trim() || '财务打款');
+  } else {
+    await pool.query(
+      `
+        UPDATE reimbursements
+        SET status = 'paid',
+            paid_at = NOW(),
+            paid_by = ?,
+            payment_note = ?,
+            updated_at = NOW()
+        WHERE id = ?
+      `,
+      [operatorId, note?.trim() || null, id]
+    );
+    await insertWorkflowLog(id, 'pay', 'approved', 'paid', operatorId, note?.trim() || '财务打款');
+  }
+
+  const updated = (await getReimbursementById(id))!;
+  await syncFinanceExpenseRecordForReimbursement(updated);
+  return updated;
 }
 
 export async function deleteReimbursement(id: string): Promise<void> {
@@ -610,7 +859,10 @@ export async function deleteReimbursement(id: string): Promise<void> {
   );
 }
 
-export async function checkPurchaseEligibilityForReimbursement(purchaseId: string): Promise<{
+export async function checkPurchaseEligibilityForReimbursement(
+  purchaseId: string,
+  options?: { excludeReimbursementId?: string | null }
+): Promise<{
   eligible: boolean;
   reason?: string;
 }> {
@@ -619,14 +871,44 @@ export async function checkPurchaseEligibilityForReimbursement(purchaseId: strin
   if (!purchase || purchase.isDeleted) {
     return { eligible: false, reason: '采购单不存在或已删除' };
   }
-  if (purchase.status !== 'approved' && purchase.status !== 'paid') {
+  if (purchase.status !== 'approved' && purchase.status !== 'pending_inbound' && purchase.status !== 'paid') {
     return { eligible: false, reason: '仅已审批采购单可关联报销' };
+  }
+  if (purchase.paymentMethod === 'corporate_transfer') {
+    return { eligible: false, reason: '对公转账采购不属于员工垫付，不能关联报销' };
   }
 
   try {
+    const excludeReimbursementId = options?.excludeReimbursementId?.trim() || null;
+    if (excludeReimbursementId) {
+      const [currentRows] = await pool.query<Array<RowDataPacket & { source_purchase_id: string | null }>>(
+        `
+          SELECT source_purchase_id
+          FROM reimbursements
+          WHERE id = ?
+            AND is_deleted = 0
+          LIMIT 1
+        `,
+        [excludeReimbursementId]
+      );
+      const currentSourcePurchaseId = currentRows[0]?.source_purchase_id ?? null;
+      if (currentSourcePurchaseId !== purchaseId) {
+        await assertPurchaseNotAlreadyLinked(purchaseId, {
+          excludeReimbursementId,
+        });
+      }
+    } else {
+      await assertPurchaseNotAlreadyLinked(purchaseId);
+    }
     await assertLinkedPurchaseInboundReady(purchaseId);
     return { eligible: true };
   } catch (error) {
+    if (error instanceof Error && error.message === 'SOURCE_PURCHASE_ALREADY_LINKED') {
+      return { eligible: false, reason: '该采购单已关联报销单，不能重复关联' };
+    }
+    if (error instanceof Error && error.message === 'SOURCE_PURCHASE_NOT_REIMBURSABLE') {
+      return { eligible: false, reason: '对公转账采购不属于员工垫付，不能关联报销' };
+    }
     if (error instanceof Error && error.message === 'SOURCE_PURCHASE_INBOUND_REQUIRED') {
       return { eligible: false, reason: '该采购单尚未入库，暂不可关联报销' };
     }

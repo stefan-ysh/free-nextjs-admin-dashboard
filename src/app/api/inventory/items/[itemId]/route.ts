@@ -6,6 +6,7 @@ import {
   updateInventoryItem,
   INVENTORY_ERRORS,
 } from '@/lib/db/inventory';
+import { normalizeInventoryCategory } from '@/lib/inventory/catalog';
 import type { InventoryItemPayload } from '@/types/inventory';
 import { sanitizeItemPayload, validateItemPayload } from '../validator';
 
@@ -47,6 +48,9 @@ export async function PATCH(
     const { itemId } = await params;
     const raw = (await request.json()) as Partial<InventoryItemPayload>;
     const payload = sanitizeItemPayload(raw);
+    if (payload.category !== undefined) {
+      payload.category = normalizeInventoryCategory(String(payload.category));
+    }
     const errorMessage = validateItemPayload(payload, { partial: true });
     if (errorMessage) {
       return NextResponse.json({ error: errorMessage }, { status: 400 });

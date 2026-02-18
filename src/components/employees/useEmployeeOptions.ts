@@ -1,30 +1,30 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { DepartmentOption, JobGradeOption } from './types';
+import { JobGradeOption } from './types';
 
 type UseEmployeeOptionsProps = {
-    initialDepartments?: DepartmentOption[];
+    // initialDepartments?: DepartmentOption[];
     initialJobGrades?: JobGradeOption[];
 };
 
 export function useEmployeeOptions({
-    initialDepartments,
+    // initialDepartments,
     initialJobGrades,
 }: UseEmployeeOptionsProps) {
-    const [departments, setDepartments] = useState<DepartmentOption[]>(
-        initialDepartments ?? []
-    );
+    // const [departments, setDepartments] = useState<DepartmentOption[]>(
+    //     initialDepartments ?? []
+    // );
     const [jobGrades, setJobGrades] = useState<JobGradeOption[]>(
         initialJobGrades ?? []
     );
 
     // Sync if props change
-    useEffect(() => {
-        if (initialDepartments?.length) {
-            setDepartments(initialDepartments);
-        }
-    }, [initialDepartments]);
+    // useEffect(() => {
+    //     if (initialDepartments?.length) {
+    //         setDepartments(initialDepartments);
+    //     }
+    // }, [initialDepartments]);
 
     useEffect(() => {
         if (initialJobGrades?.length) {
@@ -33,6 +33,7 @@ export function useEmployeeOptions({
     }, [initialJobGrades]);
 
     // Fetch if empty
+    /*
     useEffect(() => {
         if (initialDepartments?.length) return;
 
@@ -54,6 +55,7 @@ export function useEmployeeOptions({
             cancelled = true;
         };
     }, [initialDepartments]);
+    */
 
     useEffect(() => {
         if (initialJobGrades?.length) return;
@@ -78,7 +80,7 @@ export function useEmployeeOptions({
     }, [initialJobGrades]);
 
     return {
-        departments,
+        // departments,
         jobGrades,
     };
 }

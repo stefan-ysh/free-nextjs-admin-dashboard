@@ -3,27 +3,20 @@ import { NextResponse } from 'next/server';
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { toPermissionUser } from '@/lib/auth/permission-user';
 import { getPurchaseStats } from '@/lib/db/purchases';
-import { checkPermission, Permissions } from '@/lib/permissions';
+import { UserRole } from '@/types/user';
 import { parsePurchaseListParams } from '../query-utils';
 
 export async function GET(request: Request) {
   try {
     const context = await requireCurrentUser();
     const permissionUser = await toPermissionUser(context.user);
-    const [viewAll, viewDepartment] = await Promise.all([
-      checkPermission(permissionUser, Permissions.PURCHASE_VIEW_ALL),
-      checkPermission(permissionUser, Permissions.PURCHASE_VIEW_DEPARTMENT),
-    ]);
+    const isSuperAdmin = permissionUser.primaryRole === UserRole.SUPER_ADMIN;
 
     const { searchParams } = new URL(request.url);
     const params = parsePurchaseListParams(searchParams);
 
-    if (!viewAll.allowed) {
-      if (viewDepartment.allowed && permissionUser.department) {
-        params.purchaserDepartment = permissionUser.department;
-      } else {
-        params.purchaserId = context.user.id;
-      }
+    if (!isSuperAdmin) {
+      params.purchaserId = context.user.id;
     }
 
     const stats = await getPurchaseStats(params);

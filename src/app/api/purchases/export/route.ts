@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { toPermissionUser } from '@/lib/auth/permission-user';
 import { listPurchases } from '@/lib/db/purchases';
-import { checkPermission, Permissions } from '@/lib/permissions';
 import {
   getPurchaseStatusText,
   INVOICE_STATUS_LABELS,
@@ -14,6 +13,7 @@ import {
   PURCHASE_ORGANIZATION_LABELS,
   type PurchaseRecord,
 } from '@/types/purchase';
+import { UserRole } from '@/types/user';
 import { formatCurrency } from '@/lib/format';
 import { parsePurchaseListParams } from '../query-utils';
 
@@ -97,12 +97,12 @@ export async function GET(request: Request) {
   try {
     const context = await requireCurrentUser();
     const permissionUser = await toPermissionUser(context.user);
-    const viewAll = await checkPermission(permissionUser, Permissions.PURCHASE_VIEW_ALL);
+    const isSuperAdmin = permissionUser.primaryRole === UserRole.SUPER_ADMIN;
 
     const { searchParams } = new URL(request.url);
     const params = parsePurchaseListParams(searchParams);
 
-    if (!viewAll.allowed) {
+    if (!isSuperAdmin) {
       params.purchaserId = context.user.id;
     }
 

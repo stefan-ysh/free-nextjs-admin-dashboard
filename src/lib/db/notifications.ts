@@ -24,6 +24,10 @@ type FinanceUserRow = RowDataPacket & {
   id: string;
 };
 
+type ExistingNotificationRow = RowDataPacket & {
+  recipient_id: string;
+};
+
 type EmployeeEmailRow = RowDataPacket & {
   email: string | null;
 };
@@ -66,6 +70,7 @@ export async function createInAppNotifications(params: {
   linkUrl?: string | null;
   relatedType?: string | null;
   relatedId?: string | null;
+  dedupeWindowMinutes?: number;
 }) {
   await ensureNotificationsSchema();
   const recipientIds = Array.from(
@@ -74,7 +79,36 @@ export async function createInAppNotifications(params: {
   if (recipientIds.length === 0) return 0;
 
   const pool = mysqlPool();
-  const values = recipientIds.map((recipientId) => [
+  const dedupeWindowMinutes = Math.max(0, Math.floor(params.dedupeWindowMinutes ?? 10));
+  let targetRecipientIds = recipientIds;
+
+  if (dedupeWindowMinutes > 0) {
+    const placeholders = recipientIds.map(() => '?').join(',');
+    const [existingRows] = await pool.query<ExistingNotificationRow[]>(
+      `SELECT recipient_id
+       FROM app_notifications
+       WHERE recipient_id IN (${placeholders})
+         AND event_type = ?
+         AND COALESCE(related_type, '') = COALESCE(?, '')
+         AND COALESCE(related_id, '') = COALESCE(?, '')
+         AND title = ?
+         AND created_at >= DATE_SUB(NOW(3), INTERVAL ? MINUTE)`,
+      [
+        ...recipientIds,
+        params.eventType,
+        params.relatedType ?? 'purchase',
+        params.relatedId ?? null,
+        params.title,
+        dedupeWindowMinutes,
+      ]
+    );
+    const dedupedRecipientIds = new Set(existingRows.map((row) => row.recipient_id));
+    targetRecipientIds = recipientIds.filter((id) => !dedupedRecipientIds.has(id));
+  }
+
+  if (targetRecipientIds.length === 0) return 0;
+
+  const values = targetRecipientIds.map((recipientId) => [
     randomUUID(),
     recipientId,
     params.eventType,
@@ -139,7 +173,29 @@ export async function listInAppNotificationsByRecipient(params: {
   };
 }
 
-export async function listFinanceRecipientIds() {
+export async function listFinanceRecipientIds(orgType?: 'school' | 'company') {
+  await ensureNotificationsSchema();
+  const pool = mysqlPool();
+  const schoolClause = `
+         primary_role = 'finance_school'
+         OR JSON_CONTAINS(roles, JSON_QUOTE('finance_school'), '$')
+  `;
+  const companyClause = `
+         primary_role = 'finance_company'
+         OR JSON_CONTAINS(roles, JSON_QUOTE('finance_company'), '$')
+  `;
+  const bothClause = `${schoolClause} OR ${companyClause}`;
+  const scopedFinanceClause = orgType === 'school' ? schoolClause : orgType === 'company' ? companyClause : bothClause;
+  const [rows] = await pool.query<FinanceUserRow[]>(
+    `SELECT id
+     FROM hr_employees
+     WHERE is_active = 1
+       AND (${scopedFinanceClause})`
+  );
+  return rows.map((row) => row.id);
+}
+
+export async function listSuperAdminRecipientIds() {
   await ensureNotificationsSchema();
   const pool = mysqlPool();
   const [rows] = await pool.query<FinanceUserRow[]>(
@@ -147,9 +203,7 @@ export async function listFinanceRecipientIds() {
      FROM hr_employees
      WHERE is_active = 1
        AND (
-         primary_role IN ('finance','admin','super_admin')
-         OR JSON_CONTAINS(roles, JSON_QUOTE('finance'), '$')
-         OR JSON_CONTAINS(roles, JSON_QUOTE('admin'), '$')
+         primary_role = 'super_admin'
          OR JSON_CONTAINS(roles, JSON_QUOTE('super_admin'), '$')
        )`
   );

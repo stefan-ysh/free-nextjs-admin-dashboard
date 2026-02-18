@@ -9,6 +9,17 @@ function stripPassword(user: UserRecord): UserProfile {
   return profile;
 }
 
+function normalizeProfileRoles(profile: UserProfile): UserProfile {
+  const normalizedRoles = Array.from(new Set((profile.roles ?? []).map((role) => mapAuthRole(role))));
+  const normalizedPrimary = mapAuthRole(profile.primaryRole);
+  const roles = normalizedRoles.length ? normalizedRoles : [normalizedPrimary];
+  return {
+    ...profile,
+    roles,
+    primaryRole: normalizedPrimary,
+  };
+}
+
 function fallbackProfile(user: AuthUserProfile): UserProfile {
   const mappedRole = mapAuthRole(user.role);
   return {
@@ -20,7 +31,7 @@ function fallbackProfile(user: AuthUserProfile): UserProfile {
     phone: user.phone,
     employeeCode: null,
     department: null,
-    jobTitle: user.job_title,
+    jobTitle: null,
     employmentStatus: null,
     hireDate: null,
     terminationDate: null,
@@ -47,10 +58,10 @@ export async function toPermissionUser(user: AuthUserProfile): Promise<UserProfi
   try {
     const businessUser = await findBusinessUserById(user.id);
     if (businessUser) {
-      return stripPassword(businessUser);
+      return normalizeProfileRoles(stripPassword(businessUser));
     }
   } catch (error) {
     console.warn('Failed to hydrate business user profile, fallback to auth user role mapping', error);
   }
-  return fallbackProfile(user);
+  return normalizeProfileRoles(fallbackProfile(user));
 }

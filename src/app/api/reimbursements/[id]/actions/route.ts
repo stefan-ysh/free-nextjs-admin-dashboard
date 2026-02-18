@@ -106,8 +106,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     if (action === 'reject') {
       const canReject = await checkPermission(permissionUser, Permissions.REIMBURSEMENT_REJECT);
-      if (!canReject.allowed) return forbiddenResponse();
-      if (existing.pendingApproverId && existing.pendingApproverId !== permissionUser.id) return forbiddenResponse();
+      const canPay = await checkPermission(permissionUser, Permissions.REIMBURSEMENT_PAY);
+      const canRejectAsFinancePay =
+        canPay.allowed &&
+        canPayByOrg(permissionUser.primaryRole, existing.organizationType) &&
+        (existing.status === 'pending_approval' || existing.status === 'approved');
+      if (!canReject.allowed && !canRejectAsFinancePay) return forbiddenResponse();
+      if (canReject.allowed && existing.pendingApproverId && existing.pendingApproverId !== permissionUser.id && !canRejectAsFinancePay) {
+        return forbiddenResponse();
+      }
       if (typeof reason !== 'string' || !reason.trim()) return badRequestResponse('驳回原因不能为空');
       const updated = await rejectReimbursement(id, permissionUser.id, reason.trim());
       await notifySafely('reimbursement_rejected', id);

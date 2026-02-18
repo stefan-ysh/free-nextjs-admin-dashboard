@@ -26,7 +26,6 @@ const ALLOWED_SORTS: Array<NonNullable<ExportEmployeesParams['sortBy']>> = [
   'createdAt',
   'updatedAt',
   'displayName',
-  'department',
   'status',
 ];
 
@@ -50,9 +49,6 @@ export async function GET(request: Request) {
 
     const filters: ExportEmployeesParams = {
       search: searchParams.get('search') ?? undefined,
-      department: searchParams.get('department') ?? undefined,
-      departmentId: searchParams.get('departmentId') ?? undefined,
-      jobGradeId: searchParams.get('jobGradeId') ?? undefined,
       status: normalizeStatusParam(searchParams.get('status')),
       sortBy,
       sortOrder,

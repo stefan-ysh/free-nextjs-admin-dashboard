@@ -22,6 +22,7 @@ export function formatMoney(value: unknown): string {
 
 export function statusBadgeClass(status: string): string {
   if (status === 'pending_approval') return 'bg-chart-3/15 text-chart-3 border-chart-3/30';
+  if (status === 'pending_inbound') return 'bg-chart-4/15 text-chart-4 border-chart-4/30';
   if (status === 'approved') return 'bg-chart-2/15 text-chart-2 border-chart-2/30';
   if (status === 'paid') return 'bg-chart-5/15 text-chart-5 border-chart-5/30';
   if (status === 'rejected') return 'bg-destructive/15 text-destructive border-destructive/30';

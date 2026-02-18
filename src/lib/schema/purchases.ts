@@ -90,7 +90,7 @@ export async function ensurePurchasesSchema() {
       invoice_issue_date DATE,
       invoice_images JSON NOT NULL DEFAULT (JSON_ARRAY()),
       receipt_images JSON NOT NULL DEFAULT (JSON_ARRAY()),
-      status ENUM('draft','pending_approval','approved','rejected','paid','cancelled') NOT NULL DEFAULT 'draft',
+      status ENUM('draft','pending_approval','pending_inbound','approved','rejected','paid','cancelled') NOT NULL DEFAULT 'draft',
       reimbursement_status ENUM('none','invoice_pending','reimbursement_pending','reimbursement_rejected','reimbursed') NOT NULL DEFAULT 'none',
       reimbursement_submitted_at DATETIME(3),
       reimbursement_submitted_by CHAR(36),
@@ -99,6 +99,7 @@ export async function ensurePurchasesSchema() {
       reimbursement_rejected_reason TEXT,
       submitted_at DATETIME(3),
       pending_approver_id CHAR(36),
+      inbound_quantity DECIMAL(10,2) NOT NULL DEFAULT 0,
       workflow_step_index INT,
       workflow_nodes JSON,
       approved_at DATETIME(3),
@@ -159,6 +160,10 @@ export async function ensurePurchasesSchema() {
   await ensureColumn('purchases', 'invoice_number', 'VARCHAR(120)');
   await ensureColumn('purchases', 'invoice_issue_date', 'DATE');
   await ensureColumn('purchases', 'pending_approver_id', 'CHAR(36) NULL');
+  await ensureColumn('purchases', 'inbound_quantity', 'DECIMAL(10,2) NOT NULL DEFAULT 0');
+  await pool.query(
+    "ALTER TABLE purchases MODIFY COLUMN status ENUM('draft','pending_approval','pending_inbound','approved','rejected','paid','cancelled') NOT NULL DEFAULT 'draft'"
+  );
   await ensureColumn(
     'purchases',
     'reimbursement_status',
@@ -173,11 +178,11 @@ export async function ensurePurchasesSchema() {
     UPDATE purchases
     SET reimbursement_status = CASE
       WHEN status = 'paid' THEN 'reimbursed'
-      WHEN status = 'approved' THEN 'invoice_pending'
+      WHEN status IN ('pending_inbound','approved') THEN 'invoice_pending'
       ELSE reimbursement_status
     END
     WHERE reimbursement_status = 'none'
-      AND status IN ('approved', 'paid')
+      AND status IN ('pending_inbound', 'approved', 'paid')
   `);
   await ensureColumn('purchases', 'workflow_step_index', 'INT NULL');
   await ensureColumn('purchases', 'workflow_nodes', 'JSON NULL');
@@ -203,8 +208,8 @@ export async function ensurePurchasesSchema() {
       id CHAR(36) NOT NULL PRIMARY KEY,
       purchase_id CHAR(36) NOT NULL,
       action ENUM('submit','approve','reject','pay','cancel','withdraw','transfer','issue','resolve') NOT NULL,
-      from_status ENUM('draft','pending_approval','approved','rejected','paid','cancelled') NOT NULL,
-      to_status ENUM('draft','pending_approval','approved','rejected','paid','cancelled') NOT NULL,
+      from_status ENUM('draft','pending_approval','pending_inbound','approved','rejected','paid','cancelled') NOT NULL,
+      to_status ENUM('draft','pending_approval','pending_inbound','approved','rejected','paid','cancelled') NOT NULL,
       operator_id CHAR(36) NOT NULL,
       comment TEXT,
       created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -216,34 +221,12 @@ export async function ensurePurchasesSchema() {
   await pool.query(
     "ALTER TABLE reimbursement_logs MODIFY COLUMN action ENUM('submit','approve','reject','pay','cancel','withdraw','transfer','issue','resolve') NOT NULL"
   );
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS purchase_payments (
-      id CHAR(36) NOT NULL PRIMARY KEY,
-      purchase_id CHAR(36) NOT NULL,
-      amount DECIMAL(15,2) NOT NULL,
-      paid_at DATETIME(3) NOT NULL,
-      paid_by CHAR(36) NOT NULL,
-      note TEXT,
-      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-      CONSTRAINT fk_purchase_payments_purchase FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE CASCADE,
-      CONSTRAINT fk_purchase_payments_payer FOREIGN KEY (paid_by) REFERENCES hr_employees(id) ON DELETE RESTRICT
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS purchase_workflow_configs (
-      id CHAR(36) NOT NULL PRIMARY KEY,
-      workflow_key VARCHAR(64) NOT NULL UNIQUE,
-      name VARCHAR(120) NOT NULL,
-      enabled TINYINT(1) NOT NULL DEFAULT 1,
-      nodes JSON NOT NULL,
-      updated_by CHAR(36),
-      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-      updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-      CONSTRAINT fk_purchase_workflow_updated_by FOREIGN KEY (updated_by) REFERENCES hr_employees(id) ON DELETE SET NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-  `);
+  await pool.query(
+    "ALTER TABLE reimbursement_logs MODIFY COLUMN from_status ENUM('draft','pending_approval','pending_inbound','approved','rejected','paid','cancelled') NOT NULL"
+  );
+  await pool.query(
+    "ALTER TABLE reimbursement_logs MODIFY COLUMN to_status ENUM('draft','pending_approval','pending_inbound','approved','rejected','paid','cancelled') NOT NULL"
+  );
 
   await safeCreateIndex('CREATE INDEX idx_purchases_number ON purchases(purchase_number)');
   await safeCreateIndex('CREATE INDEX idx_purchases_purchaser ON purchases(purchaser_id)');
@@ -253,14 +236,21 @@ export async function ensurePurchasesSchema() {
   await safeCreateIndex('CREATE INDEX idx_purchases_created_by ON purchases(created_by)');
   await safeCreateIndex('CREATE INDEX idx_reimbursement_logs_purchase ON reimbursement_logs(purchase_id)');
   await safeCreateIndex('CREATE INDEX idx_reimbursement_logs_created ON reimbursement_logs(created_at)');
-  await safeCreateIndex('CREATE INDEX idx_purchase_payments_purchase ON purchase_payments(purchase_id)');
-  await safeCreateIndex('CREATE INDEX idx_purchase_payments_paid_at ON purchase_payments(paid_at)');
-  await safeCreateIndex('CREATE INDEX idx_purchase_workflow_enabled ON purchase_workflow_configs(enabled)');
-
   // Hard-delete deprecated supplier module tables.
   await pool.query('DROP TABLE IF EXISTS supplier_bank_accounts');
   await pool.query('DROP TABLE IF EXISTS supplier_contacts');
   await pool.query('DROP TABLE IF EXISTS suppliers');
+  await dropForeignKeyIfExists('finance_records', 'fk_finance_purchase_payment');
+  await dropIndexIfExists('finance_records', 'idx_finance_purchase_payment');
+  await dropColumnIfExists('finance_records', 'purchase_payment_id');
+  await pool.query('DROP TABLE IF EXISTS purchase_payments');
+  await pool.query('DROP TABLE IF EXISTS purchase_workflow_configs');
+  await pool.query('DROP TABLE IF EXISTS project_payments');
+  await pool.query('DROP TABLE IF EXISTS projects');
+  await pool.query('DROP TABLE IF EXISTS calendar_events');
+  await pool.query('DROP TABLE IF EXISTS client_logs');
+  await pool.query('DROP TABLE IF EXISTS client_contacts');
+  await pool.query('DROP TABLE IF EXISTS clients');
 
   initialized = true;
 }

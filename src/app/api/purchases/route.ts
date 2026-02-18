@@ -6,6 +6,7 @@ import { listPurchases, createPurchase } from '@/lib/db/purchases';
 // import { ensureDepartmentBudgetWithinLimit } from '@/lib/purchases/budget-guard'; // Removed
 import { checkPermission, Permissions } from '@/lib/permissions';
 import { CreatePurchaseInput } from '@/types/purchase';
+import { UserRole } from '@/types/user';
 import { parsePurchaseListParams } from './query-utils';
 import { mapPurchaseValidationError } from '@/lib/purchases/error-messages';
 
@@ -25,19 +26,14 @@ export async function GET(request: Request) {
   try {
     const context = await requireCurrentUser();
     const permissionUser = await toPermissionUser(context.user);
-
-    // allow full listing for users with viewAll permission,
-    // otherwise restrict to department scope (if available) or own purchases
-    const [viewAll, viewDepartment] = await Promise.all([
-      checkPermission(permissionUser, Permissions.PURCHASE_VIEW_ALL),
-      checkPermission(permissionUser, Permissions.PURCHASE_VIEW_DEPARTMENT),
-    ]);
+    const isSuperAdmin = permissionUser.primaryRole === UserRole.SUPER_ADMIN;
     const { searchParams } = new URL(request.url);
+    const scope = searchParams.get('scope');
     const params = parsePurchaseListParams(searchParams);
-
-    if (!viewAll.allowed) {
-      if (viewDepartment.allowed && permissionUser.department) {
-        params.purchaserDepartment = permissionUser.department;
+    params.currentUserId = context.user.id;
+    if (!isSuperAdmin) {
+      if (scope === 'workflow_done') {
+        params.relatedUserId = context.user.id;
       } else {
         params.purchaserId = context.user.id;
       }
@@ -58,6 +54,7 @@ export async function POST(request: Request) {
   try {
     const context = await requireCurrentUser();
     const permissionUser = await toPermissionUser(context.user);
+    if (permissionUser.primaryRole === UserRole.SUPER_ADMIN) return forbiddenResponse();
 
     // check create permission (business-layer will do deeper checks)
     const perm = await checkPermission(permissionUser, Permissions.PURCHASE_CREATE);

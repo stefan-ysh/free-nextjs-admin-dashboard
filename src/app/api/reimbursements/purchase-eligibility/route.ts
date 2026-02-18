@@ -16,9 +16,12 @@ export async function GET(request: Request) {
     await requireCurrentUser();
     const { searchParams } = new URL(request.url);
     const purchaseId = searchParams.get('purchaseId')?.trim();
+    const reimbursementId = searchParams.get('reimbursementId')?.trim() || null;
     if (!purchaseId) return badRequestResponse('缺少 purchaseId');
 
-    const data = await checkPurchaseEligibilityForReimbursement(purchaseId);
+    const data = await checkPurchaseEligibilityForReimbursement(purchaseId, {
+      excludeReimbursementId: reimbursementId,
+    });
     return NextResponse.json({ success: true, data });
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHENTICATED') return unauthorizedResponse();
@@ -26,4 +29,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: false, error: '服务器错误' }, { status: 500 });
   }
 }
-

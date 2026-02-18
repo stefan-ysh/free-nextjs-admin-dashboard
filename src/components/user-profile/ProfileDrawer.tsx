@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { UserCircle, Settings } from "lucide-react";
 import { useAuth } from "@/app/auth-context";
@@ -41,6 +41,7 @@ export default function ProfileDrawer({ open, onOpenChange }: ProfileDrawerProps
     // Form state for quick edit
     const [displayName, setDisplayName] = useState("");
     const [phone, setPhone] = useState("");
+    const [address, setAddress] = useState("");
 
     // Load profile when drawer opens
     const loadProfile = useCallback(async () => {
@@ -58,6 +59,7 @@ export default function ProfileDrawer({ open, onOpenChange }: ProfileDrawerProps
             setProfile(json.data);
             setDisplayName(json.data.displayName ?? "");
             setPhone(json.data.phone ?? "");
+            setAddress(json.data.address ?? "");
         } catch (err) {
             console.error(err);
             toast.error("加载资料失败");
@@ -66,12 +68,10 @@ export default function ProfileDrawer({ open, onOpenChange }: ProfileDrawerProps
         }
     }, [open]);
 
-    // Load profile when drawer opens
-    useState(() => {
-        if (open) {
-            loadProfile();
-        }
-    });
+    useEffect(() => {
+        if (!open) return;
+        loadProfile();
+    }, [open, loadProfile]);
 
     const handleSave = async () => {
         if (!profile) return;
@@ -82,6 +82,7 @@ export default function ProfileDrawer({ open, onOpenChange }: ProfileDrawerProps
                 ...profile,
                 displayName: displayName.trim() || null,
                 phone: phone.trim() || null,
+                address: address.trim() || null,
             };
 
             const res = await fetch("/api/profile", {
@@ -110,7 +111,7 @@ export default function ProfileDrawer({ open, onOpenChange }: ProfileDrawerProps
     return (
         <Drawer open={open} onOpenChange={onOpenChange} direction="right">
             <DrawerContent side="right" className="w-full sm:max-w-lg">
-                <DrawerHeader>
+                <DrawerHeader className="border-b border-border/60 pb-4">
                     <DrawerTitle>个人资料</DrawerTitle>
                     <DrawerDescription>快速编辑基本信息</DrawerDescription>
                 </DrawerHeader>
@@ -133,16 +134,14 @@ export default function ProfileDrawer({ open, onOpenChange }: ProfileDrawerProps
                         <div className="py-8 text-center text-sm text-muted-foreground">加载中...</div>
                     ) : (
                         <div className="space-y-4">
-                            <div className="grid gap-4 sm:grid-cols-2">
-                                <div className="space-y-2">
-                                    <Label htmlFor="displayName">姓名</Label>
-                                    <Input
-                                        id="displayName"
-                                        value={displayName}
-                                        onChange={(e) => setDisplayName(e.target.value)}
-                                        placeholder="请输入姓名"
-                                    />
-                                </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="displayName">姓名</Label>
+                                <Input
+                                    id="displayName"
+                                    value={displayName}
+                                    onChange={(e) => setDisplayName(e.target.value)}
+                                    placeholder="请输入姓名"
+                                />
                             </div>
 
                             <div className="space-y-2">
@@ -156,13 +155,23 @@ export default function ProfileDrawer({ open, onOpenChange }: ProfileDrawerProps
                                 />
                             </div>
 
+                            <div className="space-y-2">
+                                <Label htmlFor="address">住址</Label>
+                                <Input
+                                    id="address"
+                                    value={address}
+                                    onChange={(e) => setAddress(e.target.value)}
+                                    placeholder="请输入居住地址"
+                                />
+                            </div>
+
                             {/* Link to full profile */}
                             <div className="rounded-lg border border-border bg-muted/50 p-3">
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <p className="text-sm font-medium">完整资料</p>
                                         <p className="text-xs text-muted-foreground">
-                                            编辑更多信息，如地址、密码等
+                                            编辑更多信息，如简介、密码、设备等
                                         </p>
                                     </div>
                                     <Button variant="ghost" size="sm" asChild>
@@ -177,7 +186,7 @@ export default function ProfileDrawer({ open, onOpenChange }: ProfileDrawerProps
                     )}
                 </DrawerBody>
 
-                <DrawerFooter className="gap-2">
+                <DrawerFooter className="gap-2 border-t border-border/60 pt-4">
                     <DrawerClose asChild>
                         <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
                             取消

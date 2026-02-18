@@ -24,33 +24,15 @@ export type Employee = {
 	displayName: string | null;
 	email: string | null;
 	phone: string | null;
-	department: string | null;
-	departmentId?: string | null;
-	departmentCode?: string | null;
-	jobTitle: string | null;
-	jobGradeId?: string | null;
-	jobGrade?: string | null;
-	jobGradeLevel?: number | null;
-	nationalId?: string | null;
 	gender?: EmployeeGender | null;
 	address?: string | null;
-	organization?: string | null;
-	educationBackground?: string | null;
 	employmentStatus: EmploymentStatus;
 	hireDate: string | null;
 	terminationDate: string | null;
-	managerId: string | null;
 	location: string | null;
 	customFields: Record<string, unknown>;
 	createdAt: string;
 	updatedAt: string;
-};
-
-export type DepartmentOption = {
-	id: string;
-	name: string;
-	code: string | null;
-	parentId: string | null;
 };
 
 export type JobGradeOption = {
@@ -115,21 +97,11 @@ export type EmployeeImportRow = {
 	email?: string | null;
 	phone?: string | null;
 	initialPassword?: string | null;
-	department?: string | null;
-	departmentId?: string | null;
-	departmentCode?: string | null;
-	jobTitle?: string | null;
-	jobGradeId?: string | null;
-	jobGradeCode?: string | null;
-	nationalId?: string | null;
 	gender?: EmployeeGender | null;
 	address?: string | null;
-	organization?: string | null;
-	educationBackground?: string | null;
 	employmentStatus?: EmploymentStatus;
 	hireDate?: string | null;
 	terminationDate?: string | null;
-	managerId?: string | null;
 	location?: string | null;
 	customFields?: Record<string, string | number | boolean | null> | null;
 };
@@ -140,19 +112,11 @@ export type EmployeeFormSubmitPayload = {
 	email?: string | null;
 	phone?: string | null;
 	initialPassword?: string | null;
-	department?: string | null;
-	departmentId?: string | null;
-	jobTitle?: string | null;
-	jobGradeId?: string | null;
-	nationalId?: string | null;
 	gender?: EmployeeGender | null;
 	address?: string | null;
-	organization?: string | null;
-	educationBackground?: string | null;
 	employmentStatus: EmploymentStatus;
 	hireDate?: string | null;
 	terminationDate?: string | null;
-	managerId?: string | null;
 	location?: string | null;
 	customFields?: Record<string, string> | null;
 	statusChangeNote?: string | null;
@@ -160,10 +124,7 @@ export type EmployeeFormSubmitPayload = {
 
 export type EmployeeFilters = {
 	search: string;
-	department: string | null;
-	departmentId: string | null;
-	jobGradeId?: string | null;
 	status: EmploymentStatus | 'all';
-	sortBy: 'updatedAt' | 'createdAt' | 'displayName' | 'department' | 'status';
+	sortBy: 'updatedAt' | 'createdAt' | 'displayName' | 'status';
 	sortOrder: 'asc' | 'desc';
 };

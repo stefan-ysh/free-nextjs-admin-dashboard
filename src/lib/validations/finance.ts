@@ -25,7 +25,7 @@ export const financeRecordSchema = z.object({
   tags: z.array(z.string()).optional(),
   invoice: invoiceSchema.optional(),
   status: z.enum(['draft', 'cleared']).optional(),
-  sourceType: z.enum(['manual', 'purchase', 'import', 'inventory']).optional(),
+  sourceType: z.enum(['manual', 'reimbursement', 'budget_adjustment', 'inventory']).optional(),
   purchaseId: z.string().optional(),
   handlerId: z.string().optional(),
 });

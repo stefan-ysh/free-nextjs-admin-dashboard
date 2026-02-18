@@ -26,8 +26,9 @@ type RawUserRow = RowDataPacket & {
   roles: unknown; // JSON array of roles
   primary_role: string;
   display_name: string | null;
-  job_title: string | null;
+  gender: string | null;
   phone: string | null;
+  address: string | null;
   bio: string | null;
   country: string | null;
   city: string | null;
@@ -53,8 +54,9 @@ export type UserRecord = {
   roles: UserRole[]; // Array of roles from hr_employees table
   primary_role: UserRole;
   display_name: string | null;
-  job_title: string | null;
+  gender: 'male' | 'female' | 'other' | null;
   phone: string | null;
+  address: string | null;
   bio: string | null;
   country: string | null;
   city: string | null;
@@ -104,6 +106,15 @@ function parseJsonArray<T = string>(value: unknown): T[] {
   return [];
 }
 
+function normalizeGender(value: string | null | undefined): 'male' | 'female' | 'other' | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'male' || normalized === 'm' || normalized === '男') return 'male';
+  if (normalized === 'female' || normalized === 'f' || normalized === '女') return 'female';
+  if (normalized === 'other' || normalized === 'o' || normalized === '其他') return 'other';
+  return null;
+}
+
 function buildDisplayName(row: RawUserRow): string {
   const candidates: Array<string | null | undefined> = [
     row.display_name,
@@ -151,8 +162,9 @@ function mapUser(row: RawUserRow | undefined): UserRecord | null {
     primary_role: primaryRole,
     role: primaryRole, // For backward compatibility
     display_name: displayName,
-    job_title: row.job_title,
+    gender: normalizeGender(row.gender),
     phone: row.phone,
+    address: row.address ?? null,
     bio: row.bio,
     country: row.country,
     city: row.city,
@@ -319,8 +331,9 @@ export async function updateUserPassword(userId: string, password: string): Prom
 
 export type UpdateUserProfileInput = {
   displayName: string | null;
-  jobTitle: string | null;
+  gender: 'male' | 'female' | 'other' | null;
   phone: string | null;
+  address: string | null;
   bio: string | null;
   country: string | null;
   city: string | null;
@@ -344,8 +357,9 @@ export async function updateUserProfile(userId: string, input: UpdateUserProfile
 
   const payload = {
     displayName: sanitizeNullableText(input.displayName) ?? current.display_name ?? current.email,
-    jobTitle: sanitizeNullableText(input.jobTitle),
+    gender: normalizeGender(input.gender),
     phone: sanitizeNullableText(input.phone),
+    address: sanitizeNullableText(input.address),
     bio: sanitizeNullableText(input.bio),
     country: sanitizeNullableText(input.country),
     city: sanitizeNullableText(input.city),
@@ -361,8 +375,9 @@ export async function updateUserProfile(userId: string, input: UpdateUserProfile
     `UPDATE hr_employees
       SET
         display_name = ?,
-        job_title = ?,
+        gender = ?,
         phone = ?,
+        address = ?,
         bio = ?,
         country = ?,
         city = ?,
@@ -373,8 +388,9 @@ export async function updateUserProfile(userId: string, input: UpdateUserProfile
       WHERE id = ?`,
     [
       payload.displayName,
-      payload.jobTitle,
+      payload.gender,
       payload.phone,
+      payload.address,
       payload.bio,
       payload.country,
       payload.city,

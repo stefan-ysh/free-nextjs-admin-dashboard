@@ -11,8 +11,31 @@ import { Badge } from '@/components/ui/badge';
 import ModalShell from '@/components/common/ModalShell';
 import type { Employee } from './types';
 import type { UserRole } from '@/types/user';
-import { USER_ROLE_OPTIONS } from '@/constants/user-roles';
+import { ASSIGNABLE_USER_ROLES, USER_ROLE_OPTIONS } from '@/constants/user-roles';
 import { cn } from '@/lib/utils';
+
+const ROLE_CAPABILITIES: Partial<Record<UserRole, { menus: string; actions: string }>> = {
+  super_admin: {
+    menus: '全部模块',
+    actions: '审批、转审、驳回、打款、人员管理、配置',
+  },
+  finance: {
+    menus: '工作台、采购中心',
+    actions: '采购审批、转审、驳回',
+  },
+  finance_school: {
+    menus: '工作台、财务中心、采购中心',
+    actions: '学校组织打款与异常处理',
+  },
+  finance_company: {
+    menus: '工作台、财务中心、采购中心',
+    actions: '单位组织打款与异常处理',
+  },
+  employee: {
+    menus: '工作台、采购中心、个人中心',
+    actions: '发起采购、发起报销、查看进度',
+  },
+};
 
 export type RoleAssignmentPayload = {
   roles: UserRole[];
@@ -51,9 +74,11 @@ export default function RoleAssignmentDialog({
       setLocalError(null);
       return;
     }
-    const roles = Array.isArray(employee.userRoles) && employee.userRoles.length > 0 ? employee.userRoles : [];
+    const roleSet = new Set<UserRole>(ASSIGNABLE_USER_ROLES);
+    const roles = (Array.isArray(employee.userRoles) ? employee.userRoles : []).filter((role) => roleSet.has(role));
     setSelectedRoles(roles);
-    setPrimaryRole(employee.userPrimaryRole ?? roles[0] ?? null);
+    const nextPrimary = employee.userPrimaryRole && roleSet.has(employee.userPrimaryRole) ? employee.userPrimaryRole : null;
+    setPrimaryRole(nextPrimary ?? roles[0] ?? null);
     setLocalError(null);
   }, [open, employee]);
 
@@ -118,6 +143,12 @@ export default function RoleAssignmentDialog({
                 <p id={`${controlId}-desc`} className="text-xs text-muted-foreground">
                   {option.description}
                 </p>
+                {ROLE_CAPABILITIES[option.value] ? (
+                  <div className="rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground">
+                    <p>菜单：{ROLE_CAPABILITIES[option.value]?.menus}</p>
+                    <p>动作：{ROLE_CAPABILITIES[option.value]?.actions}</p>
+                  </div>
+                ) : null}
                 {checked && (
                   <div className="flex flex-wrap gap-2 pt-1">
                     <Button

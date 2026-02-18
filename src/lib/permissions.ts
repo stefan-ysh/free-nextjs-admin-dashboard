@@ -20,6 +20,12 @@ export interface PermissionConfig {
   customCheck?: (user: UserProfile) => boolean | Promise<boolean>;
 }
 
+function isSuperAdminReadonlyPermission(config: PermissionConfig): boolean {
+  if (!config.anyRoles?.includes(UserRole.SUPER_ADMIN)) return false;
+  if (config.customCheck) return false;
+  return true;
+}
+
 function resolveActiveRole(user: UserProfile): UserRole {
   if (user.primaryRole) return user.primaryRole;
   return user.roles[0] ?? UserRole.EMPLOYEE;
@@ -43,9 +49,12 @@ export async function checkPermission(
   config: PermissionConfig
 ): Promise<PermissionCheckResult> {
   const activeRole = resolveActiveRole(user);
-  // 超级管理员拥有所有权限
+  // 超级管理员为只读兜底：仅允许显式声明为可读的权限
   if (activeRole === UserRole.SUPER_ADMIN) {
-    return { allowed: true };
+    const allowed = isSuperAdminReadonlyPermission(config);
+    return allowed
+      ? { allowed: true }
+      : { allowed: false, reason: '超级管理员为只读角色，不参与流程操作' };
   }
   
   // 检查 anyRoles（满足任一即可）
@@ -92,19 +101,19 @@ export const Permissions = {
   } as PermissionConfig,
   
   USER_CREATE: {
-    anyRoles: [UserRole.SUPER_ADMIN],
+    anyRoles: [UserRole.FINANCE],
   } as PermissionConfig,
   
   USER_UPDATE: {
-    anyRoles: [UserRole.SUPER_ADMIN],
+    anyRoles: [UserRole.FINANCE],
   } as PermissionConfig,
   
   USER_DELETE: {
-    anyRoles: [UserRole.SUPER_ADMIN],
+    anyRoles: [UserRole.FINANCE],
   } as PermissionConfig,
   
   USER_ASSIGN_ROLES: {
-    anyRoles: [UserRole.SUPER_ADMIN],
+    anyRoles: [UserRole.FINANCE],
   } as PermissionConfig,
   
   // ============ 采购管理 ============
@@ -121,17 +130,17 @@ export const Permissions = {
   
   PURCHASE_UPDATE: {
     // 只能更新自己的草稿和被驳回的记录
-    customCheck: () => true, // 在业务逻辑层进一步检查
+    customCheck: (user: UserProfile) => resolveActiveRole(user) !== UserRole.SUPER_ADMIN, // 在业务逻辑层进一步检查
   } as PermissionConfig,
   
   PURCHASE_DELETE: {
     // 只能删除自己的草稿和被驳回的记录
-    customCheck: () => true, // 在业务逻辑层进一步检查
+    customCheck: (user: UserProfile) => resolveActiveRole(user) !== UserRole.SUPER_ADMIN, // 在业务逻辑层进一步检查
   } as PermissionConfig,
   
   PURCHASE_SUBMIT: {
     // 可以提交自己的采购记录
-    customCheck: () => true, // 在业务逻辑层进一步检查
+    customCheck: (user: UserProfile) => resolveActiveRole(user) !== UserRole.SUPER_ADMIN, // 在业务逻辑层进一步检查
   } as PermissionConfig,
   
   PURCHASE_APPROVE: {
@@ -142,8 +151,12 @@ export const Permissions = {
     anyRoles: [UserRole.FINANCE],
   } as PermissionConfig,
   
-  PURCHASE_PAY: {
-    anyRoles: [UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
+  PURCHASE_MONITOR_VIEW: {
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE],
+  } as PermissionConfig,
+
+  PURCHASE_AUDIT_VIEW: {
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE],
   } as PermissionConfig,
 
   // ============ 报销管理 ============
@@ -157,19 +170,19 @@ export const Permissions = {
   } as PermissionConfig,
 
   REIMBURSEMENT_UPDATE: {
-    customCheck: () => true, // 在业务逻辑层进一步检查
+    customCheck: (user: UserProfile) => resolveActiveRole(user) !== UserRole.SUPER_ADMIN, // 在业务逻辑层进一步检查
   } as PermissionConfig,
 
   REIMBURSEMENT_SUBMIT: {
-    customCheck: () => true, // 在业务逻辑层进一步检查
+    customCheck: (user: UserProfile) => resolveActiveRole(user) !== UserRole.SUPER_ADMIN, // 在业务逻辑层进一步检查
   } as PermissionConfig,
 
   REIMBURSEMENT_APPROVE: {
-    anyRoles: [UserRole.FINANCE],
+    anyRoles: [UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
 
   REIMBURSEMENT_REJECT: {
-    anyRoles: [UserRole.FINANCE],
+    anyRoles: [UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
 
   REIMBURSEMENT_PAY: {
@@ -191,51 +204,27 @@ export const Permissions = {
   } as PermissionConfig,
 
   INVENTORY_MANAGE_ITEMS: {
-    anyRoles: [UserRole.SUPER_ADMIN],
+    anyRoles: [UserRole.FINANCE],
   } as PermissionConfig,
 
   INVENTORY_MANAGE_WAREHOUSE: {
-    anyRoles: [UserRole.SUPER_ADMIN],
+    anyRoles: [UserRole.FINANCE],
   } as PermissionConfig,
 
   INVENTORY_OPERATE_INBOUND: {
-    anyRoles: [UserRole.SUPER_ADMIN],
+    anyRoles: [UserRole.FINANCE],
+  } as PermissionConfig,
+
+  INVENTORY_INBOUND_CREATE_OWN_PURCHASE_ONLY: {
+    anyRoles: [UserRole.EMPLOYEE],
   } as PermissionConfig,
 
   INVENTORY_OPERATE_OUTBOUND: {
-    anyRoles: [UserRole.SUPER_ADMIN],
+    anyRoles: [UserRole.FINANCE],
   } as PermissionConfig,
 
   INVENTORY_VIEW_ALL: {
     anyRoles: [UserRole.SUPER_ADMIN],
-  } as PermissionConfig,
-
-  // ============ 客户管理 ============
-  CLIENT_VIEW: {
-    anyRoles: [
-      UserRole.SUPER_ADMIN,
-      UserRole.FINANCE_SCHOOL,
-      UserRole.FINANCE_COMPANY,
-    ],
-  } as PermissionConfig,
-
-  CLIENT_MANAGE: {
-    anyRoles: [UserRole.SUPER_ADMIN],
-  } as PermissionConfig,
-
-  // ============ 日程管理 ============
-  CALENDAR_VIEW: {
-    anyRoles: [
-      UserRole.SUPER_ADMIN,
-      UserRole.FINANCE,
-      UserRole.FINANCE_SCHOOL,
-      UserRole.FINANCE_COMPANY,
-      UserRole.EMPLOYEE,
-    ],
-  } as PermissionConfig,
-
-  CALENDAR_MANAGE: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE],
   } as PermissionConfig,
 };
 
@@ -319,15 +308,6 @@ export function canEditPurchase(
     return true;
   }
 
-  // 已批准但仍处于报销补录阶段时，允许申请人补充发票后再提交报销
-  if (
-    purchase.status === 'approved' &&
-    (purchase.reimbursementStatus === 'invoice_pending' ||
-      purchase.reimbursementStatus === 'reimbursement_rejected')
-  ) {
-    return true;
-  }
-
   return false;
 }
 
@@ -380,7 +360,6 @@ export const can = {
   viewAllPurchases: (user: UserProfile) => checkPermission(user, Permissions.PURCHASE_VIEW_ALL),
   approvePurchase: (user: UserProfile) => checkPermission(user, Permissions.PURCHASE_APPROVE),
   rejectPurchase: (user: UserProfile) => checkPermission(user, Permissions.PURCHASE_REJECT),
-  payPurchase: (user: UserProfile) => checkPermission(user, Permissions.PURCHASE_PAY),
 
   // 报销管理
   viewAllReimbursements: (user: UserProfile) => checkPermission(user, Permissions.REIMBURSEMENT_VIEW_ALL),
@@ -392,8 +371,4 @@ export const can = {
   // 财务管理
   viewFinanceData: (user: UserProfile) => checkPermission(user, Permissions.FINANCE_VIEW_ALL),
   manageFinance: (user: UserProfile) => checkPermission(user, Permissions.FINANCE_MANAGE),
-
-  // 日程管理
-  viewCalendar: (user: UserProfile) => checkPermission(user, Permissions.CALENDAR_VIEW),
-  manageCalendar: (user: UserProfile) => checkPermission(user, Permissions.CALENDAR_MANAGE),
 };

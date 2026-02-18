@@ -4,23 +4,22 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import DataState from '@/components/common/DataState';
 import PurchaseDetailModal from '@/components/purchases/PurchaseDetailModal';
-import PurchasePayDialog from '@/components/purchases/PurchasePayDialog';
+import ReimbursementPayConfirmDialog from '@/components/reimbursements/ReimbursementPayConfirmDialog';
 import ApprovalCommentDialog from '@/components/purchases/ApprovalCommentDialog';
 import RejectionReasonDialog from '@/components/purchases/RejectionReasonDialog';
 import TransferApprovalDialog from '@/components/purchases/TransferApprovalDialog';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { PurchaseRowPermissions } from '@/components/purchases/PurchaseTable';
 import {
   type PurchaseDetail,
-  type PurchasePaymentQueueItem,
   type PurchaseRecord,
 } from '@/types/purchase';
+import type { ReimbursementRecord } from '@/types/reimbursement';
 import { isWorkflowActionStatusAllowed } from '@/lib/purchases/workflow-rules';
-import { formatMoney, reimbursementBadgeClass, reimbursementText, statusBadgeClass, statusText } from '@/components/mobile-workflow/shared';
+import { formatMoney, reimbursementText, statusBadgeClass, statusText } from '@/components/mobile-workflow/shared';
 
-type WorkbenchTab = 'todo' | 'done' | 'notifications';
+type WorkbenchTab = 'todo' | 'done';
 
 type PurchaseListResponse = {
   success: boolean;
@@ -28,28 +27,9 @@ type PurchaseListResponse = {
   error?: string;
 };
 
-type PaymentQueueResponse = {
+type ReimbursementListResponse = {
   success: boolean;
-  data?: { items: PurchasePaymentQueueItem[]; total: number; page: number; pageSize: number };
-  error?: string;
-};
-
-type NotificationRecord = {
-  id: string;
-  eventType: string;
-  title: string;
-  content: string;
-  linkUrl: string | null;
-  relatedType: string | null;
-  relatedId: string | null;
-  isRead: boolean;
-  createdAt: string;
-  readAt: string | null;
-};
-
-type NotificationListResponse = {
-  success: boolean;
-  data?: { items: NotificationRecord[]; total: number; page: number; pageSize: number };
+  data?: { items: ReimbursementRecord[]; total: number; page: number; pageSize: number };
   error?: string;
 };
 
@@ -71,41 +51,37 @@ type FailedActionSnapshot = {
   body: Record<string, unknown>;
 };
 
+type UnifiedWorkflowItem = {
+  id: string;
+  kind: 'purchase' | 'reimbursement';
+  taskLabel: string;
+  title: string;
+  number: string;
+  description: string;
+  amount: number;
+  updatedAt: string;
+  statusLabel: string;
+  statusClass: string;
+  actionLabel: string;
+  onAction: () => void;
+};
+
+const REIMBURSEMENT_STATUS_TEXT: Record<ReimbursementRecord['status'], string> = {
+  draft: '草稿',
+  pending_approval: '待审批',
+  approved: '待打款',
+  rejected: '已驳回',
+  paid: '已打款',
+};
+
 const TAB_LABELS: Record<WorkbenchTab, string> = {
   todo: '待办',
   done: '已办',
-  notifications: '通知',
 };
 
-function getNotificationActionLabel(eventType: string): string {
-  if (eventType === 'purchase_submitted' || eventType === 'purchase_transferred') return '去审批';
-  if (eventType === 'reimbursement_submitted') return '去打款';
-  if (eventType === 'reimbursement_approved') return '去打款';
-  if (eventType === 'reimbursement_rejected') return '去修改';
-  if (eventType === 'reimbursement_paid') return '看结果';
-  if (eventType === 'purchase_rejected') return '去修改';
-  if (eventType === 'payment_issue_marked') return '去处理';
-  if (eventType === 'payment_issue_resolved') return '看进度';
-  if (eventType === 'purchase_approved') return '去采购';
-  if (eventType === 'purchase_paid') return '看结果';
-  return '查看';
-}
-
-function getPendingHours(submittedAt: string | null): number {
-  if (!submittedAt) return 0;
-  const submitted = new Date(submittedAt).getTime();
-  if (!Number.isFinite(submitted)) return 0;
-  return Math.max(0, (Date.now() - submitted) / 36e5);
-}
-
-function getSlaLabel(hours: number): { label: string; className: string } | null {
-  if (hours >= 48) return { label: `超时 ${Math.floor(hours)}h`, className: 'border-destructive/40 text-destructive bg-destructive/10' };
-  if (hours >= 24) return { label: `临期 ${Math.floor(hours)}h`, className: 'border-chart-3/40 text-chart-3 bg-chart-3/10' };
-  return null;
-}
-
 function normalizeTab(tab: string | null): WorkbenchTab {
-  if (tab === 'todo' || tab === 'done' || tab === 'notifications') return tab;
+  if (tab === 'todo' || tab === 'done') return tab;
+  if (tab === 'notifications') return 'todo';
   return 'todo';
 }
 
@@ -119,18 +95,21 @@ export default function WorkflowWorkbenchClient({
   const [activeTab, setActiveTab] = useState<WorkbenchTab>(normalizeTab(initialTab));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [todoApprovals, setTodoApprovals] = useState<PurchaseRecord[]>([]);
-  const [todoPayments, setTodoPayments] = useState<PurchasePaymentQueueItem[]>([]);
-  const [doneItems, setDoneItems] = useState<PurchaseRecord[]>([]);
-  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const [todoInbound, setTodoInbound] = useState<PurchaseRecord[]>([]);
+  const [todoRejected, setTodoRejected] = useState<PurchaseRecord[]>([]);
+  const [todoReimbursementApprovals, setTodoReimbursementApprovals] = useState<ReimbursementRecord[]>([]);
+  const [todoReimbursementPays, setTodoReimbursementPays] = useState<ReimbursementRecord[]>([]);
+  const [todoReimbursementRejected, setTodoReimbursementRejected] = useState<ReimbursementRecord[]>([]);
+  const [donePurchases, setDonePurchases] = useState<PurchaseRecord[]>([]);
+  const [doneReimbursements, setDoneReimbursements] = useState<ReimbursementRecord[]>([]);
   const [selectedPurchase, setSelectedPurchase] = useState<PurchaseDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [lastFailedAction, setLastFailedAction] = useState<FailedActionSnapshot | null>(null);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
-  const [selectedNotification, setSelectedNotification] = useState<NotificationRecord | null>(null);
+  const [activeReimbursementPayId, setActiveReimbursementPayId] = useState<string | null>(null);
   const [rejectDialog, setRejectDialog] = useState<{ open: boolean; purchase: PurchaseRecord | PurchaseDetail | null }>({
     open: false,
     purchase: null,
@@ -143,30 +122,20 @@ export default function WorkflowWorkbenchClient({
     open: false,
     purchase: null,
   });
-  const [payDialog, setPayDialog] = useState<{ open: boolean; purchase: PurchaseRecord | PurchaseDetail | null }>({
-    open: false,
-    purchase: null,
-  });
 
   const { hasPermission } = usePermissions();
   const canApprove = hasPermission('PURCHASE_APPROVE');
   const canReject = hasPermission('PURCHASE_REJECT');
   const canTransfer = hasPermission('PURCHASE_APPROVE');
-  const canPay = hasPermission('PURCHASE_PAY');
+  const canInboundOwn = hasPermission('INVENTORY_INBOUND_CREATE_OWN_PURCHASE_ONLY');
+  const canInboundAll = hasPermission('INVENTORY_OPERATE_INBOUND');
   const canHandleApprovalTasks = canApprove || canReject || canTransfer;
-  const canHandlePaymentTasks = canPay;
-
-  const markNotificationsRead = useCallback(async (options: { ids?: string[]; markAll?: boolean }) => {
-    await fetch('/api/notifications', {
-      method: 'PATCH',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ids: options.ids ?? [],
-        markAll: options.markAll === true,
-      }),
-      keepalive: true,
-    });
-  }, []);
+  const canHandleInboundTasks = canInboundOwn || canInboundAll;
+  const canReimbursementApprove = hasPermission('REIMBURSEMENT_APPROVE');
+  const canReimbursementPay = hasPermission('REIMBURSEMENT_PAY');
+  const canCreateReimbursement = hasPermission('REIMBURSEMENT_CREATE');
+  const canCreatePurchase = hasPermission('PURCHASE_CREATE');
+  const showReimbursementApprovalTasks = canReimbursementApprove && !canReimbursementPay;
 
   const loadPurchaseDetail = useCallback(async (purchaseId: string) => {
     setDetailLoading(true);
@@ -186,14 +155,32 @@ export default function WorkflowWorkbenchClient({
   }, []);
 
   const loadTodo = useCallback(async () => {
-    const [approvalResult, paymentResult] = await Promise.allSettled([
-      fetch('/api/purchases/approvals?page=1&pageSize=40', { headers: { Accept: 'application/json' } }),
-      canPay
-        ? fetch('/api/finance/payments?status=pending&page=1&pageSize=40', { headers: { Accept: 'application/json' } })
+    const [approvalResult, inboundResult, rejectedResult, reimbursementApprovalResult, reimbursementPayResult, reimbursementRejectedResult] = await Promise.allSettled([
+      canHandleApprovalTasks
+        ? fetch('/api/purchases/approvals?page=1&pageSize=40', { headers: { Accept: 'application/json' } })
+        : Promise.resolve(null),
+      canHandleInboundTasks
+        ? fetch('/api/purchases?status=pending_inbound&page=1&pageSize=40&sortBy=updatedAt&sortOrder=desc', {
+            headers: { Accept: 'application/json' },
+          })
+        : Promise.resolve(null),
+      canCreatePurchase
+        ? fetch('/api/purchases?status=rejected&page=1&pageSize=40&sortBy=updatedAt&sortOrder=desc', {
+            headers: { Accept: 'application/json' },
+          })
+        : Promise.resolve(null),
+      showReimbursementApprovalTasks
+        ? fetch('/api/reimbursements?scope=approval&page=1&pageSize=40', { headers: { Accept: 'application/json' } })
+        : Promise.resolve(null),
+      canReimbursementPay
+        ? fetch('/api/reimbursements?scope=pay&page=1&pageSize=40', { headers: { Accept: 'application/json' } })
+        : Promise.resolve(null),
+      canCreateReimbursement
+        ? fetch('/api/reimbursements?scope=mine&status=rejected&page=1&pageSize=40', { headers: { Accept: 'application/json' } })
         : Promise.resolve(null),
     ]);
 
-    if (approvalResult.status === 'fulfilled') {
+    if (canHandleApprovalTasks && approvalResult.status === 'fulfilled' && approvalResult.value) {
       const approvalPayload = (await approvalResult.value.json()) as PurchaseListResponse;
       if (approvalResult.value.ok && approvalPayload.success && approvalPayload.data) {
         setTodoApprovals(approvalPayload.data.items);
@@ -202,67 +189,139 @@ export default function WorkflowWorkbenchClient({
       } else {
         throw new Error(approvalPayload.error || '加载待办失败');
       }
-    } else {
+    } else if (canHandleApprovalTasks) {
       throw new Error('加载待办失败');
+    } else {
+      setTodoApprovals([]);
     }
 
-    if (canPay && paymentResult.status === 'fulfilled' && paymentResult.value) {
-      const paymentPayload = (await paymentResult.value.json()) as PaymentQueueResponse;
-      if (!paymentResult.value.ok || !paymentPayload.success || !paymentPayload.data) {
-        setTodoPayments([]);
-        setPaymentError(paymentPayload.error || '待付款加载失败');
+    if (canHandleInboundTasks && inboundResult.status === 'fulfilled' && inboundResult.value) {
+      const inboundPayload = (await inboundResult.value.json()) as PurchaseListResponse;
+      if (inboundResult.value.ok && inboundPayload.success && inboundPayload.data) {
+        setTodoInbound(inboundPayload.data.items);
       } else {
-        setTodoPayments(paymentPayload.data.items);
+        setTodoInbound([]);
       }
-    } else if (canPay && paymentResult.status === 'rejected') {
-      setTodoPayments([]);
-      setPaymentError('待付款加载失败');
     } else {
-      setTodoPayments([]);
+      setTodoInbound([]);
     }
-  }, [canPay]);
+
+    if (canCreatePurchase && rejectedResult.status === 'fulfilled' && rejectedResult.value) {
+      const rejectedPayload = (await rejectedResult.value.json()) as PurchaseListResponse;
+      if (rejectedResult.value.ok && rejectedPayload.success && rejectedPayload.data) {
+        setTodoRejected(rejectedPayload.data.items.filter((item) => item.createdBy === currentUserId || item.purchaserId === currentUserId));
+      } else {
+        setTodoRejected([]);
+      }
+    } else {
+      setTodoRejected([]);
+    }
+
+    if (showReimbursementApprovalTasks && reimbursementApprovalResult.status === 'fulfilled' && reimbursementApprovalResult.value) {
+      const payload = (await reimbursementApprovalResult.value.json()) as ReimbursementListResponse;
+      if (reimbursementApprovalResult.value.ok && payload.success && payload.data) {
+        setTodoReimbursementApprovals(payload.data.items);
+      } else {
+        setTodoReimbursementApprovals([]);
+      }
+    } else {
+      setTodoReimbursementApprovals([]);
+    }
+
+    if (canReimbursementPay && reimbursementPayResult.status === 'fulfilled' && reimbursementPayResult.value) {
+      const payload = (await reimbursementPayResult.value.json()) as ReimbursementListResponse;
+      if (reimbursementPayResult.value.ok && payload.success && payload.data) {
+        setTodoReimbursementPays(payload.data.items);
+      } else {
+        setTodoReimbursementPays([]);
+      }
+    } else {
+      setTodoReimbursementPays([]);
+    }
+
+    if (canCreateReimbursement && reimbursementRejectedResult.status === 'fulfilled' && reimbursementRejectedResult.value) {
+      const payload = (await reimbursementRejectedResult.value.json()) as ReimbursementListResponse;
+      if (reimbursementRejectedResult.value.ok && payload.success && payload.data) {
+        setTodoReimbursementRejected(
+          payload.data.items.filter((item) => item.applicantId === currentUserId || item.createdBy === currentUserId)
+        );
+      } else {
+        setTodoReimbursementRejected([]);
+      }
+    } else {
+      setTodoReimbursementRejected([]);
+    }
+  }, [
+    canHandleApprovalTasks,
+    canHandleInboundTasks,
+    canCreatePurchase,
+    showReimbursementApprovalTasks,
+    canReimbursementPay,
+    canCreateReimbursement,
+    currentUserId,
+  ]);
 
   const loadDone = useCallback(async () => {
-    const response = await fetch('/api/purchases?page=1&pageSize=80&sortBy=updatedAt&sortOrder=desc', {
-      headers: { Accept: 'application/json' },
-    });
-    const payload = (await response.json()) as PurchaseListResponse;
-    if (!response.ok || !payload.success || !payload.data) {
-      throw new Error(payload.error || '加载已办失败');
+    const [purchaseResponse, reimbursementDoneResponse] = await Promise.all([
+      fetch('/api/purchases?scope=workflow_done&page=1&pageSize=80&sortBy=updatedAt&sortOrder=desc', {
+        headers: { Accept: 'application/json' },
+      }),
+      canReimbursementPay
+        ? fetch('/api/reimbursements?scope=all&page=1&pageSize=120', {
+            headers: { Accept: 'application/json' },
+          })
+        : fetch('/api/reimbursements?scope=mine&page=1&pageSize=120', {
+            headers: { Accept: 'application/json' },
+          }),
+    ]);
+
+    const purchasePayload = (await purchaseResponse.json()) as PurchaseListResponse;
+    if (!purchaseResponse.ok || !purchasePayload.success || !purchasePayload.data) {
+      throw new Error(purchasePayload.error || '加载已办失败');
     }
 
-    const filtered = payload.data.items.filter((item) => {
-      const isMine = item.createdBy === currentUserId || item.purchaserId === currentUserId;
-      if (!isMine) return false;
-      if (item.status === 'draft' || item.status === 'pending_approval') return false;
-      return true;
-    });
-    setDoneItems(filtered);
-  }, [currentUserId]);
+    const filteredPurchases = purchasePayload.data.items.filter((item) => {
+      const requesterRelated = item.createdBy === currentUserId || item.purchaserId === currentUserId;
+      const approverRelated = item.approvedBy === currentUserId || item.rejectedBy === currentUserId;
+      const requesterDone = item.status !== 'draft';
 
-  const loadNotifications = useCallback(async () => {
-    const response = await fetch('/api/notifications?page=1&pageSize=80', {
-      headers: { Accept: 'application/json' },
+      // 当前角色已执行过操作后即计入已办：
+      // 申请人（提交/撤回/重提等）按非草稿计入。
+      if (requesterRelated && requesterDone) return true;
+      // 审批人视角：自己完成审批/驳回后计入已办。
+      if (approverRelated && item.status !== 'pending_approval') return true;
+      return false;
     });
-    const payload = (await response.json()) as NotificationListResponse;
-    if (!response.ok || !payload.success || !payload.data) {
-      throw new Error(payload.error || '加载通知失败');
+    setDonePurchases(filteredPurchases);
+
+    const reimbursementPayload = (await reimbursementDoneResponse.json()) as ReimbursementListResponse;
+    if (reimbursementDoneResponse.ok && reimbursementPayload.success && reimbursementPayload.data) {
+      const filteredReimbursements = reimbursementPayload.data.items.filter((item) => {
+        const applicantRelated = item.applicantId === currentUserId || item.createdBy === currentUserId;
+        const financeRelated =
+          item.paidBy === currentUserId || item.approvedBy === currentUserId || item.rejectedBy === currentUserId;
+
+        if (applicantRelated && item.status !== 'draft' && item.status !== 'rejected') return true;
+        if (financeRelated && item.status !== 'pending_approval') return true;
+        return false;
+      });
+      setDoneReimbursements(filteredReimbursements);
+    } else {
+      setDoneReimbursements([]);
     }
-    setNotifications(payload.data.items);
-  }, []);
+  }, [canReimbursementPay, currentUserId]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     setError(null);
-    setPaymentError(null);
     try {
-      await Promise.all([loadTodo(), loadDone(), loadNotifications()]);
+      await Promise.all([loadTodo(), loadDone()]);
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载失败');
     } finally {
       setLoading(false);
     }
-  }, [loadDone, loadNotifications, loadTodo]);
+  }, [loadDone, loadTodo]);
 
   useEffect(() => {
     void loadAll();
@@ -272,17 +331,28 @@ export default function WorkflowWorkbenchClient({
     () => ({
       todo:
         (canHandleApprovalTasks ? todoApprovals.length : 0) +
-        (canHandlePaymentTasks ? todoPayments.length : 0),
-      done: doneItems.length,
-      notifications: notifications.length,
+        (canHandleInboundTasks ? todoInbound.length : 0) +
+        (canCreatePurchase ? todoRejected.length : 0) +
+        (showReimbursementApprovalTasks ? todoReimbursementApprovals.length : 0) +
+        (canReimbursementPay ? todoReimbursementPays.length : 0) +
+        (canCreateReimbursement ? todoReimbursementRejected.length : 0),
+      done: donePurchases.length + doneReimbursements.length,
     }),
     [
       canHandleApprovalTasks,
-      canHandlePaymentTasks,
-      doneItems.length,
-      notifications.length,
+      canHandleInboundTasks,
+      canCreatePurchase,
+      showReimbursementApprovalTasks,
+      canReimbursementPay,
+      canCreateReimbursement,
+      donePurchases.length,
+      doneReimbursements.length,
       todoApprovals.length,
-      todoPayments.length,
+      todoInbound.length,
+      todoRejected.length,
+      todoReimbursementApprovals.length,
+      todoReimbursementPays.length,
+      todoReimbursementRejected.length,
     ]
   );
 
@@ -291,18 +361,6 @@ export default function WorkflowWorkbenchClient({
       void loadPurchaseDetail(purchaseId);
     },
     [loadPurchaseDetail]
-  );
-
-  const openNotificationDetail = useCallback(
-    (item: NotificationRecord) => {
-      setSelectedNotification(item);
-      if (item.isRead) return;
-      setNotifications((prev) =>
-        prev.map((entry) => (entry.id === item.id ? { ...entry, isRead: true } : entry))
-      );
-      void markNotificationsRead({ ids: [item.id] });
-    },
-    [markNotificationsRead]
   );
 
   const performAction = useCallback(
@@ -357,10 +415,6 @@ export default function WorkflowWorkbenchClient({
     setTransferDialog({ open: true, purchase });
   }, []);
 
-  const handlePay = useCallback((purchase: PurchaseRecord | PurchaseDetail) => {
-    setPayDialog({ open: true, purchase });
-  }, []);
-
   const handleApproveDialogClose = useCallback(() => {
     if (mutatingId && approveDialog.purchase && mutatingId === approveDialog.purchase.id) return;
     setApproveDialog({ open: false, purchase: null });
@@ -375,11 +429,6 @@ export default function WorkflowWorkbenchClient({
     if (mutatingId && transferDialog.purchase && mutatingId === transferDialog.purchase.id) return;
     setTransferDialog({ open: false, purchase: null });
   }, [mutatingId, transferDialog.purchase]);
-
-  const handlePayDialogClose = useCallback(() => {
-    if (mutatingId && payDialog.purchase && mutatingId === payDialog.purchase.id) return;
-    setPayDialog({ open: false, purchase: null });
-  }, [mutatingId, payDialog.purchase]);
 
   const handleApproveSubmit = useCallback(async (comment: string) => {
     if (!approveDialog.purchase) return;
@@ -414,16 +463,200 @@ export default function WorkflowWorkbenchClient({
     if (success) setTransferDialog({ open: false, purchase: null });
   }, [performAction, transferDialog.purchase]);
 
-  const handlePaySubmit = useCallback(async (amount: number, note?: string) => {
-    if (!payDialog.purchase) return;
-    const success = await performAction(
-      payDialog.purchase.id,
-      'pay',
-      { amount, note },
-      { successMessage: '已记录打款' }
+  const unifiedPayItems = useMemo(
+    () =>
+      todoReimbursementPays.map((item) => ({
+        id: item.id,
+        source: 'reimbursement' as const,
+        title: item.title,
+        number: item.reimbursementNumber,
+        applicant: item.applicantName || '未知用户',
+        organizationType: item.organizationType,
+        amount: item.amount,
+        reimbursementId: item.id,
+      })),
+    [todoReimbursementPays]
+  );
+
+  const todoUnifiedItems = useMemo<UnifiedWorkflowItem[]>(() => {
+    const items: UnifiedWorkflowItem[] = [];
+
+    if (canHandleApprovalTasks) {
+      items.push(
+        ...todoApprovals.map((item) => ({
+          id: `purchase-approval-${item.id}`,
+          kind: 'purchase' as const,
+          taskLabel: '采购审批',
+          title: item.itemName,
+          number: item.purchaseNumber,
+          description: `申请人 ${item.purchaserName || '未知用户'} · 组织 ${item.organizationType === 'school' ? '学校' : '单位'} · 当前审批人 ${item.pendingApproverName || '未分配'}`,
+          amount: Number(item.totalAmount) + Number(item.feeAmount ?? 0),
+          updatedAt: item.updatedAt,
+          statusLabel: statusText(item),
+          statusClass: statusBadgeClass(item.status),
+          actionLabel: '去审批',
+          onAction: () => openPurchaseDetail(item.id),
+        }))
+      );
+    }
+
+    if (canHandleInboundTasks) {
+      items.push(
+        ...todoInbound.map((item) => ({
+          id: `purchase-inbound-${item.id}`,
+          kind: 'purchase' as const,
+          taskLabel: '到货入库',
+          title: item.itemName,
+          number: item.purchaseNumber,
+          description: `组织 ${item.organizationType === 'school' ? '学校' : '单位'} · 已入库 ${Number(item.inboundQuantity ?? 0)} / ${Number(item.quantity ?? 0)}`,
+          amount: Number(item.totalAmount) + Number(item.feeAmount ?? 0),
+          updatedAt: item.updatedAt,
+          statusLabel: statusText(item),
+          statusClass: statusBadgeClass(item.status),
+          actionLabel: '去入库',
+          onAction: () => {
+            window.location.href = `/inventory/inbound?purchaseId=${encodeURIComponent(item.id)}`;
+          },
+        }))
+      );
+    }
+
+    if (canCreatePurchase) {
+      items.push(
+        ...todoRejected.map((item) => ({
+          id: `purchase-rejected-${item.id}`,
+          kind: 'purchase' as const,
+          taskLabel: '驳回待处理',
+          title: item.itemName,
+          number: item.purchaseNumber,
+          description: '驳回后需修改并重新提交审批',
+          amount: Number(item.totalAmount) + Number(item.feeAmount ?? 0),
+          updatedAt: item.updatedAt,
+          statusLabel: statusText(item),
+          statusClass: statusBadgeClass(item.status),
+          actionLabel: '去处理',
+          onAction: () => openPurchaseDetail(item.id),
+        }))
+      );
+    }
+
+    if (canReimbursementPay) {
+      items.push(
+        ...unifiedPayItems.map((item) => ({
+          id: `reimbursement-pay-${item.id}`,
+          kind: 'reimbursement' as const,
+          taskLabel: '报销打款',
+          title: item.title,
+          number: item.number,
+          description: `申请人 ${item.applicant || '未知用户'} · 组织 ${item.organizationType === 'school' ? '学校' : '单位'}`,
+          amount: item.amount,
+          updatedAt: new Date().toISOString(),
+          statusLabel: '待打款',
+          statusClass: 'border-primary/30 bg-primary/10 text-primary',
+          actionLabel: '去处理',
+          onAction: () => setActiveReimbursementPayId(item.reimbursementId),
+        }))
+      );
+    }
+
+    if (showReimbursementApprovalTasks) {
+      items.push(
+        ...todoReimbursementApprovals.map((item) => ({
+          id: `reimbursement-approval-${item.id}`,
+          kind: 'reimbursement' as const,
+          taskLabel: '报销审批',
+          title: item.title,
+          number: item.reimbursementNumber,
+          description: `申请人 ${item.applicantName || '未知用户'} · 组织 ${item.organizationType === 'school' ? '学校' : '单位'}`,
+          amount: item.amount,
+          updatedAt: item.updatedAt,
+          statusLabel: REIMBURSEMENT_STATUS_TEXT[item.status] ?? '待处理',
+          statusClass: item.status === 'pending_approval' ? 'border-chart-3/30 bg-chart-3/15 text-chart-3' : 'border-border bg-muted/40 text-muted-foreground',
+          actionLabel: '去审批',
+          onAction: () => {
+            window.location.href = `/reimbursements?scope=approval&focus=${encodeURIComponent(item.id)}`;
+          },
+        }))
+      );
+    }
+
+    if (canCreateReimbursement) {
+      items.push(
+        ...todoReimbursementRejected.map((item) => ({
+          id: `reimbursement-rejected-${item.id}`,
+          kind: 'reimbursement' as const,
+          taskLabel: '报销驳回待处理',
+          title: item.title,
+          number: item.reimbursementNumber,
+          description: `申请人 ${item.applicantName || '未知用户'} · 组织 ${item.organizationType === 'school' ? '学校' : '单位'} · 需补充材料后重新提交`,
+          amount: item.amount,
+          updatedAt: item.updatedAt,
+          statusLabel: REIMBURSEMENT_STATUS_TEXT[item.status] ?? '已驳回',
+          statusClass: 'border-destructive/40 bg-destructive/10 text-destructive',
+          actionLabel: '去处理',
+          onAction: () => {
+            window.location.href = `/reimbursements?scope=mine&focus=${encodeURIComponent(item.id)}`;
+          },
+        }))
+      );
+    }
+
+    return items.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }, [
+    canHandleApprovalTasks,
+    canHandleInboundTasks,
+    canCreatePurchase,
+    canReimbursementPay,
+    showReimbursementApprovalTasks,
+    canCreateReimbursement,
+    todoApprovals,
+    todoInbound,
+    todoRejected,
+    unifiedPayItems,
+    todoReimbursementApprovals,
+    todoReimbursementRejected,
+    openPurchaseDetail,
+  ]);
+
+  const doneUnifiedItems = useMemo<UnifiedWorkflowItem[]>(() => {
+    const items: UnifiedWorkflowItem[] = [];
+    items.push(
+      ...donePurchases.map((item) => ({
+        id: `purchase-done-${item.id}`,
+        kind: 'purchase' as const,
+        taskLabel: '采购已办',
+        title: item.itemName,
+        number: item.purchaseNumber,
+        description: `采购状态 ${statusText(item)} · 报销状态 ${reimbursementText(item)}`,
+        amount: Number(item.totalAmount) + Number(item.feeAmount ?? 0),
+        updatedAt: item.updatedAt,
+        statusLabel: statusText(item),
+        statusClass: statusBadgeClass(item.status),
+        actionLabel: '查看详情',
+        onAction: () => openPurchaseDetail(item.id),
+      }))
     );
-    if (success) setPayDialog({ open: false, purchase: null });
-  }, [payDialog.purchase, performAction]);
+    items.push(
+      ...doneReimbursements.map((item) => ({
+        id: `reimbursement-done-${item.id}`,
+        kind: 'reimbursement' as const,
+        taskLabel: '报销已办',
+        title: item.title,
+        number: item.reimbursementNumber,
+        description: `申请人 ${item.applicantName || '未知用户'} · 组织 ${item.organizationType === 'school' ? '学校' : '单位'}`,
+        amount: item.amount,
+        updatedAt: item.updatedAt,
+        statusLabel: REIMBURSEMENT_STATUS_TEXT[item.status] ?? '已处理',
+        statusClass: item.status === 'paid' ? 'border-chart-5/40 bg-chart-5/10 text-chart-5' : 'border-border bg-muted/40 text-muted-foreground',
+        actionLabel: '查看详情',
+        onAction: () => {
+          const scope = canReimbursementPay ? 'all' : 'mine';
+          window.location.href = `/reimbursements?scope=${scope}&focus=${encodeURIComponent(item.id)}`;
+        },
+      }))
+    );
+    return items.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }, [donePurchases, doneReimbursements, openPurchaseDetail, canReimbursementPay]);
 
   const handleSubmitFromDetail = useCallback(async (purchase: PurchaseRecord) => {
     await performAction(
@@ -446,10 +679,9 @@ export default function WorkflowWorkbenchClient({
       canApprove: canApprove && isWorkflowActionStatusAllowed('approve', selectedPurchase),
       canTransfer: canTransfer && isWorkflowActionStatusAllowed('transfer', selectedPurchase),
       canReject: canReject && isWorkflowActionStatusAllowed('reject', selectedPurchase),
-      canPay:
-        canPay &&
-        isWorkflowActionStatusAllowed('pay', selectedPurchase),
+      canPay: false,
       canSubmitReimbursement: false,
+      canReceive: false,
     }
     : undefined;
 
@@ -459,14 +691,14 @@ export default function WorkflowWorkbenchClient({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-base font-semibold sm:text-lg">流程工作台</h1>
-            <p className="text-xs text-muted-foreground">PC 端统一查看待办、已办和通知。</p>
+            <p className="text-xs text-muted-foreground">统一查看当前待办和已办事项。</p>
           </div>
           <Button size="sm" variant="outline" onClick={() => void loadAll()} disabled={loading}>
             刷新
           </Button>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
-          {(['todo', 'done', 'notifications'] as const).map((tab) => (
+          {(['todo', 'done'] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -503,161 +735,59 @@ export default function WorkflowWorkbenchClient({
       ) : null}
 
       {!loading && !error && activeTab === 'todo' ? (
-        <div className="space-y-4">
-          {!canHandleApprovalTasks && !canHandlePaymentTasks ? (
-            <div className="surface-panel p-4">
-              <DataState variant="empty" title="当前角色暂无待办处理权限" className="min-h-[180px]" />
-            </div>
-          ) : null}
-
-          {canHandleApprovalTasks ? (
-            <div className="surface-panel p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold">待审批</h2>
-                <span className="text-xs text-muted-foreground">{todoApprovals.length} 条</span>
-              </div>
-              {todoApprovals.length === 0 ? (
-                <DataState variant="empty" title="暂无待审批任务" className="min-h-[120px]" />
-              ) : (
-                <div className="space-y-2">
-                  {todoApprovals.map((item) => (
-                    <div key={item.id} className="surface-table flex flex-wrap items-center justify-between gap-3 p-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">{item.itemName}</p>
-                        <p className="text-xs text-muted-foreground">{item.purchaseNumber}</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          申请人 {item.purchaserId} · 组织 {item.organizationType === 'school' ? '学校' : '单位'} · 当前审批人 {item.pendingApproverId ?? '未分配'}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                        {(() => {
-                          const sla = getSlaLabel(getPendingHours(item.submittedAt));
-                          return sla ? (
-                            <span className={`rounded border px-2 py-0.5 text-[11px] ${sla.className}`}>{sla.label}</span>
-                          ) : null;
-                        })()}
-                        <span className={`rounded border px-2 py-0.5 text-[11px] ${statusBadgeClass(item.status)}`}>
-                          {statusText(item)}
-                        </span>
-                        <span className="text-sm">{formatMoney(Number(item.totalAmount) + Number(item.feeAmount ?? 0))}</span>
-                        <Button size="sm" variant="outline" onClick={() => openPurchaseDetail(item.id)}>
-                          查看详情
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : null}
-
-          {canHandlePaymentTasks ? (
-            <div className="surface-panel p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold">待财务确认</h2>
-                <span className="text-xs text-muted-foreground">{todoPayments.length} 条</span>
-              </div>
-              {paymentError ? <p className="mb-2 text-xs text-chart-3">{paymentError}</p> : null}
-              {todoPayments.length === 0 ? (
-                <DataState variant="empty" title="暂无待付款任务" className="min-h-[120px]" />
-              ) : (
-                <div className="space-y-2">
-                  {todoPayments.map((item) => (
-                    <div key={item.id} className="surface-table flex flex-wrap items-center justify-between gap-3 p-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">{item.itemName}</p>
-                        <p className="text-xs text-muted-foreground">{item.purchaseNumber}</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          申请人 {item.purchaserName || item.purchaserId} · 组织 {item.organizationType === 'school' ? '学校' : '单位'}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                        <span className={`rounded border px-2 py-0.5 text-[11px] ${reimbursementBadgeClass(item.reimbursementStatus)}`}>
-                          {reimbursementText(item)}
-                        </span>
-                        <span className="text-sm">待付 {formatMoney(item.remainingAmount)}</span>
-                        <Button size="sm" variant="outline" onClick={() => openPurchaseDetail(item.id)}>
-                          查看详情
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {!loading && !error && activeTab === 'done' ? (
         <div className="surface-panel p-4">
-          {doneItems.length === 0 ? (
-            <DataState variant="empty" title="暂无已办记录" className="min-h-[180px]" />
+          {todoUnifiedItems.length === 0 ? (
+            <DataState variant="empty" title="暂无待办事项" className="min-h-[180px]" />
           ) : (
             <div className="space-y-2">
-              {doneItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => openPurchaseDetail(item.id)}
-                  className="surface-table block w-full p-3 text-left transition hover:border-primary/40"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold">{item.itemName}</p>
-                    <span className={`rounded border px-2 py-0.5 text-[11px] ${statusBadgeClass(item.status)}`}>
-                      {statusText(item)}
-                    </span>
+              {todoUnifiedItems.map((item) => (
+                <div key={item.id} className="surface-table flex flex-wrap items-center justify-between gap-3 p-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded border border-border px-2 py-0.5 text-[11px] text-muted-foreground">{item.taskLabel}</span>
+                      <p className="truncate text-sm font-semibold">{item.title}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{item.number}</p>
+                    <p className="text-[11px] text-muted-foreground">{item.description}</p>
                   </div>
-                  <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{item.purchaseNumber}</span>
-                    <span>{formatMoney(Number(item.totalAmount) + Number(item.feeAmount ?? 0))}</span>
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <span className={`rounded border px-2 py-0.5 text-[11px] ${item.statusClass}`}>{item.statusLabel}</span>
+                    <span className="text-sm">{formatMoney(item.amount)}</span>
+                    <Button size="sm" onClick={item.onAction}>
+                      {item.actionLabel}
+                    </Button>
                   </div>
-                  <div className="mt-1">
-                    <span className={`rounded border px-2 py-0.5 text-[11px] ${reimbursementBadgeClass(item.reimbursementStatus)}`}>
-                      {reimbursementText(item)}
-                    </span>
-                  </div>
-                </button>
+                </div>
               ))}
             </div>
           )}
         </div>
       ) : null}
 
-      {!loading && !error && activeTab === 'notifications' ? (
+      {!loading && !error && activeTab === 'done' ? (
         <div className="surface-panel p-4">
-          <div className="mb-3 flex items-center justify-end">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!notifications.some((item) => !item.isRead)}
-              onClick={() => {
-                setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
-                void markNotificationsRead({ markAll: true });
-              }}
-            >
-              全部已读
-            </Button>
-          </div>
-          {notifications.length === 0 ? (
-            <DataState variant="empty" title="暂无通知" className="min-h-[180px]" />
+          {doneUnifiedItems.length === 0 ? (
+            <DataState variant="empty" title="暂无已办记录" className="min-h-[180px]" />
           ) : (
             <div className="space-y-2">
-              {notifications.map((item) => (
-                <article key={item.id} className="surface-table p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold">
-                      {!item.isRead ? <span className="mr-1 inline-block h-2 w-2 rounded-full bg-primary" /> : null}
-                      {item.title}
-                    </p>
+              {doneUnifiedItems.map((item) => (
+                <div key={item.id} className="surface-table flex flex-wrap items-center justify-between gap-3 p-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded border border-border px-2 py-0.5 text-[11px] text-muted-foreground">{item.taskLabel}</span>
+                      <p className="truncate text-sm font-semibold">{item.title}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{item.number}</p>
+                    <p className="text-[11px] text-muted-foreground">{item.description}</p>
                   </div>
-                  <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                    <span>{new Date(item.createdAt).toLocaleString('zh-CN')}</span>
-                    <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => openNotificationDetail(item)}>
-                      {getNotificationActionLabel(item.eventType)}
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <span className={`rounded border px-2 py-0.5 text-[11px] ${item.statusClass}`}>{item.statusLabel}</span>
+                    <span className="text-sm">{formatMoney(item.amount)}</span>
+                    <Button size="sm" variant="outline" onClick={item.onAction}>
+                      {item.actionLabel}
                     </Button>
                   </div>
-                </article>
+                </div>
               ))}
             </div>
           )}
@@ -680,7 +810,6 @@ export default function WorkflowWorkbenchClient({
         onApprove={canApprove ? (purchase) => handleApprove(purchase) : undefined}
         onTransfer={canTransfer ? (purchase) => handleTransfer(purchase) : undefined}
         onReject={canReject ? (purchase) => handleReject(purchase) : undefined}
-        onPay={canPay ? (purchase) => handlePay(purchase) : undefined}
         onSubmit={(purchase) => void handleSubmitFromDetail(purchase)}
       />
       <ApprovalCommentDialog
@@ -702,33 +831,19 @@ export default function WorkflowWorkbenchClient({
         onSubmit={handleTransferSubmit}
         submitting={Boolean(mutatingId && transferDialog.purchase)}
       />
-      <PurchasePayDialog
-        open={payDialog.open}
-        purchase={payDialog.purchase}
+      <ReimbursementPayConfirmDialog
+        open={Boolean(activeReimbursementPayId)}
+        reimbursementId={activeReimbursementPayId}
         onOpenChange={(open) => {
-          if (!open) handlePayDialogClose();
+          if (!open) setActiveReimbursementPayId(null);
         }}
-        onSubmit={handlePaySubmit}
-        busy={Boolean(mutatingId && payDialog.purchase && mutatingId === payDialog.purchase.id)}
+        onPaid={() => {
+          void loadAll();
+        }}
+        onRejected={() => {
+          void loadAll();
+        }}
       />
-      <Dialog open={Boolean(selectedNotification)} onOpenChange={(open) => !open && setSelectedNotification(null)}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>{selectedNotification?.title ?? '通知详情'}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 text-sm">
-            <p className="whitespace-pre-line text-muted-foreground">{selectedNotification?.content ?? ''}</p>
-            {selectedNotification?.createdAt ? (
-              <p className="text-xs text-muted-foreground">{new Date(selectedNotification.createdAt).toLocaleString('zh-CN')}</p>
-            ) : null}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSelectedNotification(null)}>
-              关闭
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </section>
   );
 }

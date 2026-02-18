@@ -25,25 +25,14 @@ export async function GET(request: Request) {
     const context = await requireCurrentUser();
     const permissionUser = await toPermissionUser(context.user);
 
-    const [canViewAll, canViewDepartment, canApprove, canReject, canPay] = await Promise.all([
-      checkPermission(permissionUser, Permissions.PURCHASE_VIEW_ALL),
-      checkPermission(permissionUser, Permissions.PURCHASE_VIEW_DEPARTMENT),
-      checkPermission(permissionUser, Permissions.PURCHASE_APPROVE),
-      checkPermission(permissionUser, Permissions.PURCHASE_REJECT),
-      checkPermission(permissionUser, Permissions.PURCHASE_PAY),
-    ]);
-
-    if (!canViewAll.allowed && !canViewDepartment.allowed && !canApprove.allowed && !canReject.allowed && !canPay.allowed) {
+    const canMonitor = await checkPermission(permissionUser, Permissions.PURCHASE_MONITOR_VIEW);
+    if (!canMonitor.allowed) {
       return forbiddenResponse();
     }
 
     const { searchParams } = new URL(request.url);
     const params = parsePurchaseListParams(searchParams);
     const overdueHours = parseOverdueHours(searchParams.get('overdueHours'));
-
-    if (!canViewAll.allowed) {
-      params.purchaserId = context.user.id;
-    }
 
     const data = await getPurchaseMonitorData(params, overdueHours);
     return NextResponse.json({ success: true, data });

@@ -5,6 +5,8 @@ export const AUTH_ROLE_VALUES = [
   'admin',
   'finance_admin',
   'finance',
+  'finance_school',
+  'finance_company',
   'hr',
   'department_manager',
   'staff',
@@ -18,9 +20,11 @@ export type AuthUserRole = (typeof AUTH_ROLE_VALUES)[number];
 
 const ROLE_MAPPING: Record<AuthUserRole, UserRole> = {
   super_admin: UserRole.SUPER_ADMIN,
-  admin: UserRole.ADMIN,
+  admin: UserRole.FINANCE,
   finance_admin: UserRole.FINANCE,
   finance: UserRole.FINANCE,
+  finance_school: UserRole.FINANCE_SCHOOL,
+  finance_company: UserRole.FINANCE_COMPANY,
   hr: UserRole.HR,
   department_manager: UserRole.DEPARTMENT_MANAGER,
   staff: UserRole.EMPLOYEE,

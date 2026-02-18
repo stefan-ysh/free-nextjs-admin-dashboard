@@ -33,7 +33,7 @@ export async function GET() {
         roles: user.roles,
         primaryRole: user.primary_role,
         displayName: user.display_name,
-        jobTitle: user.job_title,
+        jobTitle: null,
         expiresAt: session.expires_at,
       },
     });

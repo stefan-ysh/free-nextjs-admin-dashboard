@@ -44,9 +44,6 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') ?? undefined;
-    const department = searchParams.get('department') ?? undefined;
-    const departmentId = searchParams.get('departmentId') ?? undefined;
-    const jobGradeId = searchParams.get('jobGradeId') ?? undefined;
     const status = normalizeStatusParam(searchParams.get('status'));
     const page = Number.parseInt(searchParams.get('page') ?? '', 10);
     const pageSize = Number.parseInt(searchParams.get('pageSize') ?? '', 10);
@@ -57,7 +54,6 @@ export async function GET(request: Request) {
       'createdAt',
       'updatedAt',
       'displayName',
-      'department',
       'status',
     ];
     const sortBy = allowedSorts.includes(sortByParam as ListEmployeesParams['sortBy'])
@@ -68,9 +64,6 @@ export async function GET(request: Request) {
 
     const result = await listEmployees({
       search,
-      department,
-      departmentId,
-      jobGradeId,
       status,
       page: Number.isNaN(page) ? undefined : page,
       pageSize: Number.isNaN(pageSize) ? undefined : pageSize,
@@ -113,19 +106,11 @@ export async function POST(request: Request) {
       email: body.email,
       phone: body.phone,
       initialPassword,
-      department: body.department,
-      departmentId: body.departmentId,
-      jobTitle: body.jobTitle,
-      jobGradeId: body.jobGradeId,
-      nationalId: body.nationalId,
       gender: body.gender,
       address: body.address,
-      organization: body.organization,
-      educationBackground: body.educationBackground,
       employmentStatus: body.employmentStatus,
       hireDate: body.hireDate,
       terminationDate: body.terminationDate,
-      managerId: body.managerId,
       location: body.location,
       customFields: body.customFields,
     });

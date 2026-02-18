@@ -213,7 +213,7 @@ export function getEmployeeInfo(user: UserRecord | UserProfile): EmployeeInfo | 
  * 辅助函数：判断用户是否是管理员（超级管理员或管理员）
  */
 export function isAdmin(user: UserRecord | UserProfile): boolean {
-  return hasAnyRole(user, [UserRole.SUPER_ADMIN, UserRole.ADMIN]);
+  return user.primaryRole === UserRole.SUPER_ADMIN;
 }
 
 /**

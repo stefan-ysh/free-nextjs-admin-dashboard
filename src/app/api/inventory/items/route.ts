@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { createInventoryItem, listInventoryItems } from '@/lib/db/inventory';
+import { normalizeInventoryCategory } from '@/lib/inventory/catalog';
 import type { InventoryItemPayload } from '@/types/inventory';
 import { sanitizeItemPayload, validateItemPayload } from './validator';
 
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
       name: String(payload.name ?? '').trim(),
       unit: String(payload.unit ?? '').trim(),
       unitPrice: Number(payload.unitPrice ?? 0),
-      category: String(payload.category ?? '未分类').trim() || '未分类',
+      category: normalizeInventoryCategory(String(payload.category ?? '未分类')),
       safetyStock: Number(payload.safetyStock ?? 0),
       barcode: payload.barcode?.trim() || undefined,
       specFields: payload.specFields,

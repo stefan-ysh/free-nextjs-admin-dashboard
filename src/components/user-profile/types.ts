@@ -3,8 +3,9 @@ export type ProfileData = {
   email: string;
   role: string;
   displayName: string | null;
-  jobTitle: string | null;
+  gender: 'male' | 'female' | 'other' | null;
   phone: string | null;
+  address: string | null;
   bio: string | null;
   country: string | null;
   city: string | null;

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { saveUploadedFile } from '@/lib/storage/local';
+import { isCosConfigured, saveUploadedFileToCos } from '@/lib/storage/cos';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB，与前端提示一致
 const DEFAULT_FOLDER = 'general';
@@ -36,7 +37,9 @@ export async function POST(request: Request) {
     const folder = typeof folderParam === 'string' && folderParam.trim().length > 0 ? folderParam : DEFAULT_FOLDER;
     const prefix = typeof prefixParam === 'string' && prefixParam.trim().length > 0 ? prefixParam : DEFAULT_PREFIX;
 
-    const url = await saveUploadedFile(file, folder, prefix);
+    const url = isCosConfigured()
+      ? await saveUploadedFileToCos(file, folder, prefix)
+      : await saveUploadedFile(file, folder, prefix);
 
     return NextResponse.json({
       success: true,

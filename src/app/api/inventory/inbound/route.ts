@@ -30,9 +30,15 @@ export async function POST(request: NextRequest) {
     }
 
     const inventoryInboundPerm = await checkPermission(permissionUser, Permissions.INVENTORY_OPERATE_INBOUND);
-    if (!inventoryInboundPerm.allowed) {
-      const purchaseCreatePerm = await checkPermission(permissionUser, Permissions.PURCHASE_CREATE);
-      if (!purchaseCreatePerm.allowed) return forbiddenResponse();
+    const ownPurchaseInboundPerm = await checkPermission(
+      permissionUser,
+      Permissions.INVENTORY_INBOUND_CREATE_OWN_PURCHASE_ONLY
+    );
+    if (!inventoryInboundPerm.allowed && !ownPurchaseInboundPerm.allowed) {
+      return forbiddenResponse();
+    }
+
+    if (!inventoryInboundPerm.allowed && ownPurchaseInboundPerm.allowed) {
 
       if (payload.type !== 'purchase') {
         return NextResponse.json({ error: '当前仅允许对采购单执行入库' }, { status: 403 });
@@ -45,8 +51,8 @@ export async function POST(request: NextRequest) {
       if (!purchase || purchase.isDeleted) {
         return NextResponse.json({ error: '关联采购单不存在' }, { status: 404 });
       }
-      if (purchase.status !== 'approved' && purchase.status !== 'paid') {
-        return NextResponse.json({ error: '仅已审批采购单可执行入库' }, { status: 400 });
+      if (purchase.status !== 'pending_inbound' && purchase.status !== 'approved' && purchase.status !== 'paid') {
+        return NextResponse.json({ error: '当前采购单状态不允许入库' }, { status: 400 });
       }
       const isOwner = purchase.createdBy === permissionUser.id || purchase.purchaserId === permissionUser.id;
       if (!isOwner) {
@@ -67,6 +73,18 @@ export async function POST(request: NextRequest) {
       }
       if (error.message === INVENTORY_ERRORS.WAREHOUSE_NOT_FOUND) {
         return NextResponse.json({ error: '仓库不存在' }, { status: 404 });
+      }
+      if (error.message === INVENTORY_ERRORS.PURCHASE_NOT_FOUND) {
+        return NextResponse.json({ error: '关联采购单不存在' }, { status: 404 });
+      }
+      if (error.message === INVENTORY_ERRORS.PURCHASE_STATUS_INVALID) {
+        return NextResponse.json({ error: '当前采购单状态不允许入库' }, { status: 400 });
+      }
+      if (error.message === INVENTORY_ERRORS.PURCHASE_ITEM_MISMATCH) {
+        return NextResponse.json({ error: '入库商品与关联采购单不一致' }, { status: 400 });
+      }
+      if (error.message === INVENTORY_ERRORS.PURCHASE_INBOUND_EXCEEDS) {
+        return NextResponse.json({ error: '入库数量超过采购单剩余可入库数量' }, { status: 400 });
       }
     }
     return NextResponse.json({ error: '创建入库单失败' }, { status: 500 });

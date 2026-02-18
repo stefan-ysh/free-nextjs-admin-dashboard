@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { mysqlPool } from '@/lib/mysql';
 import { randomUUID } from 'crypto';
+import { normalizeInventoryCategory } from '@/lib/inventory/catalog';
 
 
 export const dynamic = 'force-dynamic';
@@ -186,7 +187,7 @@ export async function GET() {
           is_deleted, 
           created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, 0, 10, 0, NOW(), NOW())`,
-        [randomUUID(), sku, cleanName, item.unit, item.category]
+        [randomUUID(), sku, cleanName, item.unit, normalizeInventoryCategory(item.category)]
       );
       
       results.push({ name: cleanName, status: 'created' });

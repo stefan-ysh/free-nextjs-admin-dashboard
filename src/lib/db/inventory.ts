@@ -3,6 +3,7 @@ import type { PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/prom
 
 import { mysqlPool, mysqlQuery } from '@/lib/mysql';
 import { ensureInventorySchema } from '@/lib/schema/inventory';
+import { ensurePurchasesSchema } from '@/lib/schema/purchases';
 import { specFieldsToDefaultRecord } from '@/lib/inventory/spec';
 import { normalizeInventoryCategory } from '@/lib/inventory/catalog';
 import type {
@@ -78,6 +79,7 @@ type MovementRow = RowDataPacket & {
   unit_cost: number | null;
   amount: number | null;
   operator_id: string | null;
+  operator_name: string | null;
   occurred_at: Date | string;
   attachments_json: string | null;
   attributes_json: string | null;
@@ -98,6 +100,14 @@ type WarehouseUsageRow = RowDataPacket & {
   totalReserved: number | null;
 };
 
+type PurchaseInboundProgressRow = RowDataPacket & {
+  id: string;
+  status: string;
+  quantity: number;
+  inbound_quantity: number | null;
+  inventory_item_id: string | null;
+};
+
 export const INVENTORY_ERRORS = {
   ITEM_NOT_FOUND: 'INVENTORY_ITEM_NOT_FOUND',
   WAREHOUSE_NOT_FOUND: 'INVENTORY_WAREHOUSE_NOT_FOUND',
@@ -109,6 +119,10 @@ export const INVENTORY_ERRORS = {
   RESERVE_EXCEEDS: 'INVENTORY_RESERVE_EXCEEDS',
   ITEM_IN_USE: 'INVENTORY_ITEM_IN_USE',
   WAREHOUSE_IN_USE: 'INVENTORY_WAREHOUSE_IN_USE',
+  PURCHASE_NOT_FOUND: 'INVENTORY_PURCHASE_NOT_FOUND',
+  PURCHASE_STATUS_INVALID: 'INVENTORY_PURCHASE_STATUS_INVALID',
+  PURCHASE_ITEM_MISMATCH: 'INVENTORY_PURCHASE_ITEM_MISMATCH',
+  PURCHASE_INBOUND_EXCEEDS: 'INVENTORY_PURCHASE_INBOUND_EXCEEDS',
 } as const;
 
 type Queryable = PoolConnection | ReturnType<typeof mysqlPool>;
@@ -220,6 +234,7 @@ function mapMovement(row: MovementRow): InventoryMovement {
     unitCost: row.unit_cost ?? undefined,
     amount: row.amount ?? undefined,
     operatorId: row.operator_id ?? undefined,
+    operatorName: row.operator_name ?? undefined,
     occurredAt: toIsoString(row.occurred_at),
     attachments: parseJsonColumn(row.attachments_json),
     attributes: parseJsonColumn(row.attributes_json),
@@ -617,7 +632,15 @@ export async function listMovements(limit = 50): Promise<InventoryMovement[]> {
   await ensureInventorySchema();
   const safeLimit = Math.min(Math.max(limit, 1), 200);
   const [rows] = await pool.query<MovementRow[]>(
-    'SELECT * FROM inventory_movements ORDER BY occurred_at DESC, created_at DESC LIMIT ?',
+    `
+      SELECT
+        m.*,
+        COALESCE(op.display_name, op.email) AS operator_name
+      FROM inventory_movements m
+      LEFT JOIN hr_employees op ON op.id = m.operator_id
+      ORDER BY m.occurred_at DESC, m.created_at DESC
+      LIMIT ?
+    `,
     [safeLimit]
   );
   return rows.map(mapMovement);
@@ -733,6 +756,7 @@ export async function createInboundRecord(
   operatorId = 'system'
 ): Promise<InventoryMovement> {
   await ensureInventorySchema();
+  await ensurePurchasesSchema();
 
   return withTransaction(async (connection) => {
     const itemRow = await fetchItem(connection, payload.itemId);
@@ -749,6 +773,37 @@ export async function createInboundRecord(
       specFieldsToDefaultRecord(specFields) ??
       readLegacyDefaults(itemRow);
     const unitCost = payload.unitCost ?? Number(itemRow.unit_price ?? 0);
+    let purchaseProgress: PurchaseInboundProgressRow | null = null;
+
+    if (payload.type === 'purchase') {
+      const relatedPurchaseId = payload.relatedPurchaseId?.trim();
+      if (!relatedPurchaseId) {
+        throw new Error(INVENTORY_ERRORS.PURCHASE_NOT_FOUND);
+      }
+      const [purchaseRows] = await connection.query<PurchaseInboundProgressRow[]>(
+        `SELECT id, status, quantity, inbound_quantity, inventory_item_id
+         FROM purchases
+         WHERE id = ?
+         FOR UPDATE`,
+        [relatedPurchaseId]
+      );
+      purchaseProgress = purchaseRows[0] ?? null;
+      if (!purchaseProgress) {
+        throw new Error(INVENTORY_ERRORS.PURCHASE_NOT_FOUND);
+      }
+      if (!['pending_inbound', 'approved', 'paid'].includes(String(purchaseProgress.status))) {
+        throw new Error(INVENTORY_ERRORS.PURCHASE_STATUS_INVALID);
+      }
+      if (purchaseProgress.inventory_item_id && purchaseProgress.inventory_item_id !== payload.itemId) {
+        throw new Error(INVENTORY_ERRORS.PURCHASE_ITEM_MISMATCH);
+      }
+      const purchaseQuantity = Number(purchaseProgress.quantity ?? 0);
+      const inboundQuantity = Number(purchaseProgress.inbound_quantity ?? 0);
+      const remainingQuantity = Number((purchaseQuantity - inboundQuantity).toFixed(2));
+      if (payload.quantity > remainingQuantity) {
+        throw new Error(INVENTORY_ERRORS.PURCHASE_INBOUND_EXCEEDS);
+      }
+    }
     const movementId = randomUUID();
 
     await connection.query(
@@ -786,6 +841,24 @@ export async function createInboundRecord(
         `UPDATE inventory_items SET unit_price = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [unitCost || 0, payload.itemId]
       );
+
+      if (purchaseProgress && payload.relatedPurchaseId?.trim()) {
+        const purchaseQuantity = Number(purchaseProgress.quantity ?? 0);
+        const inboundQuantity = Number(purchaseProgress.inbound_quantity ?? 0);
+        const nextInboundQuantity = Number((inboundQuantity + Number(payload.quantity)).toFixed(2));
+        const reachedFullInbound = nextInboundQuantity + 0.000001 >= purchaseQuantity;
+        await connection.query(
+          `UPDATE purchases
+             SET inbound_quantity = ?,
+                 status = CASE
+                   WHEN status = 'pending_inbound' AND ? = 1 THEN 'approved'
+                   ELSE status
+                 END,
+                 updated_at = NOW(3)
+           WHERE id = ?`,
+          [nextInboundQuantity, reachedFullInbound ? 1 : 0, payload.relatedPurchaseId.trim()]
+        );
+      }
     }
 
     const movement = await fetchMovement(connection, movementId);

@@ -17,7 +17,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import UserSelect from '@/components/common/UserSelect';
 import PurchaseDetailModal from './PurchaseDetailModal';
 import PurchaseTable, { type PurchaseRowPermissions } from './PurchaseTable';
-import PurchasePayDialog from './PurchasePayDialog';
 import PurchaseInboundDrawer from './PurchaseInboundDrawer';
 import RejectionReasonDialog from './RejectionReasonDialog';
 import ApprovalCommentDialog from './ApprovalCommentDialog';
@@ -40,9 +39,6 @@ import {
   isPurchaseSubmittable,
   isPurchaseWithdrawable,
   isPurchaseApprovable,
-  isPurchasePayable,
-  isReimbursementSubmittable,
-  hasInvoiceEvidence,
   getPurchaseStatusText,
 } from '@/types/purchase';
 import { canDeletePurchase, canEditPurchase } from '@/lib/permissions';
@@ -50,7 +46,6 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useConfirm } from '@/hooks/useConfirm';
 import { formatDateOnly } from '@/lib/dates';
 import { formatCurrency } from '@/lib/format';
-import { isReimbursementV2Enabled } from '@/lib/features/gates';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
@@ -103,14 +98,16 @@ function createFallbackDetail(record: PurchaseRecord): PurchaseDetail {
     ...record,
     purchaser: {
       id: record.purchaserId,
-      displayName: record.purchaserId,
+      displayName: record.purchaserName || '未知用户',
       employeeCode: null,
       department: null,
     },
-    approver: record.approvedBy ? { id: record.approvedBy, displayName: record.approvedBy } : null,
-    pendingApprover: record.pendingApproverId ? { id: record.pendingApproverId, displayName: record.pendingApproverId } : null,
-    rejecter: record.rejectedBy ? { id: record.rejectedBy, displayName: record.rejectedBy } : null,
-    payer: record.paidBy ? { id: record.paidBy, displayName: record.paidBy } : null,
+    approver: record.approvedBy ? { id: record.approvedBy, displayName: record.approvedByName || '未知用户' } : null,
+    pendingApprover: record.pendingApproverId
+      ? { id: record.pendingApproverId, displayName: record.pendingApproverName || '未分配' }
+      : null,
+    rejecter: record.rejectedBy ? { id: record.rejectedBy, displayName: record.rejectedByName || '未知用户' } : null,
+    payer: record.paidBy ? { id: record.paidBy, displayName: record.paidByName || '未知用户' } : null,
     payments: [],
     paidAmount: 0,
     remainingAmount: dueAmount,
@@ -174,8 +171,8 @@ type PermissionSnapshot = {
   canUpdate: boolean;
   canApprove: boolean;
   canReject: boolean;
-  canPay: boolean;
-  canReceive: boolean;
+  canReceiveAll: boolean;
+  canReceiveOwnPurchase: boolean;
 };
 
 export default function PurchasesClient() {
@@ -218,16 +215,11 @@ export default function PurchasesClient() {
     open: false,
     purchase: null,
   });
-  const [payDialog, setPayDialog] = useState<{ open: boolean; purchase: PurchaseRecord | PurchaseDetail | null }>({
-    open: false,
-    purchase: null,
-  });
   const [inboundDrawer, setInboundDrawer] = useState<{ open: boolean; purchase: PurchaseRecord | PurchaseDetail | null }>({
     open: false,
     purchase: null,
   });
   const confirm = useConfirm();
-  const reimbursementV2Enabled = isReimbursementV2Enabled();
 
   const permissions: PermissionSnapshot = useMemo(
     () => ({
@@ -237,8 +229,8 @@ export default function PurchasesClient() {
       canUpdate: hasPermission('PURCHASE_UPDATE'),
       canApprove: hasPermission('PURCHASE_APPROVE'),
       canReject: hasPermission('PURCHASE_REJECT'),
-      canPay: hasPermission('PURCHASE_PAY'),
-      canReceive: hasPermission('INVENTORY_OPERATE_INBOUND'),
+      canReceiveAll: hasPermission('INVENTORY_OPERATE_INBOUND'),
+      canReceiveOwnPurchase: hasPermission('INVENTORY_INBOUND_CREATE_OWN_PURCHASE_ONLY'),
     }),
     [hasPermission]
   );
@@ -602,46 +594,8 @@ export default function PurchasesClient() {
     setWithdrawDialog({ open: false, purchase: null });
   };
 
-  const handlePay = (purchase: PurchaseRecord | PurchaseDetail) => {
-    setPayDialog({ open: true, purchase });
-  };
-
-  const handleSubmitReimbursement = async (purchase: PurchaseRecord | PurchaseDetail) => {
-    if (reimbursementV2Enabled) {
-      router.push('/reimbursements');
-      return;
-    }
-    if (!hasInvoiceEvidence(purchase)) {
-      toast.error('请先上传发票或收款凭证后再提交报销', {
-        action: {
-          label: '去编辑',
-          onClick: () => router.push(`/purchases/${purchase.id}/edit`),
-        },
-      });
-      return;
-    }
-    const confirmed = await confirm({
-      title: '确认提交报销申请？',
-      description: '提交后将通知财务进入待办队列。',
-      confirmText: '提交报销',
-      cancelText: '取消',
-    });
-    if (!confirmed) return;
-    void performAction(
-      purchase.id,
-      'submit_reimbursement',
-      {},
-      { successMessage: '报销申请已提交，等待财务确认' }
-    );
-  };
-
   const handleReceive = (purchase: PurchaseRecord | PurchaseDetail) => {
     setInboundDrawer({ open: true, purchase });
-  };
-
-  const handlePayDialogClose = () => {
-    if (mutatingId && payDialog.purchase && mutatingId === payDialog.purchase.id) return;
-    setPayDialog({ open: false, purchase: null });
   };
 
   const handleApproveDialogClose = () => {
@@ -659,19 +613,6 @@ export default function PurchasesClient() {
     );
     if (success) {
       setApproveDialog({ open: false, purchase: null });
-    }
-  };
-
-  const handlePaySubmit = async (amount: number, note?: string) => {
-    if (!payDialog.purchase) return;
-    const success = await performAction(
-      payDialog.purchase.id,
-      'pay',
-      { amount, note },
-      { successMessage: '已记录打款' }
-    );
-    if (success) {
-      setPayDialog({ open: false, purchase: null });
     }
   };
 
@@ -733,10 +674,24 @@ export default function PurchasesClient() {
           canPay: false,
           canSubmitReimbursement: false,
           canWithdraw: false,
+          canReceive: false,
         };
       }
 
       const isOwner = permissionUser.id === purchase.createdBy;
+      const inboundQuantity = Number(purchase.inboundQuantity ?? 0);
+      const purchaseQuantity = Number(purchase.quantity ?? 0);
+      const remainingInboundQuantity = Math.max(0, purchaseQuantity - inboundQuantity);
+      const canReceive =
+        remainingInboundQuantity > 0 &&
+        (purchase.status === 'pending_inbound' || purchase.status === 'approved' || purchase.status === 'paid') &&
+        (
+          permissions.canReceiveAll ||
+          (
+            permissions.canReceiveOwnPurchase &&
+            (purchase.createdBy === permissionUser.id || purchase.purchaserId === permissionUser.id)
+          )
+        );
       return {
         canEdit: canEditPurchase(permissionUser, {
           createdBy: purchase.createdBy,
@@ -750,14 +705,20 @@ export default function PurchasesClient() {
         canApprove: permissions.canApprove && isPurchaseApprovable(purchase.status),
         canTransfer: permissions.canApprove && isPurchaseApprovable(purchase.status),
         canReject: permissions.canReject && isPurchaseApprovable(purchase.status),
-        canPay:
-          permissions.canPay &&
-          isPurchasePayable(purchase.status) &&
-          purchase.reimbursementStatus === 'reimbursement_pending',
-        canSubmitReimbursement: !reimbursementV2Enabled && isOwner && isReimbursementSubmittable(purchase),
+        canPay: false,
+        canSubmitReimbursement: false,
+        canReceive,
       };
     },
-    [permissionUser, permissions.canApprove, permissions.canCreate, permissions.canPay, permissions.canReject, permissions.canViewAll, reimbursementV2Enabled]
+    [
+      permissionUser,
+      permissions.canApprove,
+      permissions.canCreate,
+      permissions.canReject,
+      permissions.canViewAll,
+      permissions.canReceiveAll,
+      permissions.canReceiveOwnPurchase,
+    ]
   );
 
   const handleEdit = (purchase: PurchaseRecord) => {
@@ -794,18 +755,6 @@ export default function PurchasesClient() {
   };
 
   const selectedPurchasePermissions = selectedPurchase ? getRowPermissions(selectedPurchase) : undefined;
-  const canReceive = Boolean(
-    selectedPurchase &&
-      (selectedPurchase.status === 'approved' || selectedPurchase.status === 'paid') &&
-      (
-        permissions.canReceive ||
-        (
-          permissions.canCreate &&
-          permissionUser &&
-          (selectedPurchase.createdBy === permissionUser.id || selectedPurchase.purchaserId === permissionUser.id)
-        )
-      )
-  );
   const selectedPurchaseBusy = selectedPurchase ? mutatingId === selectedPurchase.id : false;
 
   if (permissionLoading) {
@@ -842,12 +791,12 @@ export default function PurchasesClient() {
                 <span className="text-[10px] text-muted-foreground/80">{stats.pendingCount} 条</span>
               </div>
               <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
-                <span className="font-medium text-foreground">已批准</span>
+                <span className="font-medium text-foreground">已入库</span>
                 <span className="font-semibold text-chart-1">{formatCurrency(stats.approvedAmount)}</span>
                 <span className="text-[10px] text-muted-foreground/80">{stats.approvedCount} 条</span>
               </div>
               <div className="flex items-center gap-2 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
-                <span className="font-medium text-foreground">已打款</span>
+                <span className="font-medium text-foreground">历史已完成</span>
                 <span className="font-semibold text-chart-5">{formatCurrency(stats.paidAmount)}</span>
                 <span className="text-[10px] text-muted-foreground/80">{stats.paidCount} 条</span>
               </div>
@@ -1162,8 +1111,9 @@ export default function PurchasesClient() {
           onTransfer={handleTransfer}
           onReject={handleReject}
           onWithdraw={handleWithdraw}
-          onPay={handlePay}
-          onSubmitReimbursement={handleSubmitReimbursement}
+          onPay={() => {}}
+          onSubmitReimbursement={() => {}}
+          onReceive={handleReceive}
         />
 
       </div>
@@ -1226,10 +1176,8 @@ export default function PurchasesClient() {
         onApprove={handleApprove}
         onTransfer={handleTransfer}
         onReject={handleReject}
-        onPay={handlePay}
-        onSubmitReimbursement={handleSubmitReimbursement}
-        onReceive={handleReceive}
-        canReceive={canReceive}
+        onPay={() => {}}
+        onSubmitReimbursement={() => {}}
         detailLoading={detailLoading}
         detailError={detailError}
         onReloadDetail={selectedPurchase ? () => loadPurchaseDetail(selectedPurchase.id) : undefined}
@@ -1253,16 +1201,6 @@ export default function PurchasesClient() {
         description="请输入撤回原因，系统会记录撤回说明并通知相关审批人。"
       />
 
-      <PurchasePayDialog
-        open={payDialog.open}
-        purchase={payDialog.purchase}
-        onOpenChange={(open) => {
-          if (!open) handlePayDialogClose();
-        }}
-        onSubmit={handlePaySubmit}
-        busy={Boolean(mutatingId && payDialog.purchase && mutatingId === payDialog.purchase.id)}
-      />
-
       <ApprovalCommentDialog
         open={approveDialog.open}
         onClose={handleApproveDialogClose}
@@ -1283,7 +1221,10 @@ export default function PurchasesClient() {
         onOpenChange={(open) => {
           if (!open) setInboundDrawer({ open: false, purchase: null });
         }}
-        onSuccess={() => setInboundDrawer({ open: false, purchase: null })}
+        onSuccess={() => {
+          setInboundDrawer({ open: false, purchase: null });
+          setReloadToken((token) => token + 1);
+        }}
       />
     </div>
   );

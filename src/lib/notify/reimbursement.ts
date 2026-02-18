@@ -29,18 +29,47 @@ function buildEmailSubject(title: string): string {
 }
 
 function buildEmailHtml(title: string, content: string): string {
-  const escaped = content
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/\n/g, '<br/>');
+  const lines = content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  let detailUrl: string | null = null;
+  const items = lines
+    .map((line) => {
+      const escaped = line
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+      if (line.startsWith('处理链接：') || line.startsWith('详情链接：')) {
+        const url = line.replace(/^(处理链接：|详情链接：)/, '').trim();
+        if (/^https?:\/\//i.test(url)) {
+          detailUrl = url;
+          return '';
+        }
+      }
+      return `<li style="margin:0 0 8px;">${escaped}</li>`;
+    })
+    .filter(Boolean)
+    .join('');
+
   return `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f7fb;padding:24px;">
       <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
-        <div style="padding:16px 20px;background:#111827;color:#ffffff;font-size:16px;font-weight:600;">${title}</div>
-        <div style="padding:18px 20px;color:#111827;line-height:1.7;">${escaped}</div>
+        <div style="padding:16px 20px;background:#111827;color:#ffffff;font-size:16px;font-weight:700;">${title}</div>
+        <div style="padding:18px 20px;color:#111827;">
+          <ul style="margin:0;padding-left:18px;line-height:1.65;">${items}</ul>
+          ${detailUrl ? `
+            <div style="margin-top:14px;">
+              <a href="${detailUrl}" style="display:inline-block;padding:9px 14px;border-radius:8px;background:#4f46e5;color:#fff;text-decoration:none;font-size:13px;">
+                查看详情
+              </a>
+            </div>
+          ` : ''}
+        </div>
       </div>
     </div>
   `;
@@ -115,7 +144,7 @@ export async function notifyReimbursementEvent(
     const content = [
       `【${title}】`,
       ...common,
-      '已通过审批，请财务处理打款。',
+      '已通过审批，请财务核对附件后执行打款。',
       `处理链接：${detailLink}`,
     ].join('\n');
     await dispatch({

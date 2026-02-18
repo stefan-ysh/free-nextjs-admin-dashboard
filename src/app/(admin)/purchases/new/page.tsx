@@ -22,10 +22,24 @@ export default function PurchaseCreatePage() {
 			body: JSON.stringify(payload),
 		});
 		const result = await response.json();
-		if (!response.ok || !result.success) {
+		if (!response.ok || !result.success || !result?.data?.id) {
 			throw new Error(result.error || '创建采购失败');
 		}
-		toast.success('采购草稿已保存');
+
+		const submitResp = await fetch(`/api/purchases/${result.data.id}/actions`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ action: 'submit' }),
+		});
+		const submitResult = await submitResp.json().catch(() => null);
+		if (!submitResp.ok || !submitResult?.success) {
+			toast.warning(submitResult?.error || '采购单已保存为草稿，请在详情中手动提交审批');
+			router.push('/purchases');
+			router.refresh();
+			return;
+		}
+
+		toast.success('采购申请已提交，等待审批');
 		router.push('/purchases');
 		router.refresh();
 	};

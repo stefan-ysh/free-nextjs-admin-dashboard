@@ -129,12 +129,8 @@ export default function EmployeeTable({
 								</div>
 								<div className="mt-3 grid gap-2 text-xs text-muted-foreground">
 									<div className="flex items-center justify-between gap-3">
-										<span>部门</span>
-										<span className="text-foreground">{employee.department ?? '—'}</span>
-									</div>
-									<div className="flex items-center justify-between gap-3">
-										<span>职位</span>
-										<span className="text-foreground">{employee.jobTitle ?? '—'}</span>
+										<span>邮箱</span>
+										<span className="text-foreground">{employee.email ?? '—'}</span>
 									</div>
 									<div className="flex items-center justify-between gap-3">
 										<span>入职日期</span>
@@ -209,14 +205,13 @@ export default function EmployeeTable({
 					scrollAreaClassName="max-h-[calc(100vh-280px)] custom-scrollbar"
 					className="w-full text-muted-foreground"
 				>
-					<TableHeader>
-						<TableRow className="bg-muted/60">
-							<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">员工编号</TableHead>
-							<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">姓名</TableHead>
-							<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">部门</TableHead>
-							<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">职位</TableHead>
-							<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">状态</TableHead>
-							<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">入职日期</TableHead>
+						<TableHeader>
+							<TableRow className="bg-muted/60">
+								<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">员工编号</TableHead>
+								<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">姓名</TableHead>
+								<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">邮箱</TableHead>
+								<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">状态</TableHead>
+								<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">入职日期</TableHead>
 							{(canEdit || canDelete || canAssignRoles || canResetPassword) && (
 								<TableHead className="px-4 py-3 text-right uppercase tracking-wide text-muted-foreground">操作</TableHead>
 							)}
@@ -236,9 +231,6 @@ export default function EmployeeTable({
 											</AvatarFallback>
 										</Avatar>
 										<div className="flex items-center gap-2 truncate">
-											<span className="font-medium text-foreground truncate" title={resolveDisplayName(employee)}>
-												{resolveDisplayName(employee)}
-											</span>
 											{employee.userPrimaryRole ? (
 												<Badge variant="secondary" className="whitespace-nowrap text-xs">
 													{USER_ROLE_LABELS[employee.userPrimaryRole] ?? employee.userPrimaryRole}
@@ -247,18 +239,7 @@ export default function EmployeeTable({
 										</div>
 									</div>
 								</TableCell>
-								<TableCell className="px-4 py-4 text-sm text-muted-foreground">
-									<span className="block max-w-[180px] truncate" title={`${employee.department ?? '—'}${employee.departmentCode ? `（${employee.departmentCode}）` : ''}`}>
-										{employee.department ?? '—'}
-										{employee.department && employee.departmentCode ? `（${employee.departmentCode}）` : ''}
-									</span>
-								</TableCell>
-								<TableCell className="px-4 py-4 text-sm text-muted-foreground">
-									<span className="block max-w-[160px] truncate" title={employee.jobTitle ?? '—'}>
-										{employee.jobTitle ?? '—'}
-										{employee.jobGrade ? ` · ${employee.jobGrade}${employee.jobGradeLevel != null ? `L${employee.jobGradeLevel}` : ''}` : ''}
-									</span>
-								</TableCell>
+								<TableCell className="px-4 py-4 text-sm text-muted-foreground">{employee.email ?? '—'}</TableCell>
 								<TableCell className="px-4 py-4">
 									<EmployeeStatusBadge status={employee.employmentStatus} />
 								</TableCell>

@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { toPermissionUser } from '@/lib/auth/permission-user';
-import { listJobGradeOptions } from '@/lib/hr/employees';
 import { checkPermission, Permissions } from '@/lib/permissions';
 
 function unauthorizedResponse() {
@@ -22,8 +21,7 @@ export async function GET() {
       return forbiddenResponse();
     }
 
-    const jobGrades = await listJobGradeOptions();
-    return NextResponse.json({ success: true, data: jobGrades });
+    return NextResponse.json({ success: true, data: [] });
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHENTICATED') {
       return unauthorizedResponse();

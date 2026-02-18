@@ -10,7 +10,6 @@ import type {
 } from '@/types/inventory';
 import type { PurchaseRecord } from '@/types/purchase';
 import { usePermissions } from '@/hooks/usePermissions';
-import { specFieldsToDefaultRecord } from '@/lib/inventory/spec';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,18 +22,35 @@ const defaultPayload: InventoryInboundPayload = {
     quantity: 1,
     type: 'purchase',
 };
+const MIN_INBOUND_QUANTITY = 0.001;
 
 interface InventoryInboundFormProps {
     onSuccess?: () => void;
     onCancel?: () => void;
     formId?: string;
     hideActions?: boolean;
+    initialRelatedPurchaseId?: string;
 }
 
-export default function InventoryInboundForm({ onSuccess, onCancel, formId, hideActions = false }: InventoryInboundFormProps) {
+function findWarehouseIdByOrgType(warehouses: Warehouse[], orgType?: PurchaseRecord['organizationType']): string | undefined {
+    const targetCode = orgType === 'school' ? 'SCHOOL' : orgType === 'company' ? 'COMPANY' : undefined;
+    if (!targetCode) return undefined;
+    const matched = warehouses.find((warehouse) => warehouse.code.toUpperCase() === targetCode);
+    return matched?.id;
+}
+
+export default function InventoryInboundForm({
+    onSuccess,
+    onCancel,
+    formId,
+    hideActions = false,
+    initialRelatedPurchaseId,
+}: InventoryInboundFormProps) {
     const { hasPermission, loading: permissionLoading } = usePermissions();
     const canOperate = useMemo(
-        () => hasPermission('INVENTORY_OPERATE_INBOUND'),
+        () =>
+            hasPermission('INVENTORY_OPERATE_INBOUND') ||
+            hasPermission('INVENTORY_INBOUND_CREATE_OWN_PURCHASE_ONLY'),
         [hasPermission]
     );
 
@@ -44,10 +60,30 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
     const [payload, setPayload] = useState<InventoryInboundPayload>(defaultPayload);
     const [submitting, setSubmitting] = useState(false);
 
-    const selectedItem = useMemo(
-        () => items.find((item) => item.id === payload.itemId),
-        [items, payload.itemId]
+    const selectedPurchase = useMemo(
+        () => purchases.find((purchase) => purchase.id === payload.relatedPurchaseId),
+        [payload.relatedPurchaseId, purchases]
     );
+    const selectedItem = useMemo(() => {
+        if (!selectedPurchase) return null;
+        if (selectedPurchase.inventoryItemId) {
+            return items.find((item) => item.id === selectedPurchase.inventoryItemId) ?? null;
+        }
+        return items.find((item) => item.name === selectedPurchase.itemName) ?? null;
+    }, [items, selectedPurchase]);
+    const selectedWarehouseId = useMemo(
+        () => (selectedPurchase ? findWarehouseIdByOrgType(warehouses, selectedPurchase.organizationType) : undefined),
+        [selectedPurchase, warehouses]
+    );
+    const selectedWarehouse = useMemo(
+        () => warehouses.find((warehouse) => warehouse.id === payload.warehouseId) ?? null,
+        [payload.warehouseId, warehouses]
+    );
+    const remainingQuantity = useMemo(() => {
+        if (!selectedPurchase) return 0;
+        return Math.max(0, Number(selectedPurchase.quantity ?? 0) - Number(selectedPurchase.inboundQuantity ?? 0));
+    }, [selectedPurchase]);
+    const [initialSelectionHandled, setInitialSelectionHandled] = useState(false);
 
     useEffect(() => {
         if (!canOperate) return;
@@ -60,10 +96,41 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
                 setItems(itemsResponse.data ?? []);
                 setWarehouses(warehousesResponse.data ?? []);
                 const rows = (purchasesResponse?.data?.items ?? []) as PurchaseRecord[];
-                setPurchases(rows.filter((row) => row.status === 'approved' || row.status === 'paid'));
+                setPurchases(
+                    rows.filter(
+                        (row) =>
+                            (row.status === 'pending_inbound' ||
+                                row.status === 'approved' ||
+                                row.status === 'paid') &&
+                            Math.max(0, Number(row.quantity ?? 0) - Number(row.inboundQuantity ?? 0)) > 0
+                    )
+                );
             })
             .catch((error) => console.error('Failed to load dependency data', error));
     }, [canOperate]);
+
+    useEffect(() => {
+        if (initialSelectionHandled) return;
+        const targetId = initialRelatedPurchaseId?.trim();
+        if (!targetId) {
+            setInitialSelectionHandled(true);
+            return;
+        }
+        if (purchases.length === 0) return;
+
+        const matched = purchases.find((purchase) => purchase.id === targetId);
+        if (!matched) {
+            toast.error('指定采购单当前不可入库（可能已完成入库或状态不允许）');
+            setInitialSelectionHandled(true);
+            return;
+        }
+        setPayload((prev) => ({
+            ...prev,
+            type: 'purchase',
+            relatedPurchaseId: matched.id,
+        }));
+        setInitialSelectionHandled(true);
+    }, [initialRelatedPurchaseId, initialSelectionHandled, purchases]);
 
     const handleChange = (
         field: keyof InventoryInboundPayload,
@@ -72,37 +139,60 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
         setPayload((prev) => ({ ...prev, [field]: value }));
     };
 
-    const handleSpecChange = (key: string, value: string) => {
-        setPayload((prev) => ({
-            ...prev,
-            attributes: {
-                ...(prev.attributes ?? {}),
-                [key]: value,
-            },
-        }));
-    };
-
     useEffect(() => {
-        if (!selectedItem) {
-            return;
-        }
-        const defaultAttributes = specFieldsToDefaultRecord(selectedItem.specFields);
-        setPayload((prev) => ({
-            ...prev,
-            unitCost: prev.unitCost ?? selectedItem.unitPrice,
-            attributes: prev.attributes ?? defaultAttributes ?? {},
-        }));
-    }, [selectedItem]);
+        if (!selectedPurchase) return;
+        setPayload((prev) => {
+            const nextItemId = selectedItem?.id ?? prev.itemId;
+            const nextWarehouseId = selectedWarehouseId ?? prev.warehouseId;
+            const maxInbound = Math.max(
+                0,
+                Number(selectedPurchase.quantity ?? 0) - Number(selectedPurchase.inboundQuantity ?? 0)
+            );
+            const nextQuantity =
+                maxInbound > 0
+                    ? Math.min(Math.max(MIN_INBOUND_QUANTITY, Number(prev.quantity) || MIN_INBOUND_QUANTITY), maxInbound)
+                    : MIN_INBOUND_QUANTITY;
 
-    useEffect(() => {
-        if (payload.type === 'purchase') return;
-        setPayload((prev) => ({ ...prev, relatedPurchaseId: undefined }));
-    }, [payload.type]);
+            if (
+                prev.itemId === nextItemId &&
+                prev.warehouseId === nextWarehouseId &&
+                prev.quantity === nextQuantity
+            ) {
+                return prev;
+            }
+
+            return {
+                ...prev,
+                type: 'purchase',
+                relatedPurchaseId: selectedPurchase.id,
+                itemId: nextItemId,
+                warehouseId: nextWarehouseId,
+                quantity: nextQuantity,
+            };
+        });
+    }, [selectedItem, selectedPurchase, selectedWarehouseId]);
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        const purchaseId = payload.relatedPurchaseId?.trim();
+        if (!purchaseId) {
+            toast.error('请先选择关联采购单');
+            return;
+        }
         if (!canOperate || !payload.itemId || !payload.warehouseId) {
             toast.error('请选择商品与仓库');
+            return;
+        }
+        if (remainingQuantity <= 0) {
+            toast.error('该采购单已完成入库');
+            return;
+        }
+        if (!Number.isFinite(Number(payload.quantity)) || Number(payload.quantity) <= 0) {
+            toast.error('入库数量需大于 0');
+            return;
+        }
+        if (Number(payload.quantity) > remainingQuantity) {
+            toast.error(`本次最多可入库 ${remainingQuantity} 件`);
             return;
         }
         setSubmitting(true);
@@ -110,7 +200,11 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
             const res = await fetch('/api/inventory/inbound', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                body: JSON.stringify({
+                    ...payload,
+                    type: 'purchase',
+                    relatedPurchaseId: purchaseId,
+                }),
             });
             if (!res.ok) {
                 const error = await res.json();
@@ -147,137 +241,85 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
     return (
         <form id={formId} onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-                <Label htmlFor="inbound-item" className="text-sm font-medium">
-                    商品
+                <Label htmlFor="inbound-related-purchase" className="text-sm font-medium">
+                    关联采购单
                 </Label>
                 <Select
-                    value={payload.itemId || undefined}
-                    onValueChange={(value) => handleChange('itemId', value)}
+                    value={payload.relatedPurchaseId || undefined}
+                    onValueChange={(value) =>
+                        setPayload((prev) => ({
+                            ...prev,
+                            type: 'purchase',
+                            relatedPurchaseId: value,
+                        }))
+                    }
                     disabled={submitting}
                 >
-                    <SelectTrigger id="inbound-item" className="w-full">
-                        <SelectValue placeholder="选择商品" />
+                    <SelectTrigger id="inbound-related-purchase" className="w-full">
+                        <SelectValue placeholder="选择采购单" />
                     </SelectTrigger>
                     <SelectContent>
-                        {items.map((item) => (
-                            <SelectItem key={item.id} value={item.id}>
-                                {item.name}（{item.sku}）
+                        {purchases.map((purchase) => (
+                            <SelectItem key={purchase.id} value={purchase.id}>
+                                {purchase.purchaseNumber} · {purchase.itemName}
                             </SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
             </div>
 
-            {selectedItem && (
-                <div className="rounded-lg border border-dashed border-primary/40 bg-primary/10 p-3 text-sm text-primary">
-                    标准单价：¥{selectedItem.unitPrice.toLocaleString()} / {selectedItem.unit}
-                </div>
-            )}
-
-            {selectedItem?.specFields?.length ? (
-                <div className="space-y-4">
-                    {selectedItem.specFields.map((field) => {
-                        const specValue = payload.attributes?.[field.key] ?? '';
-                        return (
-                            <div key={field.key} className="space-y-2">
-                                <Label className="text-sm font-medium">{field.label}</Label>
-                                {field.options ? (
-                                    <Select
-                                        value={specValue || undefined}
-                                        onValueChange={(value) => handleSpecChange(field.key, value)}
-                                        disabled={submitting}
-                                    >
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder={`选择${field.label}`} />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {field.options.map((option) => (
-                                                <SelectItem key={option} value={option}>
-                                                    {option}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                ) : (
-                                    <Input
-                                        value={specValue}
-                                        onChange={(event) => handleSpecChange(field.key, event.target.value)}
-                                        placeholder={`填写${field.label}`}
-                                        disabled={submitting}
-                                    />
-                                )}
-                            </div>
-                        );
-                    })}
+            {selectedPurchase ? (
+                <div className="rounded-lg border border-dashed border-border/70 bg-muted/20 p-3 text-xs text-muted-foreground">
+                    <p>采购单号：{selectedPurchase.purchaseNumber}</p>
+                    <p>物品：{selectedPurchase.itemName}</p>
+                    <p>组织：{selectedPurchase.organizationType === 'school' ? '学校' : '单位'}</p>
+                    <p>采购数量：{Number(selectedPurchase.quantity ?? 0)}</p>
+                    <p>已入库：{Number(selectedPurchase.inboundQuantity ?? 0)}</p>
+                    <p>剩余可入库：{remainingQuantity}</p>
                 </div>
             ) : null}
 
-            <div className="space-y-2">
-                <Label htmlFor="inbound-warehouse" className="text-sm font-medium">
-                    仓库
-                </Label>
-                <Select
-                    value={payload.warehouseId || undefined}
-                    onValueChange={(value) => handleChange('warehouseId', value)}
-                    disabled={submitting}
-                >
-                    <SelectTrigger id="inbound-warehouse" className="w-full">
-                        <SelectValue placeholder="选择仓库" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {warehouses.map((warehouse) => (
-                            <SelectItem key={warehouse.id} value={warehouse.id}>
-                                {warehouse.name}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-
-            <div className="space-y-2">
-                <Label htmlFor="inbound-type" className="text-sm font-medium">
-                    入库类型
-                </Label>
-                <Select
-                    value={payload.type}
-                    onValueChange={(value) => handleChange('type', value as InventoryInboundPayload['type'])}
-                    disabled={submitting}
-                >
-                    <SelectTrigger id="inbound-type" className="w-full">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="purchase">采购入库</SelectItem>
-                        <SelectItem value="adjust">盘盈调整</SelectItem>
-                        <SelectItem value="return">退货入库</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
-
-            {payload.type === 'purchase' && (
+            <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                    <Label htmlFor="inbound-related-purchase" className="text-sm font-medium">
-                        关联采购单
+                    <Label htmlFor="inbound-item" className="text-sm font-medium">
+                        商品
                     </Label>
-                    <Select
-                        value={payload.relatedPurchaseId || undefined}
-                        onValueChange={(value) => handleChange('relatedPurchaseId', value)}
-                        disabled={submitting}
-                    >
-                        <SelectTrigger id="inbound-related-purchase" className="w-full">
-                            <SelectValue placeholder="选择采购单（可选）" />
+                    <Select value={payload.itemId || undefined} disabled>
+                        <SelectTrigger id="inbound-item" className="w-full">
+                            <SelectValue placeholder="选择采购单后自动带出" />
                         </SelectTrigger>
                         <SelectContent>
-                            {purchases.map((purchase) => (
-                                <SelectItem key={purchase.id} value={purchase.id}>
-                                    {purchase.purchaseNumber} · {purchase.itemName}
+                            {items.map((item) => (
+                                <SelectItem key={item.id} value={item.id}>
+                                    {item.name}（{item.sku}）
                                 </SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground">关联后可用于报销时校验该采购单已入库。</p>
                 </div>
-            )}
+
+                <div className="space-y-2">
+                    <Label htmlFor="inbound-warehouse" className="text-sm font-medium">
+                        仓库
+                    </Label>
+                    <Select value={payload.warehouseId || undefined} disabled>
+                        <SelectTrigger id="inbound-warehouse" className="w-full">
+                            <SelectValue placeholder="选择采购单后自动带出" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {warehouses.map((warehouse) => (
+                                <SelectItem key={warehouse.id} value={warehouse.id}>
+                                    {warehouse.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+                商品和仓库按采购单自动带出并锁定，仅可修改数量与备注。
+                {selectedWarehouse ? ` 当前仓库：${selectedWarehouse.name}` : ''}
+            </p>
 
             <div className="space-y-2">
                 <Label htmlFor="inbound-quantity" className="text-sm font-medium">
@@ -286,29 +328,26 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
                 <Input
                     id="inbound-quantity"
                     type="number"
-                    min={1}
+                    min={MIN_INBOUND_QUANTITY}
+                    step="0.001"
+                    max={Math.max(MIN_INBOUND_QUANTITY, remainingQuantity)}
                     value={payload.quantity}
-                    onChange={(event) => handleChange('quantity', Number(event.target.value))}
+                    onChange={(event) => {
+                        const raw = Number(event.target.value);
+                        const normalized = Number.isFinite(raw) ? raw : 0;
+                        if (remainingQuantity > 0) {
+                            handleChange(
+                                'quantity',
+                                Math.min(Math.max(MIN_INBOUND_QUANTITY, normalized), remainingQuantity)
+                            );
+                            return;
+                        }
+                        handleChange('quantity', Math.max(MIN_INBOUND_QUANTITY, normalized));
+                    }}
                     required
                     disabled={submitting}
                 />
-            </div>
-
-            <div className="space-y-2">
-                <Label htmlFor="inbound-unit-cost" className="text-sm font-medium">
-                    单价 (¥)
-                </Label>
-                <Input
-                    id="inbound-unit-cost"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={payload.unitCost ?? ''}
-                    onChange={(event) =>
-                        handleChange('unitCost', event.target.value ? Number(event.target.value) : undefined)
-                    }
-                    disabled={submitting}
-                />
+                <p className="text-xs text-muted-foreground">剩余可入库：{remainingQuantity} 件</p>
             </div>
 
             <div className="space-y-2">
@@ -320,7 +359,7 @@ export default function InventoryInboundForm({ onSuccess, onCancel, formId, hide
                     value={payload.notes ?? ''}
                     onChange={(event) => handleChange('notes', event.target.value)}
                     rows={2}
-                    placeholder="可填写采购单号、批次等信息"
+                    placeholder="手动填写备注（可选）"
                     disabled={submitting}
                 />
             </div>

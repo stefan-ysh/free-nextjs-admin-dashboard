@@ -1,4 +1,4 @@
-import type { ClientType } from '@/types/client';
+export type ClientType = 'personal' | 'company';
 
 export type InventoryDirection = 'inbound' | 'outbound';
 export type InventoryMovementType = 'purchase' | 'transfer' | 'adjust' | 'return' | 'use';
@@ -68,6 +68,7 @@ export interface InventoryMovement {
   unitCost?: number;
   amount?: number;
   operatorId?: string;
+  operatorName?: string;
   occurredAt: string;
   attachments?: string[];
   notes?: string;

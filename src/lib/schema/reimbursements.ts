@@ -1,4 +1,4 @@
-import { safeCreateIndex, schemaPool } from '@/lib/schema/mysql-utils';
+import { ensureColumn, safeCreateIndex, schemaPool } from '@/lib/schema/mysql-utils';
 import { ensurePurchasesSchema } from '@/lib/schema/purchases';
 
 let initialized = false;
@@ -21,6 +21,7 @@ export async function ensureReimbursementsSchema() {
       amount DECIMAL(15,2) NOT NULL,
       occurred_at DATE NOT NULL,
       description TEXT NULL,
+      details_json JSON NOT NULL DEFAULT (JSON_OBJECT()),
       invoice_images JSON NOT NULL DEFAULT (JSON_ARRAY()),
       receipt_images JSON NOT NULL DEFAULT (JSON_ARRAY()),
       attachments JSON NOT NULL DEFAULT (JSON_ARRAY()),
@@ -51,6 +52,8 @@ export async function ensureReimbursementsSchema() {
       CONSTRAINT fk_reimbursements_created_by FOREIGN KEY (created_by) REFERENCES hr_employees(id) ON DELETE RESTRICT
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
+
+  await ensureColumn('reimbursements', 'details_json', "JSON NOT NULL DEFAULT (JSON_OBJECT())");
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS reimbursement_workflow_logs (

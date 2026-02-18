@@ -109,7 +109,7 @@ function buildTimeline(purchase: PurchaseDetail, reimbursementV2Enabled: boolean
 		key: 'submit',
 		title: '提交申请',
 		description: hasSubmitted 
-			? `申请人 ${purchase.purchaser.displayName || purchase.purchaser.id}`
+			? `申请人 ${purchase.purchaser.displayName || '未知用户'}`
 			: '草稿状态',
 		timestamp: purchase.submittedAt ?? purchase.createdAt,
 		status: hasSubmitted ? 'done' : 'active',
@@ -135,7 +135,7 @@ function buildTimeline(purchase: PurchaseDetail, reimbursementV2Enabled: boolean
 		key: 'approval',
 		title: '管理审批',
 		description: isApproved
-			? `审批通过 (操作人: ${purchase.approvedBy ?? '管理员'})`
+			? `审批通过 (操作人: ${purchase.approver?.displayName || purchase.approvedByName || '管理员'})`
 			: isRejected
 				? `已驳回: ${purchase.rejectionReason ?? '无理由'}`
 				: '等待管理员审批',
@@ -147,18 +147,18 @@ function buildTimeline(purchase: PurchaseDetail, reimbursementV2Enabled: boolean
 
 	if (isRejected) return steps;
 
-	// v2: purchase flow ends after approval/payment stage.
+	// v2: purchase flow = submit -> approval -> inbound.
 	if (reimbursementV2Enabled) {
-		const isPaid = purchase.status === 'paid';
+		const isInboundDone = purchase.status === 'approved' || purchase.status === 'paid';
 		steps.push({
-			key: 'payment',
-			title: '财务打款',
-			description: isPaid
-				? `已打款 (操作人: ${purchase.paidBy ?? '财务'})`
-				: '审批通过后由财务完成打款（如需报销请前往报销中心）',
-			timestamp: purchase.paidAt ?? undefined,
-			status: isPaid ? 'done' : isApproved ? 'active' : 'pending',
-			tone: isPaid ? 'success' : 'default',
+			key: 'inbound',
+			title: '到货入库',
+			description: isInboundDone
+				? '已完成入库'
+				: '审批通过后请采购申请人完成到货入库',
+			timestamp: purchase.updatedAt ?? undefined,
+			status: isInboundDone ? 'done' : isApproved ? 'active' : 'pending',
+			tone: isInboundDone ? 'success' : 'default',
 		});
 		return steps;
 	}
@@ -198,7 +198,7 @@ function buildTimeline(purchase: PurchaseDetail, reimbursementV2Enabled: boolean
 		key: 'payment',
 		title: '财务打款',
 		description: isPaid
-			? `已打款 (操作人: ${purchase.paidBy ?? '财务'})`
+			? `已打款 (操作人: ${purchase.payer?.displayName || purchase.paidByName || '财务'})`
 			: '等待财务打款',
 		timestamp: purchase.paidAt ?? undefined,
 		status: isPaid ? 'done' : isReimbursed ? 'active' : 'pending',
@@ -210,11 +210,11 @@ function buildTimeline(purchase: PurchaseDetail, reimbursementV2Enabled: boolean
 
 function resolveOperatorName(purchase: PurchaseDetail, operatorId: string, operatorName?: string | null): string {
     if (operatorName) return operatorName;
-	if (purchase.purchaser.id === operatorId) return purchase.purchaser.displayName || operatorId;
+	if (purchase.purchaser.id === operatorId) return purchase.purchaser.displayName || '未知用户';
 	if (purchase.approver?.id === operatorId) return purchase.approver.displayName;
 	if (purchase.rejecter?.id === operatorId) return purchase.rejecter.displayName;
 	if (purchase.payer?.id === operatorId) return purchase.payer.displayName;
-	return operatorId;
+	return '未知用户';
 }
 
 function renderLogEntry(purchase: PurchaseDetail, log: ReimbursementLog) {

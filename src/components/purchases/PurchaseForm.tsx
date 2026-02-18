@@ -657,10 +657,6 @@ export default function PurchaseForm({
                     </FormItem>
                   )}
                 />
-
-                <div className={`${FIELD_FULL} lg:col-span-3 xl:col-span-5 rounded-lg border border-dashed border-border/70 bg-muted/20 p-3 text-xs text-muted-foreground`}>
-                  采购阶段无需上传发票或收款凭证，报销时请在“报销中心”上传。
-                </div>
               </div>
             ) : null}
           </div>

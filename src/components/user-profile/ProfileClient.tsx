@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useState } from "react";
 
 import { useAuth } from "@/app/auth-context";
 
-import UserAddressCard from "./UserAddressCard";
 import UserDevicesCard from "./UserDevicesCard";
 import UserInfoCard from "./UserInfoCard";
 import UserMetaCard from "./UserMetaCard";
@@ -13,8 +12,9 @@ import type { DeviceInfo, ProfileData } from "./types";
 
 type ProfileUpdatePayload = {
   displayName: string | null;
-  jobTitle: string | null;
+  gender: 'male' | 'female' | 'other' | null;
   phone: string | null;
+  address: string | null;
   bio: string | null;
   country: string | null;
   city: string | null;
@@ -38,8 +38,9 @@ const DEVICES_ENDPOINT = "/api/profile/devices";
 function mergeProfilePayload(current: ProfileData, overrides: ProfileUpdateOverrides): ProfileUpdatePayload {
   const base: ProfileUpdatePayload = {
     displayName: current.displayName ?? null,
-    jobTitle: current.jobTitle ?? null,
+    gender: current.gender ?? null,
     phone: current.phone ?? null,
+    address: current.address ?? null,
     bio: current.bio ?? null,
     country: current.country ?? null,
     city: current.city ?? null,
@@ -48,24 +49,32 @@ function mergeProfilePayload(current: ProfileData, overrides: ProfileUpdateOverr
     socialLinks: { ...current.socialLinks },
   };
 
-  const keys: Array<keyof Omit<ProfileUpdatePayload, "socialLinks">> = [
-    "displayName",
-    "jobTitle",
-    "phone",
-    "bio",
-    "country",
-    "city",
-    "postalCode",
-    "taxId",
-  ];
-
-  for (const key of keys) {
-    if (Object.prototype.hasOwnProperty.call(overrides, key)) {
-      const value = overrides[key];
-      if (value !== undefined) {
-        base[key] = value as ProfileUpdatePayload[typeof key];
-      }
-    }
+  if (Object.prototype.hasOwnProperty.call(overrides, "displayName") && overrides.displayName !== undefined) {
+    base.displayName = overrides.displayName;
+  }
+  if (Object.prototype.hasOwnProperty.call(overrides, "gender") && overrides.gender !== undefined) {
+    base.gender = overrides.gender;
+  }
+  if (Object.prototype.hasOwnProperty.call(overrides, "phone") && overrides.phone !== undefined) {
+    base.phone = overrides.phone;
+  }
+  if (Object.prototype.hasOwnProperty.call(overrides, "address") && overrides.address !== undefined) {
+    base.address = overrides.address;
+  }
+  if (Object.prototype.hasOwnProperty.call(overrides, "bio") && overrides.bio !== undefined) {
+    base.bio = overrides.bio;
+  }
+  if (Object.prototype.hasOwnProperty.call(overrides, "country") && overrides.country !== undefined) {
+    base.country = overrides.country;
+  }
+  if (Object.prototype.hasOwnProperty.call(overrides, "city") && overrides.city !== undefined) {
+    base.city = overrides.city;
+  }
+  if (Object.prototype.hasOwnProperty.call(overrides, "postalCode") && overrides.postalCode !== undefined) {
+    base.postalCode = overrides.postalCode;
+  }
+  if (Object.prototype.hasOwnProperty.call(overrides, "taxId") && overrides.taxId !== undefined) {
+    base.taxId = overrides.taxId;
   }
 
   if (Object.prototype.hasOwnProperty.call(overrides, "socialLinks")) {
@@ -242,7 +251,6 @@ export default function ProfileClient() {
       <div className="space-y-6">
         <UserMetaCard profile={profile} onProfileUpdate={handleProfileUpdate} loading={profileLoading} />
         <UserInfoCard profile={profile} onUpdate={(payload) => handleProfileUpdate(payload)} loading={profileLoading} />
-        <UserAddressCard profile={profile} onUpdate={(payload) => handleProfileUpdate(payload)} loading={profileLoading} />
         <UserPasswordCard passwordUpdatedAt={profile?.passwordUpdatedAt ?? null} onChangePassword={handlePasswordChange} loading={profileLoading} />
         <UserDevicesCard
           devices={devices}

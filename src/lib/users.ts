@@ -473,7 +473,7 @@ export async function ensureBusinessUserRecord(userId: string): Promise<UserReco
       INSERT INTO hr_employees (
         id, email, password_hash, roles, primary_role,
         display_name,
-        phone, department, job_title,
+        phone,
         employment_status, hire_date, manager_id,
         bio, city, country, postal_code, tax_id,
         social_links, is_active, email_verified,
@@ -486,8 +486,6 @@ export async function ensureBusinessUserRecord(userId: string): Promise<UserReco
         ${mappedRole},
         ${displayName},
         ${sanitizeNullableText(authUser.phone)},
-        ${null},
-        ${sanitizeNullableText(authUser.job_title)},
         ${'active'},
         ${null},
         ${null},

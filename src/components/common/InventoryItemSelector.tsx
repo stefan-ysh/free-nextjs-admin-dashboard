@@ -6,29 +6,9 @@ import { Plus } from 'lucide-react';
 import { SearchableEntitySelect, type SearchableEntityOption } from '@/components/common/SearchableEntitySelect';
 import { Button } from '@/components/ui/button';
 import { formatInventoryItemName } from '@/lib/format';
+import { getInventoryCategoryLabel, normalizeInventoryCategory } from '@/lib/inventory/catalog';
 import InventoryItemFormDialog from '@/components/inventory/InventoryItemFormDialog';
 import type { InventoryItem } from '@/types/inventory';
-
-const CATEGORY_MAP: Record<string, string> = {
-  Chemicals: '化学药品',
-  Equipment: '仪器设备',
-  Consumables: '实验耗材',
-  Glassware: '玻璃仪器',
-  Reagents: '生化试剂',
-  Biology: '生物制品',
-  Stationery: '办公用品',
-  Others: '其他',
-  Service: '服务',
-  Safety: '劳保用品',
-  Testing: '检测服务',
-  Pantry: '茶水间',
-  Tools: '工具',
-  Office: '办公用品',
-};
-
-function getCategoryLabel(category: string) {
-  return CATEGORY_MAP[category] || category;
-}
 
 const PAGE_SIZE = 50;
 
@@ -71,7 +51,7 @@ export default function InventoryItemSelector({
     return items.filter((item) => {
       const name = item.name?.toLowerCase() ?? '';
       const sku = item.sku?.toLowerCase() ?? '';
-      const category = item.category?.toLowerCase() ?? '';
+      const category = normalizeInventoryCategory(item.category).toLowerCase();
       return (
         name.includes(normalizedKeyword) ||
         sku.includes(normalizedKeyword) ||
@@ -121,7 +101,7 @@ export default function InventoryItemSelector({
         searchPlaceholder="输入名称或SKU搜索"
         emptyText="暂无可选物品，可点击下方“新增物品”"
         
-        groupBy={(option) => getCategoryLabel(option.data.category)}
+        groupBy={(option) => getInventoryCategoryLabel(option.data.category)}
         renderGroupHeader={({ groupKey, count }) => (
           <div className="sticky top-0 z-10 -mx-1 -mt-1 mb-1 bg-muted/95 px-3 py-1.5 text-xs font-medium text-foreground/80 backdrop-blur supports-[backdrop-filter]:bg-muted/75">
             {groupKey} <span className="ml-1 text-[10px] text-muted-foreground font-normal">({count})</span>
@@ -167,5 +147,4 @@ function ItemOption({ item, isSelected }: { item: InventoryItem; isSelected: boo
     </div>
   );
 }
-
 

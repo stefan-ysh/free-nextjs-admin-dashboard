@@ -9,6 +9,8 @@ import Label from "../form/Label";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { ProfileData } from "./types";
+import { USER_ROLE_LABELS } from "@/constants/user-roles";
+import { UserRole } from "@/types/user";
 
 type SocialKey = "facebook" | "x" | "linkedin" | "instagram" | "website";
 
@@ -74,7 +76,6 @@ type UserMetaCardProps = {
   profile: ProfileData | null;
   onProfileUpdate: (payload: {
     displayName: string | null;
-    jobTitle: string | null;
     socialLinks: Record<string, string | null>;
   }) => Promise<void>;
   loading?: boolean;
@@ -87,7 +88,6 @@ export default function UserMetaCard({ profile, onProfileUpdate, loading = false
 
   const [formState, setFormState] = useState({
     displayName: "",
-    jobTitle: "",
     socialLinks: SOCIAL_CONFIG.reduce<Record<SocialKey, string>>((acc, item) => {
       acc[item.key] = "";
       return acc;
@@ -98,7 +98,6 @@ export default function UserMetaCard({ profile, onProfileUpdate, loading = false
     if (!profile) return;
     setFormState({
       displayName: profile.displayName ?? "",
-      jobTitle: profile.jobTitle ?? "",
       socialLinks: SOCIAL_CONFIG.reduce<Record<SocialKey, string>>((acc, item) => {
         const value = profile.socialLinks?.[item.key] ?? "";
         acc[item.key] = typeof value === "string" ? value : "";
@@ -112,12 +111,10 @@ export default function UserMetaCard({ profile, onProfileUpdate, loading = false
     return profile.displayName || profile.email;
   }, [profile]);
 
-
-  const location = useMemo(() => {
-    if (!profile) return "";
-    const parts = [profile.city, profile.country].filter(Boolean);
-    return parts.join(", ");
-  }, [profile]);
+  const roleLabel = useMemo(() => {
+    if (!profile?.role) return "";
+    return USER_ROLE_LABELS[profile.role as UserRole] ?? profile.role;
+  }, [profile?.role]);
 
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -128,7 +125,6 @@ export default function UserMetaCard({ profile, onProfileUpdate, loading = false
     try {
       await onProfileUpdate({
         displayName: formState.displayName,
-        jobTitle: formState.jobTitle,
         socialLinks: Object.entries(formState.socialLinks).reduce<Record<string, string | null>>((acc, [key, value]) => {
           acc[key] = value.trim() ? value.trim() : null;
           return acc;
@@ -143,138 +139,18 @@ export default function UserMetaCard({ profile, onProfileUpdate, loading = false
     }
   };
 
-  const socialLinks = profile?.socialLinks ?? {};
-
   return (
     <>
       <div className="p-5 border border-border rounded-2xl lg:p-6">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-col items-center w-full gap-6 xl:flex-row">
-            <div className="relative w-20 h-20 overflow-hidden border border-border rounded-full">
-              <Image width={80} height={80} src="/images/user/owner.jpg" alt={displayName || "用户头像"} className={loading ? "animate-pulse" : ""} />
-            </div>
-            <div className="order-3 text-center xl:order-2 xl:text-left">
-              <h4 className="mb-1 text-lg font-semibold text-foreground">
-                {loading ? "加载中..." : displayName || "未命名用户"}
-              </h4>
-              <div className="flex flex-col items-center gap-1 text-center text-sm text-muted-foreground xl:flex-row xl:gap-3 xl:text-left">
-                <span>{profile?.jobTitle || (loading ? "" : "未填写职位")}</span>
-                <div className="hidden h-3.5 w-px bg-border xl:block"></div>
-                <span>{location || (loading ? "" : "未填写地区")}</span>
-              </div>
-            </div>
-            <div className="flex items-center order-2 gap-2 grow xl:order-3 xl:justify-end">
-              {SOCIAL_CONFIG.map(({ key, icon, label }) => {
-                const url = socialLinks?.[key] ?? "";
-                const isActive = Boolean(url);
-                const commonClasses = "flex h-11 w-11 items-center justify-center rounded-full border text-sm font-medium shadow-theme-xs";
-                const baseClasses = "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground";
-                if (isActive) {
-                  return (
-                    <a
-                      key={key}
-                      href={url as string}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`${commonClasses} ${baseClasses}`}
-                      title={label}
-                    >
-                      {icon}
-                    </a>
-                  );
-                }
-                return (
-                  <div
-                    key={key}
-                    className={`${commonClasses} ${baseClasses} opacity-40 cursor-not-allowed`}
-                    aria-disabled
-                    title={`${label} 未设置`}
-                  >
-                    {icon}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          <div className="flex flex-col gap-3 w-full sm:flex-row sm:w-auto sm:items-center">
-            <Button
-              size="sm"
-              className="w-full sm:w-auto"
-              onClick={openModal}
-              disabled={loading || !profile}
-              type="button"
-            >
-              编辑
-            </Button>
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-start">
+          <h4 className="mb-1 text-lg font-semibold text-foreground">
+            {loading ? "加载中..." : displayName || "未命名用户"}
+          </h4>
+          <div className="flex flex-col items-center gap-1 text-center text-sm text-muted-foreground xl:flex-row xl:gap-3 xl:text-left">
+            <span>{roleLabel || (loading ? "" : "未设置角色")}</span>
           </div>
         </div>
       </div>
-      <Dialog open={isOpen} onOpenChange={(nextOpen) => (nextOpen ? openModal() : closeModal())}>
-        <DialogContent className="max-w-[640px]">
-          <DialogHeader>
-            <DialogTitle>编辑个人信息</DialogTitle>
-            <DialogDescription>填写社交链接与展示信息，方便团队识别。</DialogDescription>
-          </DialogHeader>
-          <DialogBody>
-            <form id="user-meta-form" className="flex flex-col gap-6" onSubmit={handleSubmit}>
-              <div className="space-y-6">
-                <div className="space-y-5">
-                  <h5 className="text-sm font-semibold text-muted-foreground">展示信息</h5>
-                  <div className="grid grid-cols-1 gap-x-6 gap-y-5 lg:grid-cols-2">
-                    <div className="col-span-2 lg:col-span-1">
-                      <Label>显示名称</Label>
-                      <Input
-                        type="text"
-                        value={formState.displayName}
-                        onChange={(event) => setFormState((prev) => ({ ...prev, displayName: event.target.value }))}
-                      />
-                    </div>
-                    <div className="col-span-2 lg:col-span-1">
-                      <Label>职位</Label>
-                      <Input
-                        type="text"
-                        value={formState.jobTitle}
-                        onChange={(event) => setFormState((prev) => ({ ...prev, jobTitle: event.target.value }))}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-5">
-                  <h5 className="text-sm font-semibold text-muted-foreground">社交链接</h5>
-                  <div className="grid grid-cols-1 gap-x-6 gap-y-5 lg:grid-cols-2">
-                    {SOCIAL_CONFIG.map(({ key, label, placeholder }) => (
-                      <div key={key}>
-                        <Label>{label}</Label>
-                        <Input
-                          type="text"
-                          value={formState.socialLinks[key] ?? ""}
-                          placeholder={placeholder}
-                          onChange={(event) =>
-                            setFormState((prev) => ({
-                              ...prev,
-                              socialLinks: { ...prev.socialLinks, [key]: event.target.value },
-                            }))
-                          }
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              {error && <p className="text-sm text-error-500">{error}</p>}
-            </form>
-          </DialogBody>
-          <DialogFooter>
-            <Button size="sm" variant="outline" type="button" onClick={closeModal} disabled={saving}>
-              取消
-            </Button>
-            <Button size="sm" type="submit" form="user-meta-form" disabled={saving}>
-              {saving ? "保存中..." : "保存修改"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

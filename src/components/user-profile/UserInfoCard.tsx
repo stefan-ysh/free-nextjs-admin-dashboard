@@ -23,6 +23,7 @@ type UserInfoCardProps = {
   onUpdate: (payload: {
     displayName: string | null;
     phone: string | null;
+    address: string | null;
     bio: string | null;
   }) => Promise<void>;
   loading?: boolean;
@@ -35,6 +36,7 @@ export default function UserInfoCard({ profile, onUpdate, loading = false }: Use
   const [formState, setFormState] = useState({
     displayName: "",
     phone: "",
+    address: "",
     bio: "",
   });
 
@@ -43,6 +45,7 @@ export default function UserInfoCard({ profile, onUpdate, loading = false }: Use
     setFormState({
       displayName: profile.displayName ?? "",
       phone: profile.phone ?? "",
+      address: profile.address ?? "",
       bio: profile.bio ?? "",
     });
   }, [profile, isOpen]);
@@ -61,6 +64,7 @@ export default function UserInfoCard({ profile, onUpdate, loading = false }: Use
       await onUpdate({
         displayName: formState.displayName,
         phone: formState.phone,
+        address: formState.address,
         bio: formState.bio,
       });
       closeModal();
@@ -75,10 +79,10 @@ export default function UserInfoCard({ profile, onUpdate, loading = false }: Use
   return (
     <div className="p-5 border border-border rounded-2xl lg:p-6">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-        <div>
+        <div className="items-center w-full gap-6 lg:flex-row lg:items-center lg:gap-8">
           <h4 className="text-lg font-semibold text-foreground lg:mb-6">基础信息</h4>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-7 2xl:gap-x-32">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-4 lg:gap-6 2xl:gap-x-32">
             <div>
               <p className="mb-2 text-xs leading-normal text-muted-foreground">姓名</p>
               <p className="text-sm font-medium text-foreground">
@@ -100,12 +104,13 @@ export default function UserInfoCard({ profile, onUpdate, loading = false }: Use
               </p>
             </div>
 
-            <div className="lg:col-span-2">
-              <p className="mb-2 text-xs leading-normal text-muted-foreground">个人简介</p>
+            <div>
+              <p className="mb-2 text-xs leading-normal text-muted-foreground">住址</p>
               <p className="text-sm font-medium text-foreground">
-                {loading ? "加载中..." : profile?.bio || "未填写"}
+                {loading ? "加载中..." : profile?.address || "未填写"}
               </p>
             </div>
+           
           </div>
         </div>
 
@@ -150,12 +155,13 @@ export default function UserInfoCard({ profile, onUpdate, loading = false }: Use
                     onChange={(event) => setFormState((prev) => ({ ...prev, phone: event.target.value }))}
                   />
                 </div>
-                <div className="space-y-2 lg:col-span-2">
-                  <Label>个人简介</Label>
-                  <Textarea
-                    rows={4}
-                    value={formState.bio}
-                    onChange={(event) => setFormState((prev) => ({ ...prev, bio: event.target.value }))}
+                <div className="space-y-2">
+                  <Label>住址</Label>
+                  <Input
+                    type="text"
+                    value={formState.address}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, address: event.target.value }))}
+                    placeholder="请输入居住地址"
                   />
                 </div>
               </div>

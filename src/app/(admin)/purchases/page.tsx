@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+// import Link from 'next/link';
 import { useMemo, type ReactNode } from 'react';
 
 import PurchasesClient from '@/components/purchases/PurchasesClient';
@@ -13,7 +13,7 @@ export default function PurchasesPage() {
 		if (permissionLoading) {
 			return {
 				canViewAllPurchases: false,
-				canViewDepartmentPurchases: false,
+				// canViewDepartmentPurchases: false,
 				canCreatePurchase: false,
 				canApprovePurchase: false,
 			};
@@ -21,7 +21,7 @@ export default function PurchasesPage() {
 
 		return {
 			canViewAllPurchases: hasPermission('PURCHASE_VIEW_ALL'),
-			canViewDepartmentPurchases: hasPermission('PURCHASE_VIEW_DEPARTMENT'),
+			// canViewDepartmentPurchases: hasPermission('PURCHASE_VIEW_DEPARTMENT'),
 			canCreatePurchase: hasPermission('PURCHASE_CREATE'),
 			canApprovePurchase: hasPermission('PURCHASE_APPROVE'),
 		};
@@ -29,23 +29,24 @@ export default function PurchasesPage() {
 
 	const {
 		canViewAllPurchases,
-		canViewDepartmentPurchases,
+		// canViewDepartmentPurchases,
 		canCreatePurchase,
-		canApprovePurchase,
+
+		// canApprovePurchase,
 	} = permissionSnapshot;
 
-	const canViewPurchases = canViewAllPurchases || canViewDepartmentPurchases || canCreatePurchase;
-	const viewScopeLabel = canViewAllPurchases
-		? '全部采购记录'
-		: canViewDepartmentPurchases
-			? '所在部门采购记录'
-			: '—';
+	const canViewPurchases = canViewAllPurchases || canCreatePurchase;
+	// const viewScopeLabel = canViewAllPurchases
+	// 	? '全部采购记录'
+	// 	: canViewDepartmentPurchases
+	// 		? '所在部门采购记录'
+	// 		: '—';
 
-	const capabilityBadges = [
-		{ label: '查看范围', value: viewScopeLabel },
-		{ label: '可否发起采购', value: canCreatePurchase ? '可以' : '不可' },
-		{ label: '可否审批 / 打款', value: canApprovePurchase ? '可以' : '不可' },
-	];
+	// const capabilityBadges = [
+	// 	{ label: '查看范围', value: viewScopeLabel },
+	// 	{ label: '可否发起采购', value: canCreatePurchase ? '可以' : '不可' },
+	// 	{ label: '可否审批 / 打款', value: canApprovePurchase ? '可以' : '不可' },
+	// ];
 
 	let bodyContent: ReactNode;
 
@@ -58,7 +59,7 @@ export default function PurchasesPage() {
 	} else if (!canViewPurchases) {
 		bodyContent = (
 			<div className="alert-box alert-danger">
-				当前账户无权访问采购模块。需要 PURCHASE_CREATE、PURCHASE_VIEW_ALL 或 PURCHASE_VIEW_DEPARTMENT 权限，请联系管理员开通。
+				当前账户无权访问采购模块。需要 PURCHASE_CREATE 或 PURCHASE_VIEW_ALL 权限，请联系管理员开通。
 			</div>
 		);
 	} else {

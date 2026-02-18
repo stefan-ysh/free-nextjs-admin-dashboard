@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server';
 
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { toPermissionUser } from '@/lib/auth/permission-user';
-import { listPaymentQueue } from '@/lib/db/purchases';
+import { listReimbursements } from '@/lib/db/reimbursements';
 import { checkPermission, Permissions } from '@/lib/permissions';
-import { isPaymentQueueStatus } from '@/types/purchase';
+import { isReimbursementStatus, type ReimbursementStatus } from '@/types/reimbursement';
+import { UserRole } from '@/types/user';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -21,35 +22,49 @@ function parseNumber(value: string | null, fallback: number) {
   return parsed;
 }
 
+function normalizeStatusParam(value: string | null): ReimbursementStatus | undefined {
+  if (!value) return undefined;
+  if (isReimbursementStatus(value)) return value;
+  if (value === 'all') return undefined;
+  if (value === 'pending' || value === 'processing') return 'pending_approval';
+  if (value === 'paid') return 'paid';
+  if (value === 'issue') return 'rejected';
+  return undefined;
+}
+
 export async function GET(request: Request) {
   try {
     const context = await requireCurrentUser();
     const permissionUser = await toPermissionUser(context.user);
 
-    const [canPay, canViewFinance] = await Promise.all([
-      checkPermission(permissionUser, Permissions.PURCHASE_PAY),
-      checkPermission(permissionUser, Permissions.FINANCE_VIEW_ALL),
-    ]);
+    const canPay = await checkPermission(permissionUser, Permissions.REIMBURSEMENT_PAY);
 
-    if (!canPay.allowed && !canViewFinance.allowed) {
+    if (!canPay.allowed) {
       return forbiddenResponse();
     }
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') ?? undefined;
-    const statusParam = searchParams.get('status');
-    const idsParam = searchParams.get('ids');
-    const ids = idsParam
-      ? idsParam
-          .split(',')
-          .map((id) => id.trim())
-          .filter(Boolean)
-      : undefined;
-    const status = isPaymentQueueStatus(statusParam) ? statusParam : 'all';
+    const status = normalizeStatusParam(searchParams.get('status'));
     const page = parseNumber(searchParams.get('page'), 1);
     const pageSize = parseNumber(searchParams.get('pageSize'), 50);
+    const activeRole = permissionUser.primaryRole;
+    const financeOrgType =
+      activeRole === UserRole.FINANCE_SCHOOL
+        ? 'school'
+        : activeRole === UserRole.FINANCE_COMPANY
+          ? 'company'
+          : null;
 
-    const data = await listPaymentQueue({ search, status, page, pageSize, ids });
+    const data = await listReimbursements({
+      scope: 'pay',
+      currentUserId: permissionUser.id,
+      financeOrgType,
+      page,
+      pageSize,
+      search,
+      status,
+    });
     return NextResponse.json({ success: true, data });
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHENTICATED') {

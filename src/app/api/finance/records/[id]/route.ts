@@ -74,17 +74,29 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json();
+    const existingRecord = await getRecord(id);
+
+    if (!existingRecord) {
+      return NextResponse.json(
+        { success: false, error: 'Record not found' },
+        { status: 404 }
+      );
+    }
+
+    if (existingRecord.sourceType !== 'budget_adjustment') {
+      return NextResponse.json(
+        { success: false, error: '仅支持编辑预算调整记录，自动流水不可手动修改' },
+        { status: 400 }
+      );
+    }
 
     // Handle handlerId update by merging into metadata
     if (body.handlerId) {
-      const existing = await getRecord(id);
-      if (existing) {
-        body.metadata = {
-          ...existing.metadata,
+      body.metadata = {
+          ...existingRecord.metadata,
           handlerId: body.handlerId,
-        };
-        delete body.handlerId;
-      }
+      };
+      delete body.handlerId;
     }
 
     const record = await updateRecord(id, body);
@@ -130,13 +142,22 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const success = await deleteRecord(id);
-
-    if (!success) {
+    const existingRecord = await getRecord(id);
+    if (!existingRecord) {
       return NextResponse.json(
         { success: false, error: 'Record not found' },
         { status: 404 }
       );
+    }
+    if (existingRecord.sourceType !== 'budget_adjustment') {
+      return NextResponse.json(
+        { success: false, error: '仅支持删除预算调整记录，自动流水不可删除' },
+        { status: 400 }
+      );
+    }
+    const success = await deleteRecord(id);
+    if (!success) {
+      return NextResponse.json({ success: false, error: '删除失败' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });

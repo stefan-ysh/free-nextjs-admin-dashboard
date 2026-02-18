@@ -1,7 +1,5 @@
-import { requireCurrentUser } from '@/lib/auth/current-user';
-import MobileHistoryClient from '@/components/mobile-workflow/MobileHistoryClient';
+import { redirect } from 'next/navigation';
 
 export default async function MobileHistoryPage() {
-  const context = await requireCurrentUser();
-  return <MobileHistoryClient currentUserId={context.user.id} />;
+  redirect('/workflow/done');
 }

@@ -1,7 +1,6 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import Image from 'next/image';
 
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']);
@@ -17,6 +16,61 @@ function detectPreviewType(fileUrl: string | null): 'image' | 'pdf' | 'unknown' 
   return 'unknown';
 }
 
+function sanitizePreviewUrl(fileUrl: string | null): string | null {
+  if (!fileUrl) return null;
+  const isAbsolute = /^https?:\/\//i.test(fileUrl);
+  try {
+    const parsed = new URL(fileUrl, isAbsolute ? undefined : 'http://local');
+    parsed.searchParams.delete('filename');
+    if (isAbsolute) return parsed.toString();
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return fileUrl;
+  }
+}
+
+function isCosDirectUrl(url: URL): boolean {
+  return /\.cos\.[^.]+\.myqcloud\.com$/i.test(url.hostname);
+}
+
+function convertCosUrlToProxy(fileUrl: string | null): string | null {
+  if (!fileUrl) return null;
+  if (!/^https?:\/\//i.test(fileUrl)) {
+    if (!fileUrl.startsWith('/') || fileUrl.startsWith('/api/files/')) return fileUrl;
+    try {
+      const parsed = new URL(fileUrl, 'http://local');
+      const key = parsed.pathname.replace(/^\/+/, '');
+      if (!key) return fileUrl;
+      const encodedKey = key
+        .split('/')
+        .filter(Boolean)
+        .map((segment) => encodeURIComponent(segment))
+        .join('/');
+      const fileName = parsed.searchParams.get('filename')?.trim();
+      const suffix = fileName ? `?filename=${encodeURIComponent(fileName)}` : '';
+      return `/api/files/cos/${encodedKey}${suffix}`;
+    } catch {
+      return fileUrl;
+    }
+  }
+  try {
+    const parsed = new URL(fileUrl);
+    if (!isCosDirectUrl(parsed)) return fileUrl;
+    const key = parsed.pathname.replace(/^\/+/, '');
+    if (!key) return fileUrl;
+    const encodedKey = key
+      .split('/')
+      .filter(Boolean)
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+    const fileName = parsed.searchParams.get('filename')?.trim();
+    const suffix = fileName ? `?filename=${encodeURIComponent(fileName)}` : '';
+    return `/api/files/cos/${encodedKey}${suffix}`;
+  } catch {
+    return fileUrl;
+  }
+}
+
 type FilePreviewDialogProps = {
   open: boolean;
   fileUrl: string | null;
@@ -26,6 +80,7 @@ type FilePreviewDialogProps = {
 
 export default function FilePreviewDialog({ open, fileUrl, fileLabel, onClose }: FilePreviewDialogProps) {
   const previewType = detectPreviewType(fileUrl);
+  const previewUrl = convertCosUrlToProxy(sanitizePreviewUrl(fileUrl));
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
@@ -35,10 +90,10 @@ export default function FilePreviewDialog({ open, fileUrl, fileLabel, onClose }:
           {fileLabel ? <DialogDescription className="break-all text-xs text-muted-foreground">{fileLabel}</DialogDescription> : null}
         </DialogHeader>
         <DialogBody>
-          {previewType === 'image' && fileUrl ? (
+          {previewType === 'image' && previewUrl ? (
             <div className="relative flex max-h-[70vh] w-full justify-center overflow-auto rounded-md border bg-muted/40 p-2">
               <Image
-                src={fileUrl}
+                src={previewUrl}
                 alt={fileLabel ?? '附件预览'}
                 width={800}
                 height={600}
@@ -46,27 +101,18 @@ export default function FilePreviewDialog({ open, fileUrl, fileLabel, onClose }:
                 unoptimized
               />
             </div>
-          ) : previewType === 'pdf' && fileUrl ? (
+          ) : previewType === 'pdf' && previewUrl ? (
             <iframe
-              src={fileUrl}
+              src={previewUrl}
               title="附件预览"
               className="h-[70vh] w-full rounded-md border"
             />
           ) : (
             <p className="rounded-md border border-dashed px-4 py-6 text-sm text-muted-foreground">
-              暂不支持此格式的在线预览，可点击下方按钮在新窗口打开或下载附件。
+              暂不支持此格式的在线预览。
             </p>
           )}
         </DialogBody>
-        {fileUrl ? (
-          <DialogFooter>
-            <Button variant="outline" asChild>
-              <a href={fileUrl} target="_blank" rel="noopener noreferrer">
-                在新窗口打开
-              </a>
-            </Button>
-          </DialogFooter>
-        ) : null}
       </DialogContent>
     </Dialog>
   );

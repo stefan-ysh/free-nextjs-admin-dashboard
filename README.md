@@ -1,53 +1,27 @@
-<div align="center">
+# admin_cosmorigin - 财务 / 采购一体化后台
 
-# admin_cosmorigin
+源自 TailAdmin 模板,现已完全本地化: 结构化数据全部存入自建 MySQL,附件与头像写入 `LOCAL_STORAGE_ROOT`, 不再依赖 Vercel KV / Blob。
 
-Localized finance + procurement workspace built on **Next.js 16**, **React 19**, and **Tailwind CSS v4**. All business data lives in your own MySQL instance and every attachment is persisted to the local filesystem—no Vercel KV / Blob dependencies.
+> 当前只交付侧边栏截图中的模块(仪表盘、财务、采购、供应商、进销存、组织架构)。其他功能会在后续迭代逐步开放。
 
-</div>
+## ✨ 模块亮点
+- 📊 **财务管理**: 合同金额、手续费、发票、附件、收支分类一站式维护
+- 🧾 **采购联动**: 采购台账 + 审批工作台, 审批完成自动写入财务流水
+- 🧋 **供应商 / 进销存**: 供应商库 + 商品/仓库/库存流水, 数据随时回写 MySQL
+- 🧑‍🤝‍🧑 **组织架构**: 员工/部门共享同一认证体系, `seed:admin` 一键创建管理员
+- 📁 **本地文件存储**: 所有附件与头像都进入自定义目录, 方便物理备份
 
-> Originally derived from the TailAdmin template, now fully repurposed for self-hosted enterprise finance operations.
+- 🔐 **自托管认证**: NextAuth + MySQL, 通过 `npm run seed:admin` 快速创建管理员
+- 🌓 **深色模式与中文 UI**: 组件、图表、表单、日期选择器都对深色模式与中文本地化做了适配
 
-## Current Scope (Dec 2025)
+## 🧱 技术栈
+- **框架**: Next.js 15 (App Router) + React 19 + TypeScript
+- **样式**: Tailwind CSS v4
+- **数据库**: MySQL (财务 / 采购 / 项目 / 认证 全量数据)
+- **文件存储**: 本地文件系统 (`LOCAL_STORAGE_ROOT`)
+- **图表**: ApexCharts、JSVectorMap
 
-Only the modules shown in the sidebar screenshots are considered production-ready right now:
-
-- **仪表盘**: KPI snapshot rendered from local data.
-- **财务管理**: Income/expense ledger, attachments written to `LOCAL_STORAGE_ROOT`.
-- **采购管理**: Procurement ledger plus the dedicated approvals workbench.
-- **供应商管理**: CRUD over suppliers with default marketplace seeds.
-- **进销存**: Overview, product catalog, warehouse registry, and inventory movement log.
-- **组织架构**: Employee and department management (shares MySQL auth tables).
-
-Everything else from the original template remains parked for later iterations. Keep unfinished routes hidden behind feature flags or permissions when deploying.
-
-## Inventory Operational Mode
-
-- 商品管理入口已临时隐藏，当前库存作业聚焦`入库 / 出库`流程。
-- 仓库已固定为两类：`学校`（code: `SCHOOL`）与`单位`（code: `COMPANY`）。
-- API `GET /api/inventory/warehouses` 会自动校正并只返回这两类仓库。
-
-## Procurement + Reimbursement Flow
-
-Current workflow is now:
-
-`采购申请 -> 管理员审批 -> 通知申请人可采购 -> 申请人补发票并提交报销 -> 财务打款 -> 通知申请人`
-
-Key rules:
-
-- 提交采购时不再强制上传发票。
-- 审批通过后会进入报销状态 `invoice_pending`（待补发票）。
-- 申请人提交报销后，状态进入 `reimbursement_pending`，财务队列才可见。
-- 财务打款完成后，采购状态 `paid`，报销状态 `reimbursed`。
-
-## Tech Stack
-
-- Next.js 16 App Router · React 19 · TypeScript
-- Tailwind CSS v4 + Radix UI + TanStack Table
-- MySQL (`mysql2/promise`) with zero-ORM DAOs
-- Local file store via `src/lib/storage/local.ts`
-
-## Getting Started
+## 📦 快速开始
 
 ```bash
 git clone https://github.com/stefan-ysh/free-nextjs-admin-dashboard.git admin_cosmorigin
@@ -55,111 +29,160 @@ cd admin_cosmorigin
 npm install
 ```
 
-1. **Provision MySQL**
-   ```bash
-   mysql -uroot -p -e "CREATE DATABASE IF NOT EXISTS admin_cosmorigin CHARACTER SET utf8mb4;"
-   ```
-2. **Configure environment** – create `.env.local` manually and set either `MYSQL_URL` or the individual `MYSQL_*` vars plus, optionally, `LOCAL_STORAGE_ROOT`.
-   ```dotenv
-   MYSQL_URL="mysql://root:password@127.0.0.1:3306/admin_cosmorigin"
-   # or split credentials
-   # MYSQL_HOST="127.0.0.1"
-   # MYSQL_PORT="3306"
-   # MYSQL_USER="root"
-   # MYSQL_PASSWORD="password"
-   # MYSQL_DATABASE="admin_cosmorigin"
-   LOCAL_STORAGE_ROOT="/Users/you/Documents/admin_cosmorigin-storage"
-   ```
-3. **Seed an administrator (optional)**
-   ```bash
-   npm run seed:admin -- admin@example.com SuperSecurePass finance_admin
-   ```
-4. **Run the dev server**
-   ```bash
-   npm run dev
-   ```
+1. **准备数据库**
+    - 启动本地 MySQL,创建数据库 `admin_cosmorigin`
+2. **配置环境变量**
+    - 手动创建 `.env.local` 并填写 `MYSQL_*` 或 `MYSQL_URL`
+    - 可选: 自定义 `LOCAL_STORAGE_ROOT`
+    - 示例:
+      ```dotenv
+      MYSQL_URL="mysql://root:password@127.0.0.1:3306/admin_cosmorigin"
+      # 或者拆分配置
+      # MYSQL_HOST="127.0.0.1"
+      # MYSQL_PORT="3306"
+      # MYSQL_USER="root"
+      # MYSQL_PASSWORD="password"
+      # MYSQL_DATABASE="admin_cosmorigin"
+      LOCAL_STORAGE_ROOT="/Users/you/Documents/admin_cosmorigin-storage"
+      ```
+3. **创建管理员 (可选)**
+    ```bash
+    npm run seed:admin -- admin@example.com SuperSecurePass finance_admin
+    ```
+4. **启动开发服务器**
+    ```bash
+    npm run dev
+    ```
+    访问 http://localhost:3000/finance
 
-Visit `http://localhost:3000/finance` or `/purchases/approvals` to verify the scoped modules.
+所有表结构在第一次访问 API 时会自动创建,无需额外迁移脚本。
 
-## Form Drawer Width Standard
+### 🔐 管理员账号 & 密码
 
-To keep all business forms readable on desktop and mobile, form drawers now share three width presets:
+1. **初始化管理员**
+    ```bash
+    npm run seed:admin -- admin@example.com SuperSecurePass finance_admin
+    ```
+    - 第 1 个参数是邮箱,登录名将自动转小写
+    - 第 2 个参数是明文密码,脚本会在数据库里保存 bcrypt 哈希
+    - 第 3 个参数为角色(可选),支持 `super_admin|admin|finance_admin|finance|hr|department_manager|staff|employee`, 不填默认 `finance_admin`
+
+2. **重置/修改密码**
+    - **推荐**: 删除原账号后重新执行 `seed:admin`
+      ```sql
+      DELETE FROM auth_users WHERE email = 'admin@example.com';
+      ```
+    - **或直接更新哈希**:
+      1. 生成新哈希 (示例)
+          ```bash
+          node -e "console.log(require('bcryptjs').hashSync('NewPass123', 12))"
+          ```
+      2. 在 MySQL 中写回
+          ```sql
+          UPDATE auth_users SET password_hash = '<新哈希>' WHERE email = 'admin@example.com';
+          ```
+
+3. **排障**
+    - 如果脚本提示 “邮箱已存在”, 先删除再创建
+    - 如果连不上数据库, 检查 `.env.local` 中 `MYSQL_URL`/`MYSQL_*` 是否正确
+
+## 🗄️ 数据落地策略
+| 模块 | 数据源 | 说明 |
+|------|--------|------|
+| 财务 (finance) | MySQL | `src/lib/db/finance.ts` + `src/lib/schema/finance.ts` 自动建表,适合大批量统计查询 |
+| 采购 / 员工 / 供应商 | MySQL | 复用统一的连接池,审批动作会把流水写回财务表 |
+| 进销存 | MySQL | 商品、仓库、库存流水均落在本地数据库,便于追溯 |
+| 附件 / 头像 | 本地文件夹 | 由 `src/lib/storage/local.ts` 统一管理,对外暴露 `/api/files/*` 访问路径 |
+
+更多细节参阅 [docs/LOCAL_STORAGE_SETUP.md](./docs/LOCAL_STORAGE_SETUP.md)。
+
+## 📖 相关文档
+- [FINANCE_MODULE.md](./docs/FINANCE_MODULE.md): 财务模块开发说明
+- [LOCAL_STORAGE_SETUP.md](./docs/LOCAL_STORAGE_SETUP.md): 本地文件目录与权限
+- [DEPLOYMENT.md](./docs/DEPLOYMENT.md): 本地 / 自托管部署示例
+- [FINANCE_UI_UPDATE.md](./docs/FINANCE_UI_UPDATE.md): UI & 交互调整记录
+- [TEST_CHECKLIST.md](./docs/TEST_CHECKLIST.md): 端到端测试清单
+- [PROCUREMENT_SYSTEM_MASTER_LIST.md](./docs/PROCUREMENT_SYSTEM_MASTER_LIST.md): 需求追踪与交付状态
+- [DEVELOPMENT_BASELINE.md](./docs/DEVELOPMENT_BASELINE.md): 当前业务与开发强约束基线（必读）
+- [BUSINESS_BASELINE.md](./docs/BUSINESS_BASELINE.md): 业务流程与角色边界基线
+- [ENGINEERING_BASELINE.md](./docs/ENGINEERING_BASELINE.md): 开发实现与数据边界基线
+
+## 🔄 采购与报销流程（当前实现）
+
+当前流程为：
+
+`采购申请 -> 管理员审批 -> 通知申请人可采购 -> 货到补发票并提交报销 -> 财务确认打款 -> 通知申请人`
+
+关键规则：
+
+1. 提交采购不再强制上传发票。
+2. 审批通过后进入报销状态 `invoice_pending`。
+3. 申请人点击“提交报销”后才进入财务待办（`reimbursement_pending`）。
+4. 财务完成打款后，报销状态更新为 `reimbursed`。
+
+## 🧩 表单抽屉宽度规范
+
+为避免“抽屉表单过窄、字段挤压”，项目统一采用 3 档宽度常量：
 
 - `FORM_DRAWER_WIDTH_COMPACT`: `w-full sm:max-w-2xl`
 - `FORM_DRAWER_WIDTH_STANDARD`: `w-full sm:max-w-3xl lg:max-w-4xl`
 - `FORM_DRAWER_WIDTH_WIDE`: `w-full sm:max-w-4xl xl:max-w-5xl`
 
-Source: `src/components/common/form-drawer-width.ts`.
-Apply these constants to all new form drawers instead of hard-coded `sm:max-w-*` strings.
+定义位置：`src/components/common/form-drawer-width.ts`。  
+新增表单抽屉时请优先复用常量，避免重复硬编码 `sm:max-w-*`。
 
-## Environment Defaults
-
-| Variable | Default | Notes |
-| --- | --- | --- |
-| `MYSQL_URL` | _unset_ | Prefer `mysql://user:pass@host:3306/admin_cosmorigin` for simplicity. |
-| `LOCAL_STORAGE_ROOT` | `~/Documents/admin_cosmorigin-storage` | All avatars + finance files land here. |
-| `UPLOAD_MAX_BYTES` | `5 MB` | Override if you need larger invoices. |
-| `SMS_NOTIFY_ENABLED` | `0` | `1` 时启用短信通知。 |
-| `NOTIFY_POLICY_JSON` | _unset_ | 通知策略 JSON（按事件配置启用和通道）。 |
-| `SMS_WEBHOOK_URL` | _unset_ | 短信网关 webhook（主通道）。 |
-| `SMS_WEBHOOK_APPROVAL_URL` | _unset_ | 审批通知专用 webhook（可选）。 |
-| `SMS_WEBHOOK_APPLICANT_URL` | _unset_ | 申请人通知专用 webhook（可选）。 |
-| `SMS_WEBHOOK_FINANCE_URL` | _unset_ | 财务通知专用 webhook（可选）。 |
-| `SMS_WEBHOOK_TOKEN` | _unset_ | 短信网关 Bearer Token（可选）。 |
-| `SMS_FALLBACK_PHONES` | _unset_ | 默认回退手机号（逗号分隔，可选）。 |
-| `SMS_FALLBACK_APPROVAL_PHONES` | _unset_ | 审批通知回退手机号（可选）。 |
-| `SMS_FALLBACK_APPLICANT_PHONES` | _unset_ | 申请人通知回退手机号（可选）。 |
-| `SMS_FALLBACK_FINANCE_PHONES` | _unset_ | 财务通知回退手机号（可选）。 |
-| `APP_BASE_URL` | `http://localhost:3000` | 用于通知消息中的详情链接。 |
-
-短信通知会优先使用员工手机号 `hr_employees.phone` 做精准触达；若找不到手机号则回退到配置的 `SMS_FALLBACK_*` 号码组。
-
-`NOTIFY_POLICY_JSON` 示例：
-
-```json
-{
-  "purchase_submitted": { "enabled": true, "channels": ["sms", "in_app"] },
-  "purchase_approved": { "enabled": true, "channels": ["sms", "in_app"] },
-  "reimbursement_submitted": { "enabled": true, "channels": ["sms", "in_app"] },
-  "purchase_paid": { "enabled": true, "channels": ["sms", "in_app"] }
-}
+## 📁 项目结构 (核心部分)
+```
+src/
+├── app/
+│   ├── api/
+│   │   ├── finance/records|stats|categories/route.ts      # MySQL + 本地附件
+│   │   ├── purchases/… / projects/… / employees/…         # MySQL
+│   └── (admin)/finance/page.tsx                           # 财务页面
+├── components/finance/                                     # 表单、表格、上传等组件
+├── lib/
+│   ├── mysql.ts                                           # 数据库连接
+│   ├── db/finance|projects|purchases.ts                    # DAO 层
+│   ├── schema/*                                            # 自动建表脚本
+│   └── storage/local.ts                                    # 本地文件操作
+└── scripts/create-admin.mjs                                # 管理员种子脚本 (MySQL)
 ```
 
-当通道包含 `in_app` 时，系统会把通知写入 `app_notifications`，移动端通知页 `/m/notifications` 读取该表展示。
+## 🔧 API 速览
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| GET | `/api/finance/records` | 分页查询财务记录 (`startDate/endDate/limit/offset` 参数) |
+| POST | `/api/finance/records` | 新建记录 (自动计算 `totalAmount`) |
+| PATCH | `/api/finance/records/[id]` | 更新记录并同步附件 |
+| DELETE | `/api/finance/records/[id]` | 删除记录、同时删除本地文件 |
+| GET | `/api/finance/stats` | 汇总统计 + 分类占比 |
+| GET/POST | `/api/finance/categories` | 查询/新增分类 |
 
-The helper `src/lib/mysql.ts` derives a connection pool from either `MYSQL_URL` or individual host credentials, with the new default database name baked in.
+采购、项目、人员等 API 请参考 `src/app/api/*` 目录。
 
-## Available Scripts
+## 🖥️ 部署 / 自托管
+我们优先支持下述两种方式,详见 [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md):
+1. **个人电脑 / 私有服务器**: Node.js 进程 + Nginx 反代 + systemd/PM2 常驻
+2. **Docker / Compose**: 将 MySQL、Next.js 放在同一台机器,完全断网也可使用
 
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Start Next.js in development mode. |
-| `npm run build && npm run start` | Production build + serve. |
-| `npm run lint` | ESLint via the Next.js config. |
-| `npm run seed:admin -- <email> <password> [role]` | Bootstrap an auth user with MySQL-backed credentials. |
-| `npm run import:finance` | Import the sample Excel ledger. |
-| `npm run import:employees` | Bulk load employee CSV records. |
-| `npm run migrate:finance-categories` | Sync updated finance categories. |
+如果未来需要接入 Vercel / Cloudflare,可以在自托管版本稳定后再扩展远程存储,但默认模板不再强制依赖任何云厂商。
 
-## Documentation Map
+## 🙋 常见问题
+- **还需要安装多种数据库吗?** 不需要, 现在所有模块都运行在 MySQL 上, 只安装一个数据库即可。
+- **附件存在哪里?** 默认在 `~/Documents/admin_cosmorigin-storage`,通过 `LOCAL_STORAGE_ROOT` 可修改。
+- **如何备份?** 使用 `mysqldump` 导出数据库,配合 rsync/TimeMachine 备份文件目录即可。
+- **还能用远程 KV 吗?** 相关代码已移除,如需云端方案可自行接入 S3、Supabase Storage 等服务。
 
-- `docs/FINANCE_MODULE.md` – finance form/table specs
-- `docs/FINANCE_UI_UPDATE.md` – UI diff notes
-- `docs/INVENTORY_MODULE.md` – scope + schema for inventory
-- `docs/LOCAL_STORAGE_SETUP.md` – filesystem layout + permissions
-- `docs/DEPLOYMENT.md` – systemd / Docker compose samples
-- `docs/TEST_CHECKLIST.md` – end-to-end manual validation checklist
-- `docs/PROCUREMENT_SYSTEM_MASTER_LIST.md` – requirement traceability and delivery status
-- `docs/purchase-workflow-plan.md` – role-based procurement workflow plan and live progress checklist
-- `docs/SMS_INTEGRATION.md` – 短信网关接入与联调指南
-- `README.zh-CN.md` – Chinese quick start
+## 📝 开源协议
+MIT License (沿用 TailAdmin 模板授权)。欢迎提交 Issue / PR 帮助完善本地化版本。
 
-## Future Work
+---
 
-- Reactivate CRM/contract modules once procurement & finance harden.
-- Replace base64 upload shim with streaming multipart endpoints.
-- Add CSRF middleware described in `docs/SECURITY.md`.
+```bash
+npm run dev
+# or
+npm run build && npm start
+```
 
-## License
-
-MIT. Attributions to TailAdmin remain in the commit history; any upstream assets retain their original license.
+打开 http://localhost:3000/finance 立即体验私有化财务后台 🚀
+│   ├── FinanceTable.tsx          # 记录列表

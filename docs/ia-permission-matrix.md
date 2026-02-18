@@ -16,10 +16,10 @@
 ### 一级导航：财务管理
 - 二级：财务流水
 - 路由：`/finance`
-- 目标：财务记录查询、筛选、维护
+- 目标：收支流水查询、预算调整记录
 - 二级：付款任务
 - 路由：`/finance/payments`
-- 目标：待付款任务处理、异常标记与解除
+- 目标：仅处理报销打款任务（确认打款/驳回）
 
 ### 一级导航：采购管理
 - 二级：采购台账
@@ -27,7 +27,7 @@
 - 目标：采购单查询与发起
 - 二级：采购审批
 - 路由：`/purchases/approvals`
-- 目标：审批、驳回、转交、打款
+- 目标：审批、驳回、转交（不含打款）
 - 二级：流程监控
 - 路由：`/purchases/monitor`
 - 目标：流程时效与异常监控
@@ -57,13 +57,10 @@
 - 路由：`/inventory/movements`
 - 目标：出入库明细查询
 
-### 一级导航：组织架构
+### 一级导航：人员管理
 - 二级：员工管理
 - 路由：`/employees`
 - 目标：员工档案与账号管理
-- 二级：部门管理
-- 路由：`/departments`
-- 目标：部门与预算维护
 
 ### 非菜单但可访问页面
 - 路由：`/profile`（个人资料）
@@ -76,21 +73,20 @@
 |---|---|---|---|
 | `/` | 登录即可进入页面，模块卡片按权限显示 | 各模块 API 分别校验 | 任意登录账号 |
 | `/finance` | `FINANCE_VIEW_ALL` 或 `FINANCE_MANAGE`（在页面中判定可见/可管理） | `/api/finance/*`：`FINANCE_VIEW_ALL` / `FINANCE_MANAGE` | 财务角色（FINANCE*） |
-| `/finance/payments` | `PURCHASE_PAY` 或 `FINANCE_VIEW_ALL` | `/api/finance/payments*` 同上 | 财务出纳/财务经理 |
-| `/purchases` | `PURCHASE_CREATE` 或 `PURCHASE_VIEW_ALL` 或 `PURCHASE_VIEW_DEPARTMENT` | `/api/purchases` 同上 | 普通采购申请人（至少 CREATE） |
+| `/finance/payments` | `REIMBURSEMENT_PAY` | `/api/finance/payments*`（报销支付口径） | 学校财务/单位财务 |
+| `/purchases` | `PURCHASE_CREATE` 或 `PURCHASE_VIEW_ALL` | `/api/purchases` 同上 | 普通采购申请人（至少 CREATE） |
 | `/purchases/new` | `PURCHASE_CREATE` | `/api/purchases` POST：`PURCHASE_CREATE` | 采购申请人 |
 | `/purchases/[id]/edit` | `PURCHASE_UPDATE` 或 `PURCHASE_APPROVE`，且业务规则允许 | `/api/purchases/[id]` + workflow handler | 申请人或审批人 |
-| `/purchases/approvals` | `PURCHASE_APPROVE` 或 `PURCHASE_REJECT` 或 `PURCHASE_PAY` | `/api/purchases/approvals` 同上 | 审批人/财务 |
-| `/purchases/monitor` | `PURCHASE_VIEW_ALL/DEPARTMENT/APPROVE/REJECT/PAY` 任一 | `/api/purchases/monitor` 同上 | 管理者/审批人/财务 |
-| `/purchases/audit` | `PURCHASE_VIEW_ALL` 或 `PURCHASE_APPROVE` 或 `PURCHASE_PAY` | `/api/purchases/audit` 同上 | 管理者/审计/财务 |
-| `/workflow/todo` | 登录可访问，数据按权限过滤 | 依赖 `/api/purchases/approvals`、`/api/finance/payments` | 与采购/财务权限一致 |
+| `/purchases/approvals` | `PURCHASE_APPROVE` 或 `PURCHASE_REJECT` | `/api/purchases/approvals` 同上 | 审批管理员 |
+| `/purchases/monitor` | `PURCHASE_MONITOR_VIEW` | `/api/purchases/monitor` 同上 | 审批管理员及以上 |
+| `/purchases/audit` | `PURCHASE_AUDIT_VIEW` | `/api/purchases/audit` 同上 | 审批管理员及以上 |
+| `/workflow/todo` | 登录可访问，数据按权限过滤 | 依赖采购审批/到货入库/报销打款 API | 与当前角色待办职责一致 |
 | `/workflow/done` | 登录可访问 | 依赖 `/api/purchases` | 与采购权限一致 |
 | `/workflow/notifications` | 登录可访问 | `/api/notifications`：登录即可 | 任意登录账号 |
 | `/inventory` | `INVENTORY_VIEW_DASHBOARD`（无则显示无权） | `/api/inventory/stats` 等 | 库存角色 |
 | `/inventory/items` | `INVENTORY_MANAGE_ITEMS` | `/api/inventory/items*`：管理权限 | 库存管理员 |
 | `/inventory/movements` | `INVENTORY_VIEW_ALL` | `/api/inventory/movements`：查看权限 | 审计/管理员 |
 | `/employees` | `USER_VIEW_ALL`（无则阻断） | `/api/employees*`：`USER_VIEW_ALL/CREATE/UPDATE/DELETE` | HR/管理员 |
-| `/departments` | `USER_VIEW_ALL`（组件内判定） | `/api/hr/departments*`：`USER_VIEW_ALL/CREATE/UPDATE/DELETE` | HR/管理员 |
 | `/profile` | 登录可访问 | `/api/profile*`：登录即可 | 任意登录账号 |
 
 ## 3. 当前缺口与执行项

@@ -1,6 +1,8 @@
 export type PurchaseNotifyEvent =
   | 'purchase_submitted'
   | 'purchase_approved'
+  | 'purchase_rejected'
+  | 'purchase_transferred'
   | 'reimbursement_submitted'
   | 'purchase_paid'
   | 'payment_issue_marked'
@@ -18,6 +20,8 @@ export type NotifyPolicyMap = Record<PurchaseNotifyEvent, NotifyPolicyRule>;
 const DEFAULT_NOTIFY_POLICY: NotifyPolicyMap = {
   purchase_submitted: { enabled: true, channels: ['in_app', 'email'] },
   purchase_approved: { enabled: true, channels: ['in_app', 'email'] },
+  purchase_rejected: { enabled: true, channels: ['in_app', 'email'] },
+  purchase_transferred: { enabled: true, channels: ['in_app', 'email'] },
   reimbursement_submitted: { enabled: true, channels: ['in_app', 'email'] },
   purchase_paid: { enabled: true, channels: ['in_app', 'email'] },
   payment_issue_marked: { enabled: true, channels: ['in_app', 'email'] },
@@ -53,6 +57,8 @@ function parseNotifyPolicy(raw: string | undefined): NotifyPolicyMap {
     return {
       purchase_submitted: normalizeRule(parsed.purchase_submitted, DEFAULT_NOTIFY_POLICY.purchase_submitted),
       purchase_approved: normalizeRule(parsed.purchase_approved, DEFAULT_NOTIFY_POLICY.purchase_approved),
+      purchase_rejected: normalizeRule(parsed.purchase_rejected, DEFAULT_NOTIFY_POLICY.purchase_rejected),
+      purchase_transferred: normalizeRule(parsed.purchase_transferred, DEFAULT_NOTIFY_POLICY.purchase_transferred),
       reimbursement_submitted: normalizeRule(parsed.reimbursement_submitted, DEFAULT_NOTIFY_POLICY.reimbursement_submitted),
       purchase_paid: normalizeRule(parsed.purchase_paid, DEFAULT_NOTIFY_POLICY.purchase_paid),
       payment_issue_marked: normalizeRule(parsed.payment_issue_marked, DEFAULT_NOTIFY_POLICY.payment_issue_marked),

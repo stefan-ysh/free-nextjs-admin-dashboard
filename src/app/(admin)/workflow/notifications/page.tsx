@@ -3,6 +3,5 @@ import WorkflowWorkbenchClient from '@/components/workflow/WorkflowWorkbenchClie
 
 export default async function WorkflowNotificationsPage() {
   const context = await requireCurrentUser();
-  return <WorkflowWorkbenchClient currentUserId={context.user.id} initialTab="notifications" />;
+  return <WorkflowWorkbenchClient currentUserId={context.user.id} initialTab="todo" />;
 }
-

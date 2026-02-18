@@ -32,43 +32,23 @@ async function hasIndex(table: string, indexName: string): Promise<boolean> {
   return rows.length > 0;
 }
 
+async function dropColumnIfExists(table: string, column: string) {
+  const pool = schemaPool();
+  if (!(await hasColumn(table, column))) return;
+  try {
+    await pool.query(`ALTER TABLE ${table} DROP COLUMN ${column}`);
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code !== 'ER_BAD_FIELD_ERROR' && code !== 'ER_CANT_DROP_FIELD_OR_KEY' && code !== 'ER_LOCK_DEADLOCK') {
+      throw error;
+    }
+  }
+}
+
 export async function ensureHrSchema() {
   if (initialized) return;
 
   const pool = schemaPool();
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS hr_departments (
-      id CHAR(36) NOT NULL PRIMARY KEY,
-      name VARCHAR(160) NOT NULL,
-      code VARCHAR(60),
-      parent_id CHAR(36),
-      description TEXT,
-      sort_order INT NOT NULL DEFAULT 0,
-      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-      updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-      CONSTRAINT fk_hr_department_parent FOREIGN KEY (parent_id) REFERENCES hr_departments(id) ON DELETE SET NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-  `);
-
-  await safeCreateIndex('CREATE UNIQUE INDEX hr_departments_code_idx ON hr_departments(code)');
-  await safeCreateIndex('CREATE INDEX hr_departments_parent_idx ON hr_departments(parent_id)');
-  await safeCreateIndex('CREATE INDEX hr_departments_sort_order_idx ON hr_departments(sort_order)');
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS hr_job_grades (
-      id CHAR(36) NOT NULL PRIMARY KEY,
-      name VARCHAR(160) NOT NULL,
-      code VARCHAR(60),
-      level INT,
-      description TEXT,
-      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-      updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-  `);
-
-  await safeCreateIndex('CREATE UNIQUE INDEX hr_job_grades_code_idx ON hr_job_grades(code)');
-  await safeCreateIndex('CREATE INDEX hr_job_grades_level_idx ON hr_job_grades(level)');
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS hr_employees (
@@ -80,15 +60,8 @@ export async function ensureHrSchema() {
       display_name VARCHAR(255) NOT NULL,
       phone VARCHAR(60),
       employee_code VARCHAR(120),
-      department VARCHAR(120),
-      department_id CHAR(36),
-      job_title VARCHAR(120),
-      job_grade_id CHAR(36),
-      national_id VARCHAR(64),
       gender VARCHAR(16),
       address TEXT,
-      organization VARCHAR(255),
-      education_background VARCHAR(160),
       employment_status ENUM('active','on_leave','terminated') NOT NULL DEFAULT 'active',
       hire_date DATE,
       termination_date DATE,
@@ -115,18 +88,7 @@ export async function ensureHrSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS hr_department_budgets (
-      department_id CHAR(36) NOT NULL,
-      budget_year INT NOT NULL,
-      budget_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
-      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-      updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-      PRIMARY KEY (department_id, budget_year),
-      CONSTRAINT fk_hr_department_budget_department FOREIGN KEY (department_id) REFERENCES hr_departments(id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-  `);
-
+  // Ensure columns exist (new + legacy compatibility)
   await ensureColumn('hr_employees', 'email', 'VARCHAR(255) NULL');
   await ensureColumn('hr_employees', 'password_hash', 'VARCHAR(255) NULL');
   await ensureColumn('hr_employees', 'roles', "JSON NOT NULL DEFAULT (JSON_ARRAY('employee'))");
@@ -145,13 +107,11 @@ export async function ensureHrSchema() {
   await ensureColumn('hr_employees', 'password_updated_at', 'DATETIME(3) NULL');
   await ensureColumn('hr_employees', 'failed_login_attempts', 'INT NOT NULL DEFAULT 0');
   await ensureColumn('hr_employees', 'locked_until', 'DATETIME(3) NULL');
-  await ensureColumn('hr_employees', 'department_id', 'CHAR(36) NULL');
-  await ensureColumn('hr_employees', 'job_grade_id', 'CHAR(36) NULL');
-  await ensureColumn('hr_employees', 'national_id', 'VARCHAR(64) NULL');
   await ensureColumn('hr_employees', 'gender', 'VARCHAR(16) NULL');
   await ensureColumn('hr_employees', 'address', 'TEXT NULL');
-  await ensureColumn('hr_employees', 'organization', 'VARCHAR(255) NULL');
-  await ensureColumn('hr_employees', 'education_background', 'VARCHAR(160) NULL');
+  await ensureColumn('hr_employees', 'employee_code', 'VARCHAR(120) NULL');
+  await ensureColumn('hr_employees', 'custom_fields', 'JSON NOT NULL DEFAULT (JSON_OBJECT())');
+
   await safeCreateIndex('CREATE UNIQUE INDEX hr_employees_employee_code_idx ON hr_employees(employee_code)');
   await safeCreateIndex('CREATE UNIQUE INDEX hr_employees_email_idx ON hr_employees(email)');
   try {
@@ -163,7 +123,22 @@ export async function ensureHrSchema() {
     }
     console.warn('[hr_employees] Duplicate phone detected; skip unique index creation.');
   }
-  // Cleanup legacy wecom column/index from historical schema versions.
+
+  // Department module removed: drop legacy tables.
+  await pool.query('DROP TABLE IF EXISTS hr_department_budgets');
+  await pool.query('DROP TABLE IF EXISTS hr_departments');
+
+  // Drop legacy FK/index if present.
+  if (await hasIndex('hr_employees', 'hr_employees_department_id_idx')) {
+    try {
+      await pool.query('DROP INDEX hr_employees_department_id_idx ON hr_employees');
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code !== 'ER_CANT_DROP_FIELD_OR_KEY' && code !== 'ER_LOCK_DEADLOCK') {
+        throw error;
+      }
+    }
+  }
   if (await hasIndex('hr_employees', 'hr_employees_wecom_user_id_idx')) {
     try {
       await pool.query('DROP INDEX hr_employees_wecom_user_id_idx ON hr_employees');
@@ -174,20 +149,22 @@ export async function ensureHrSchema() {
       }
     }
   }
-  if (await hasColumn('hr_employees', 'wecom_user_id')) {
-    try {
-      await pool.query('ALTER TABLE hr_employees DROP COLUMN wecom_user_id');
-    } catch (error) {
-      const code = (error as { code?: string }).code;
-      if (
-        code !== 'ER_BAD_FIELD_ERROR' &&
-        code !== 'ER_CANT_DROP_FIELD_OR_KEY' &&
-        code !== 'ER_LOCK_DEADLOCK'
-      ) {
-        throw error;
-      }
-    }
-  }
+  try {
+    await pool.query('ALTER TABLE hr_employees DROP FOREIGN KEY fk_hr_department_link');
+  } catch {}
+  try {
+    await pool.query('ALTER TABLE hr_employees DROP FOREIGN KEY fk_hr_job_grade_link');
+  } catch {}
+
+  // Drop legacy columns removed from employee model.
+  await dropColumnIfExists('hr_employees', 'department');
+  await dropColumnIfExists('hr_employees', 'department_id');
+  await dropColumnIfExists('hr_employees', 'job_title');
+  await dropColumnIfExists('hr_employees', 'job_grade_id');
+  await dropColumnIfExists('hr_employees', 'national_id');
+  await dropColumnIfExists('hr_employees', 'organization');
+  await dropColumnIfExists('hr_employees', 'education_background');
+  await dropColumnIfExists('hr_employees', 'wecom_user_id');
 
   // Migrate legacy name columns into display_name, then physically drop old columns.
   const hasFirstName = await hasColumn('hr_employees', 'first_name');
@@ -241,24 +218,12 @@ export async function ensureHrSchema() {
       }
     }
   }
-  await safeCreateIndex('CREATE INDEX hr_employees_department_idx ON hr_employees(department)');
-  await safeCreateIndex('CREATE INDEX hr_employees_department_id_idx ON hr_employees(department_id)');
+
   await safeCreateIndex('CREATE INDEX hr_employees_status_idx ON hr_employees(employment_status)');
-  await safeCreateIndex('CREATE INDEX hr_employees_job_grade_id_idx ON hr_employees(job_grade_id)');
   await safeCreateIndex('CREATE INDEX hr_employees_manager_idx ON hr_employees(manager_id)');
   await safeCreateIndex('CREATE INDEX hr_employees_active_idx ON hr_employees(is_active)');
   await safeCreateIndex('CREATE INDEX hr_employees_primary_role_idx ON hr_employees(primary_role)');
-  await safeCreateIndex('CREATE INDEX hr_department_budgets_year_idx ON hr_department_budgets(budget_year)');
-  await ensureForeignKey(
-    'hr_employees',
-    'fk_hr_department_link',
-    'FOREIGN KEY (department_id) REFERENCES hr_departments(id) ON DELETE SET NULL'
-  );
-  await ensureForeignKey(
-    'hr_employees',
-    'fk_hr_job_grade_link',
-    'FOREIGN KEY (job_grade_id) REFERENCES hr_job_grades(id) ON DELETE SET NULL'
-  );
+
   await ensureForeignKey(
     'hr_employees',
     'fk_hr_manager_link',
@@ -269,8 +234,6 @@ export async function ensureHrSchema() {
     'fk_hr_created_by_link',
     'FOREIGN KEY (created_by) REFERENCES hr_employees(id) ON DELETE SET NULL'
   );
-  await ensureColumn('hr_employees', 'custom_fields', 'JSON NOT NULL DEFAULT (JSON_OBJECT())');
-  await ensureColumn('hr_employees', 'employee_code', 'VARCHAR(120) NULL');
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS hr_employee_status_logs (

@@ -1,5 +1,4 @@
 "use client";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React, { useMemo, useState } from "react";
@@ -39,15 +38,6 @@ export default function UserDropdown() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button className="dropdown-toggle flex items-center text-foreground">
-          <span className="mr-3 overflow-hidden rounded-full h-11 w-11">
-            <Image
-              width={44}
-              height={44}
-              src="/images/user/owner.jpg"
-              alt={displayName || "User"}
-            />
-          </span>
-
           <span className="block mr-1 font-medium text-theme-sm">
             {displayName || "未登录"}
           </span>

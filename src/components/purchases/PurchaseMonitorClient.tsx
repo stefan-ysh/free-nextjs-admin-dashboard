@@ -34,11 +34,12 @@ type MonitorResponse = {
 function statusSortValue(item: PurchaseMonitorStatusSummary): number {
   const orderMap: Record<PurchaseMonitorStatusSummary['status'], number> = {
     pending_approval: 0,
-    approved: 1,
-    paid: 2,
-    rejected: 3,
-    draft: 4,
-    cancelled: 5,
+    pending_inbound: 1,
+    approved: 2,
+    paid: 3,
+    rejected: 4,
+    draft: 5,
+    cancelled: 6,
   };
   return orderMap[item.status] ?? 99;
 }
@@ -52,12 +53,7 @@ export default function PurchaseMonitorClient() {
   const [reloadToken, setReloadToken] = useState(0);
 
   const canAccess = useMemo(
-    () =>
-      hasPermission('PURCHASE_VIEW_ALL') ||
-      hasPermission('PURCHASE_VIEW_DEPARTMENT') ||
-      hasPermission('PURCHASE_APPROVE') ||
-      hasPermission('PURCHASE_REJECT') ||
-      hasPermission('PURCHASE_PAY'),
+    () => hasPermission('PURCHASE_MONITOR_VIEW'),
     [hasPermission]
   );
 
@@ -106,7 +102,7 @@ export default function PurchaseMonitorClient() {
       <DataState
         variant="error"
         title="无权访问采购流程监控"
-        description="需要采购查看、审批或打款权限，请联系管理员开通"
+        description="仅审批管理员及超级管理员可访问"
         className="min-h-[220px]"
       />
     );

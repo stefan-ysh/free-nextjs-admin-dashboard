@@ -4,11 +4,10 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import DataState from '@/components/common/DataState';
 import { Button } from '@/components/ui/button';
-import type { PurchasePaymentQueueItem, PurchaseRecord } from '@/types/purchase';
+import type { PurchaseRecord } from '@/types/purchase';
+import type { ReimbursementRecord } from '@/types/reimbursement';
 import {
   formatMoney,
-  reimbursementBadgeClass,
-  reimbursementText,
   statusBadgeClass,
   statusText,
 } from '@/components/mobile-workflow/shared';
@@ -19,9 +18,9 @@ type PurchaseListResponse = {
   error?: string;
 };
 
-type PaymentQueueResponse = {
+type ReimbursementListResponse = {
   success: boolean;
-  data?: { items: PurchasePaymentQueueItem[]; total: number; page: number; pageSize: number };
+  data?: { items: ReimbursementRecord[]; total: number; page: number; pageSize: number };
   error?: string;
 };
 
@@ -39,7 +38,7 @@ export default function MobileTasksClient({
   const [error, setError] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [approvalItems, setApprovalItems] = useState<PurchaseRecord[]>([]);
-  const [paymentItems, setPaymentItems] = useState<PurchasePaymentQueueItem[]>([]);
+  const [paymentItems, setPaymentItems] = useState<ReimbursementRecord[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,7 +48,7 @@ export default function MobileTasksClient({
       const [approvalsResult, paymentsResult] = await Promise.allSettled([
         fetch('/api/purchases/approvals?page=1&pageSize=30', { headers: { Accept: 'application/json' } }),
         canPay
-          ? fetch('/api/finance/payments?status=pending&page=1&pageSize=30', { headers: { Accept: 'application/json' } })
+          ? fetch('/api/reimbursements?scope=pay&page=1&pageSize=30', { headers: { Accept: 'application/json' } })
           : Promise.resolve(null),
       ]);
 
@@ -63,10 +62,10 @@ export default function MobileTasksClient({
       setApprovalItems(approvalsPayload.data.items);
 
       if (canPay && paymentsResult.status === 'fulfilled' && paymentsResult.value) {
-        const paymentPayload = (await paymentsResult.value.json()) as PaymentQueueResponse;
+        const paymentPayload = (await paymentsResult.value.json()) as ReimbursementListResponse;
         if (!paymentsResult.value.ok || !paymentPayload.success || !paymentPayload.data) {
           setPaymentItems([]);
-          setPaymentError(paymentPayload.error || '待付款加载失败');
+          setPaymentError(paymentPayload.error || '待报销打款加载失败');
         } else {
           setPaymentItems(paymentPayload.data.items);
         }
@@ -151,10 +150,10 @@ export default function MobileTasksClient({
             <section className="space-y-2">
               <div className="flex items-center justify-between px-1">
                 <h2 className="text-sm font-semibold">待财务确认</h2>
-                <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
-                  {paymentItems.length}
-                </span>
-              </div>
+              <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
+                {paymentItems.length}
+              </span>
+            </div>
               {paymentError ? (
                 <p className="surface-panel border-chart-3/40 px-3 py-2 text-xs text-chart-3">
                   财务队列暂时不可用：{paymentError}
@@ -165,19 +164,19 @@ export default function MobileTasksClient({
               ) : null}
               {paymentItems.map((item) => (
                 <Link
-                  key={`payment-${item.id}`}
-                  href={`/m/tasks/${item.id}`}
+                  key={`payment-${item.reimbursementNumber}`}
+                  href={`/reimbursements?scope=pay&focus=${encodeURIComponent(item.id)}`}
                   className="surface-panel block space-y-2 p-3 transition hover:border-primary/40"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold">{item.itemName}</p>
-                    <span className={`rounded border px-2 py-0.5 text-[11px] ${reimbursementBadgeClass(item.reimbursementStatus)}`}>
-                      {reimbursementText(item)}
+                    <p className="text-sm font-semibold">{item.title}</p>
+                    <span className="rounded border border-chart-3/30 bg-chart-3/15 px-2 py-0.5 text-[11px] text-chart-3">
+                      待打款
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground">{item.purchaseNumber}</p>
+                  <p className="text-xs text-muted-foreground">{item.reimbursementNumber}</p>
                   <div className="flex items-center justify-between text-xs">
-                    <span>待付 {formatMoney(item.remainingAmount)}</span>
+                    <span>待付 {formatMoney(item.amount)}</span>
                     <span className="text-muted-foreground">去处理</span>
                   </div>
                 </Link>

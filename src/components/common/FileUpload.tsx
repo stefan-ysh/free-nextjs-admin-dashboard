@@ -33,11 +33,32 @@ type FileUploadProps = {
 	helperText?: string;
 	getFileLabel?: (fileUrl: string, index: number) => string;
 	disabled?: boolean;
+	readOnly?: boolean;
 };
+
+function withOriginalFileName(url: string, filename: string): string {
+	const safeName = filename?.trim();
+	if (!safeName) return url;
+	const isAbsolute = /^https?:\/\//i.test(url);
+	try {
+		const parsed = new URL(url, 'http://local');
+		parsed.searchParams.set('filename', safeName);
+		if (isAbsolute) return parsed.toString();
+		return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+	} catch {
+		const joiner = url.includes('?') ? '&' : '?';
+		return `${url}${joiner}filename=${encodeURIComponent(safeName)}`;
+	}
+}
 
 function extractFileLabel(fileUrl: string, index: number): string {
 	if (!fileUrl) return `附件 ${index + 1}`;
 	try {
+		const parsed = new URL(fileUrl, 'http://local');
+		const filename = parsed.searchParams.get('filename');
+		if (filename?.trim()) {
+			return filename.trim();
+		}
 		const decoded = decodeURIComponent(fileUrl);
 		const segments = decoded.split('/').filter(Boolean);
 		const lastSegment = segments[segments.length - 1];
@@ -61,10 +82,11 @@ export default function FileUpload({
 	helperText = '支持 JPG、PNG、PDF 格式, 单个文件不超过 5MB',
 	getFileLabel,
 	disabled = false,
+	readOnly = false,
 }: FileUploadProps) {
 	const [uploading, setUploading] = useState(false);
 	const [previewTarget, setPreviewTarget] = useState<{ url: string; label: string } | null>(null);
-	const interactionDisabled = disabled || uploading;
+	const interactionDisabled = disabled || uploading || readOnly;
 
 	const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 		if (interactionDisabled) return;
@@ -108,7 +130,7 @@ export default function FileUpload({
 					throw new Error(message);
 				}
 
-				uploadedPaths.push(result.data.url);
+				uploadedPaths.push(withOriginalFileName(result.data.url, result.data.name || file.name));
 			}
 
 			if (uploadedPaths.length) {
@@ -156,34 +178,36 @@ export default function FileUpload({
 									</svg>
 									<span className="text-sm text-foreground">{label}</span>
 								</div>
-								<div className="flex items-center gap-3">
-									<button
-										type="button"
-										onClick={() => setPreviewTarget({ url: fileUrl, label })}
-										disabled={interactionDisabled}
-										className="text-sm text-primary hover:underline disabled:opacity-40"
-									>
-										预览
-									</button>
-									<button
-										type="button"
-										onClick={() => handleRemove(index)}
-										disabled={interactionDisabled}
-										className="text-red-600 hover:text-red-700 disabled:opacity-40 dark:text-red-400"
-									>
-										<svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-										</svg>
-									</button>
+									<div className="flex items-center gap-3">
+										<button
+											type="button"
+											onClick={() => setPreviewTarget({ url: fileUrl, label })}
+											disabled={disabled || uploading}
+											className="text-sm text-primary hover:underline disabled:opacity-40"
+										>
+											预览
+										</button>
+										{!readOnly ? (
+											<button
+												type="button"
+												onClick={() => handleRemove(index)}
+												disabled={interactionDisabled}
+												className="text-red-600 hover:text-red-700 disabled:opacity-40 dark:text-red-400"
+											>
+												<svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+												</svg>
+											</button>
+										) : null}
+									</div>
 								</div>
-							</div>
-						);
-					})}
-				</div>
-			)}
+							);
+						})}
+					</div>
+				)}
 
-			{files.length < maxFiles && (
-				<label className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-border bg-card px-4 py-3 text-sm transition-colors hover:border-muted-foreground/40 hover:bg-muted">
+				{!readOnly && files.length < maxFiles && (
+					<label className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-border bg-card px-4 py-3 text-sm transition-colors hover:border-muted-foreground/40 hover:bg-muted">
 					<input
 						type="file"
 						multiple

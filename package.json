@@ -10,8 +10,13 @@
     "import:finance": "tsx scripts/import-finance-excel.ts",
     "import:employees": "tsx scripts/import-employees.ts",
     "seed:admin": "tsx scripts/create-admin.ts",
+    "check:purchases": "tsx scripts/check-purchase-health.ts",
+    "check:workflow": "tsx scripts/check-workflow-integrity.ts",
     "seed:departments": "node scripts/seed-departments.mjs",
     "migrate:finance-categories": "tsx scripts/migrate-finance-categories.ts",
+    "check:cleanup-removed": "node scripts/precheck-removed-modules.mjs",
+    "cleanup:removed-modules": "node scripts/run-cleanup-removed-modules.mjs",
+    "check:baseline": "npm run check:purchases && npm run check:workflow && npm run check:cleanup-removed",
     "test": "vitest"
   },
   "dependencies": {
@@ -50,6 +55,7 @@
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cos-nodejs-sdk-v5": "^2.15.4",
     "jose": "^6.1.1",
     "lucide-react": "^0.468.0",
     "mime": "^4.1.0",

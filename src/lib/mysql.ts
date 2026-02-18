@@ -5,6 +5,7 @@ const globalForMysql = globalThis as unknown as { mysqlPool: Pool | null };
 
 function resolvePoolOptions(): PoolOptions {
   const connectionLimit = Number(process.env.MYSQL_POOL_SIZE ?? '10');
+  const mysqlTimezone = process.env.MYSQL_TIMEZONE?.trim() || '+08:00';
   const url = process.env.MYSQL_URL || process.env.DATABASE_URL;
 
   if (url && url.trim()) {
@@ -18,7 +19,7 @@ function resolvePoolOptions(): PoolOptions {
       waitForConnections: true,
       connectionLimit,
       decimalNumbers: true,
-      timezone: 'Z',
+      timezone: mysqlTimezone,
     } satisfies PoolOptions;
   }
 
@@ -37,7 +38,7 @@ function resolvePoolOptions(): PoolOptions {
     waitForConnections: true,
     connectionLimit,
     decimalNumbers: true,
-    timezone: 'Z',
+    timezone: mysqlTimezone,
   } satisfies PoolOptions;
 }
 

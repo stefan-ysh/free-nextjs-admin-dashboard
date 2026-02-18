@@ -1,9 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 
 import FileUpload from '@/components/common/FileUpload';
+import { SearchableEntitySelect } from '@/components/common/SearchableEntitySelect';
+import DatePicker from '@/components/ui/DatePicker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,15 +14,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Drawer, DrawerBody, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Textarea } from '@/components/ui/textarea';
 import { usePermissions } from '@/hooks/usePermissions';
+import { formatDateOnly, formatDateTimeLocal } from '@/lib/dates';
 import type {
   CreateReimbursementInput,
   ListReimbursementsResult,
+  ReimbursementDetails,
   ReimbursementOrganizationType,
+  ReimbursementLog,
   ReimbursementRecord,
   ReimbursementSourceType,
   UpdateReimbursementInput,
 } from '@/types/reimbursement';
-import { REIMBURSEMENT_CATEGORY_OPTIONS } from '@/types/reimbursement';
+import { REIMBURSEMENT_CATEGORY_FIELDS, REIMBURSEMENT_CATEGORY_OPTIONS } from '@/types/reimbursement';
 import { UserRole } from '@/types/user';
 import type { PurchaseRecord } from '@/types/purchase';
 
@@ -34,6 +40,11 @@ type PurchaseListResponse = {
 type EligibilityResponse = {
   success: boolean;
   data?: { eligible: boolean; reason?: string };
+  error?: string;
+};
+type DetailResponse = {
+  success: boolean;
+  data?: (ReimbursementRecord & { logs?: ReimbursementLog[] }) | null;
   error?: string;
 };
 
@@ -64,12 +75,52 @@ const STATUS_STYLES: Record<ReimbursementRecord['status'], string> = {
   rejected: 'border-destructive/40 text-destructive bg-destructive/10',
   paid: 'border-chart-5/40 text-chart-5 bg-chart-5/10',
 };
+const ACTION_LABELS: Record<ReimbursementLog['action'], string> = {
+  create: '创建草稿',
+  submit: '提交审批',
+  approve: '审批通过',
+  reject: '驳回',
+  withdraw: '撤回',
+  pay: '打款',
+};
+
 
 const MONEY = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' });
 
+function normalizeDetailsByCategory(category: string, details: ReimbursementDetails | null | undefined): ReimbursementDetails {
+  const fields = REIMBURSEMENT_CATEGORY_FIELDS[category] ?? [];
+  const source = details ?? {};
+  if (fields.length === 0) {
+    return Object.fromEntries(
+      Object.entries(source)
+        .map(([key, value]) => [key.trim(), String(value ?? '').trim()])
+        .filter(([key, value]) => key && value)
+    );
+  }
+  const allowed = new Set(fields.map((item) => item.key));
+  const result: ReimbursementDetails = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (!allowed.has(key)) continue;
+    const text = String(value ?? '').trim();
+    if (!text) continue;
+    result[key] = text;
+  }
+  return result;
+}
+
+function getCategoryRequiredMessage(category: string, details: ReimbursementDetails): string | null {
+  const fields = REIMBURSEMENT_CATEGORY_FIELDS[category] ?? [];
+  for (const field of fields) {
+    if (!field.required) continue;
+    if (!details[field.key]?.trim()) {
+      return `请填写「${field.label}」`;
+    }
+  }
+  return null;
+}
+
 function toDateInputValue(value?: string | null): string {
-  if (!value) return '';
-  return value.slice(0, 10);
+  return formatDateOnly(value) ?? '';
 }
 
 function buildDefaultForm(): ReimbursementFormState {
@@ -78,10 +129,11 @@ function buildDefaultForm(): ReimbursementFormState {
     category: '交通',
     title: '',
     amount: 0,
-    occurredAt: toDateInputValue(new Date().toISOString()),
+    occurredAt: formatDateOnly(new Date()) ?? '',
     organizationType: 'company',
     sourcePurchaseId: '',
     description: '',
+    details: {},
     invoiceImages: [],
     receiptImages: [],
     attachments: [],
@@ -94,6 +146,7 @@ function hasReimbursementEvidence(row: Pick<ReimbursementRecord, 'invoiceImages'
 
 export default function ReimbursementsClient() {
   const { user, hasPermission } = usePermissions();
+  const searchParams = useSearchParams();
   const [records, setRecords] = useState<ReimbursementRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [scope, setScope] = useState<'mine' | 'approval' | 'pay' | 'all'>('mine');
@@ -101,15 +154,18 @@ export default function ReimbursementsClient() {
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitIntent, setSubmitIntent] = useState<'draft' | 'submit' | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [detailMode, setDetailMode] = useState(false);
   const [form, setForm] = useState<ReimbursementFormState>(buildDefaultForm);
 
   const [purchaseOptions, setPurchaseOptions] = useState<PurchaseRecord[]>([]);
   const [purchaseLoading, setPurchaseLoading] = useState(false);
-  const [purchaseSearch, setPurchaseSearch] = useState('');
 
   const [eligibilityChecking, setEligibilityChecking] = useState(false);
   const [eligibility, setEligibility] = useState<{ eligible: boolean; reason?: string } | null>(null);
+  const handledFocusRef = useRef<string | null>(null);
+  const [currentLogs, setCurrentLogs] = useState<ReimbursementLog[]>([]);
 
   const canCreate = hasPermission('REIMBURSEMENT_CREATE');
   const canApprove = hasPermission('REIMBURSEMENT_APPROVE');
@@ -124,11 +180,31 @@ export default function ReimbursementsClient() {
     return options;
   }, [canApprove, canPay, canViewAll]);
 
+  useEffect(() => {
+    const queryScope = searchParams.get('scope');
+    const hasScopeKey = searchParams.has('scope');
+    if (!hasScopeKey) return;
+    const allowed = new Set(scopeOptions.map((item) => item.value));
+    if (queryScope && allowed.has(queryScope as 'mine' | 'approval' | 'pay' | 'all')) {
+      setScope(queryScope as 'mine' | 'approval' | 'pay' | 'all');
+      return;
+    }
+    if (allowed.has('approval')) {
+      setScope('approval');
+      return;
+    }
+    if (allowed.has('pay')) {
+      setScope('pay');
+      return;
+    }
+    setScope('mine');
+  }, [scopeOptions, searchParams]);
+
   const role = user?.primaryRole;
 
   const canOperatePay = useCallback(
     (row: ReimbursementRecord) => {
-      if (!canPay || row.status !== 'approved') return false;
+      if (!canPay || (row.status !== 'approved' && row.status !== 'pending_approval')) return false;
       if (role === UserRole.FINANCE_SCHOOL) return row.organizationType === 'school';
       if (role === UserRole.FINANCE_COMPANY) return row.organizationType === 'company';
       return false;
@@ -142,7 +218,10 @@ export default function ReimbursementsClient() {
   );
 
   const editable = useCallback(
-    (row: ReimbursementRecord) => isOwner(row) && (row.status === 'draft' || row.status === 'rejected'),
+    (row: ReimbursementRecord) =>
+      isOwner(row) &&
+      (row.status === 'draft' || row.status === 'rejected') &&
+      !(row.sourceType === 'purchase' && Boolean(row.submittedAt)),
     [isOwner]
   );
 
@@ -167,7 +246,30 @@ export default function ReimbursementsClient() {
     }
   }, [scope, search]);
 
-  const fetchPurchases = useCallback(async () => {
+  const filterEligiblePurchases = useCallback(
+    async (items: PurchaseRecord[], excludeReimbursementId?: string | null): Promise<PurchaseRecord[]> => {
+      const checks = await Promise.all(
+        items.map(async (item) => {
+          try {
+            const params = new URLSearchParams();
+            params.set('purchaseId', item.id);
+            if (excludeReimbursementId) params.set('reimbursementId', excludeReimbursementId);
+            const response = await fetch(`/api/reimbursements/purchase-eligibility?${params.toString()}`, {
+              headers: { Accept: 'application/json' },
+            });
+            const payload = (await response.json()) as EligibilityResponse;
+            return Boolean(response.ok && payload.success && payload.data?.eligible);
+          } catch {
+            return false;
+          }
+        })
+      );
+      return items.filter((_, index) => checks[index]);
+    },
+    []
+  );
+
+  const fetchPurchases = useCallback(async (excludeReimbursementId?: string | null): Promise<PurchaseRecord[]> => {
     setPurchaseLoading(true);
     try {
       const params = new URLSearchParams();
@@ -180,15 +282,41 @@ export default function ReimbursementsClient() {
       if (!response.ok || !payload.success || !payload.data) {
         throw new Error(payload.error ?? '加载采购单失败');
       }
-      const options = payload.data.items.filter((item) => item.status === 'approved' || item.status === 'paid');
-      setPurchaseOptions(options);
+      const rawOptions = payload.data.items.filter(
+        (item) =>
+          (item.status === 'approved' || item.status === 'pending_inbound' || item.status === 'paid') &&
+          item.paymentMethod !== 'corporate_transfer'
+      );
+      const options = await filterEligiblePurchases(rawOptions, excludeReimbursementId);
+      setPurchaseOptions((prev) => {
+        if (prev.length === options.length && prev.every((item, index) => item.id === options[index]?.id)) {
+          return prev;
+        }
+        return options;
+      });
+      return options;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '加载采购单失败');
       setPurchaseOptions([]);
+      return [];
     } finally {
       setPurchaseLoading(false);
     }
-  }, []);
+  }, [filterEligiblePurchases]);
+
+  const fetchPurchaseEntities = useCallback(
+    async (keyword: string): Promise<PurchaseRecord[]> => {
+      const options = purchaseOptions;
+      const normalized = keyword.trim().toLowerCase();
+      if (!normalized) return options;
+      return options.filter((item) => {
+        const text = `${item.purchaseNumber} ${item.itemName} ${item.purpose ?? ''}`.toLowerCase();
+        return text.includes(normalized);
+      });
+    },
+    [purchaseOptions]
+  );
+  const purchaseMap = useMemo(() => new Map(purchaseOptions.map((item) => [item.id, item])), [purchaseOptions]);
 
   useEffect(() => {
     void fetchList();
@@ -196,18 +324,21 @@ export default function ReimbursementsClient() {
 
   useEffect(() => {
     if (!drawerOpen || form.sourceType !== 'purchase') return;
-    void fetchPurchases();
-  }, [drawerOpen, form.sourceType, fetchPurchases]);
+    void fetchPurchases(editingId);
+  }, [drawerOpen, editingId, form.sourceType, fetchPurchases]);
 
   useEffect(() => {
-    if (!drawerOpen || form.sourceType !== 'purchase' || !form.sourcePurchaseId?.trim()) {
+    if (!drawerOpen || detailMode || form.sourceType !== 'purchase' || !form.sourcePurchaseId?.trim()) {
       setEligibility(null);
       return;
     }
 
     let cancelled = false;
     setEligibilityChecking(true);
-    void fetch(`/api/reimbursements/purchase-eligibility?purchaseId=${encodeURIComponent(form.sourcePurchaseId.trim())}`, {
+    const params = new URLSearchParams();
+    params.set('purchaseId', form.sourcePurchaseId.trim());
+    if (editingId) params.set('reimbursementId', editingId);
+    void fetch(`/api/reimbursements/purchase-eligibility?${params.toString()}`, {
       headers: { Accept: 'application/json' },
     })
       .then(async (response) => {
@@ -229,7 +360,7 @@ export default function ReimbursementsClient() {
     return () => {
       cancelled = true;
     };
-  }, [drawerOpen, form.sourceType, form.sourcePurchaseId]);
+  }, [drawerOpen, detailMode, editingId, form.sourceType, form.sourcePurchaseId]);
 
   const runAction = useCallback(
     async (id: string, action: 'submit' | 'approve' | 'reject' | 'pay' | 'withdraw', body: Record<string, unknown> = {}) => {
@@ -249,20 +380,13 @@ export default function ReimbursementsClient() {
 
   const resetForm = useCallback(() => {
     setEditingId(null);
-    setPurchaseSearch('');
+    setDetailMode(false);
     setEligibility(null);
+    setCurrentLogs([]);
     setForm(buildDefaultForm());
   }, []);
 
-  const openCreateDrawer = useCallback(() => {
-    resetForm();
-    setDrawerOpen(true);
-  }, [resetForm]);
-
-  const openEditDrawer = useCallback((row: ReimbursementRecord) => {
-    setEditingId(row.id);
-    setPurchaseSearch('');
-    setEligibility(null);
+  const applyRecordToForm = useCallback((row: ReimbursementRecord) => {
     setForm({
       sourceType: row.sourceType,
       sourcePurchaseId: row.sourcePurchaseId ?? '',
@@ -272,14 +396,81 @@ export default function ReimbursementsClient() {
       amount: row.amount,
       occurredAt: toDateInputValue(row.occurredAt),
       description: row.description ?? '',
+      details: normalizeDetailsByCategory(row.category, row.details),
       invoiceImages: row.invoiceImages,
       receiptImages: row.receiptImages,
       attachments: row.attachments,
     });
-    setDrawerOpen(true);
   }, []);
 
-  const submitForm = useCallback(async () => {
+  const loadDetailLogs = useCallback(async (id: string) => {
+    try {
+      const response = await fetch(`/api/reimbursements/${id}`, { headers: { Accept: 'application/json' } });
+      const payload = (await response.json()) as DetailResponse;
+      if (!response.ok || !payload.success || !payload.data) return;
+      setCurrentLogs((payload.data.logs ?? []).slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+    } catch {
+      setCurrentLogs([]);
+    }
+  }, []);
+
+  const openCreateDrawer = useCallback(() => {
+    resetForm();
+    setDetailMode(false);
+    setDrawerOpen(true);
+  }, [resetForm]);
+
+  const openEditDrawer = useCallback((row: ReimbursementRecord) => {
+    setEditingId(row.id);
+    setDetailMode(false);
+    setEligibility(null);
+    applyRecordToForm(row);
+    void loadDetailLogs(row.id);
+    setDrawerOpen(true);
+  }, [applyRecordToForm, loadDetailLogs]);
+
+  const openDetailDrawer = useCallback((row: ReimbursementRecord) => {
+    setEditingId(row.id);
+    setDetailMode(true);
+    setEligibility(null);
+    applyRecordToForm(row);
+    void loadDetailLogs(row.id);
+    setDrawerOpen(true);
+  }, [applyRecordToForm, loadDetailLogs]);
+
+  const resolvePurchaseInvoiceRequired = useCallback(
+    async (purchaseId: string): Promise<boolean | null> => {
+      const candidate = purchaseMap.get(purchaseId);
+      if (candidate) {
+        return candidate.invoiceType !== 'none' && candidate.invoiceStatus !== 'not_required';
+      }
+      const response = await fetch(`/api/purchases/${purchaseId}`, { headers: { Accept: 'application/json' } });
+      const payload = (await response.json()) as { success: boolean; data?: PurchaseRecord; error?: string };
+      if (!response.ok || !payload.success || !payload.data) {
+        return null;
+      }
+      return payload.data.invoiceType !== 'none' && payload.data.invoiceStatus !== 'not_required';
+    },
+    [purchaseMap]
+  );
+
+  useEffect(() => {
+    const focusId = searchParams.get('focus');
+    if (!focusId || records.length === 0 || !scope) return;
+    if (handledFocusRef.current === focusId) return;
+    const target = records.find((item) => item.id === focusId);
+    if (target) {
+      if (editable(target)) {
+        openEditDrawer(target);
+      } else {
+        openDetailDrawer(target);
+      }
+      handledFocusRef.current = focusId;
+    }
+  }, [editable, openDetailDrawer, openEditDrawer, records, scope, searchParams]);
+
+  const submitForm = useCallback(async (intent: 'draft' | 'submit') => {
+    setSubmitIntent(intent);
     setSubmitting(true);
     try {
       const payloadBase: CreateReimbursementInput = {
@@ -290,6 +481,7 @@ export default function ReimbursementsClient() {
         occurredAt: form.occurredAt,
         sourcePurchaseId: form.sourceType === 'purchase' ? form.sourcePurchaseId?.trim() || '' : undefined,
         description: form.description?.trim() || undefined,
+        details: normalizeDetailsByCategory(form.category, form.details),
         invoiceImages: form.invoiceImages ?? [],
         receiptImages: form.receiptImages ?? [],
         attachments: form.attachments ?? [],
@@ -301,6 +493,10 @@ export default function ReimbursementsClient() {
       if (!payloadBase.category) {
         throw new Error('请选择报销分类');
       }
+      const categoryRequiredError = getCategoryRequiredMessage(payloadBase.category, payloadBase.details ?? {});
+      if (categoryRequiredError) {
+        throw new Error(categoryRequiredError);
+      }
       if (!Number.isFinite(payloadBase.amount) || payloadBase.amount <= 0) {
         throw new Error('报销金额必须大于 0');
       }
@@ -308,6 +504,7 @@ export default function ReimbursementsClient() {
         throw new Error('请选择关联采购单');
       }
 
+      let savedRecord: ReimbursementRecord;
       if (editingId) {
         const response = await fetch(`/api/reimbursements/${editingId}`, {
           method: 'PATCH',
@@ -318,7 +515,7 @@ export default function ReimbursementsClient() {
         if (!response.ok || !body.success || !body.data) {
           throw new Error(body.error ?? '更新报销失败');
         }
-        toast.success('报销草稿已更新');
+        savedRecord = body.data;
       } else {
         const response = await fetch('/api/reimbursements', {
           method: 'POST',
@@ -329,7 +526,26 @@ export default function ReimbursementsClient() {
         if (!response.ok || !body.success || !body.data) {
           throw new Error(body.error ?? '创建报销失败');
         }
-        toast.success('报销草稿已创建');
+        savedRecord = body.data;
+      }
+
+      if (intent === 'submit') {
+        const hasAnyEvidence = (payloadBase.invoiceImages?.length ?? 0) > 0 || (payloadBase.receiptImages?.length ?? 0) > 0;
+        if (payloadBase.sourceType === 'purchase' && payloadBase.sourcePurchaseId) {
+          const invoiceRequired = await resolvePurchaseInvoiceRequired(payloadBase.sourcePurchaseId);
+          if (invoiceRequired == null) {
+            throw new Error('无法校验采购单发票规则，请稍后重试');
+          }
+          if (invoiceRequired === true && (payloadBase.invoiceImages?.length ?? 0) === 0) {
+            throw new Error('该采购单要求补充发票，提交报销前请先上传发票附件');
+          }
+        } else if (!hasAnyEvidence) {
+          throw new Error('请先上传发票或收款凭证后再提交');
+        }
+        await runAction(savedRecord.id, 'submit');
+        toast.success('报销申请已提交审批');
+      } else {
+        toast.success(editingId ? '报销草稿已更新' : '报销草稿已创建');
       }
 
       setDrawerOpen(false);
@@ -339,8 +555,9 @@ export default function ReimbursementsClient() {
       toast.error(error instanceof Error ? error.message : '保存失败');
     } finally {
       setSubmitting(false);
+      setSubmitIntent(null);
     }
-  }, [editingId, fetchList, form, resetForm]);
+  }, [editingId, fetchList, form, resetForm, resolvePurchaseInvoiceRequired, runAction]);
 
   const handleDelete = useCallback(
     async (row: ReimbursementRecord) => {
@@ -364,9 +581,18 @@ export default function ReimbursementsClient() {
 
   const handleSubmit = useCallback(
     async (row: ReimbursementRecord) => {
-      if (!hasReimbursementEvidence(row)) {
+      if (row.sourceType === 'purchase' && row.sourcePurchaseId) {
+        const invoiceRequired = await resolvePurchaseInvoiceRequired(row.sourcePurchaseId);
+        if (invoiceRequired == null) {
+          toast.error('无法校验采购单发票规则，请稍后重试');
+          return;
+        }
+        if (invoiceRequired === true && (row.invoiceImages?.length ?? 0) === 0) {
+          toast.error('该采购单要求补充发票，提交报销前请先上传发票附件');
+          return;
+        }
+      } else if (!hasReimbursementEvidence(row)) {
         toast.error('请先上传发票或收款凭证后再提交');
-        openEditDrawer(row);
         return;
       }
       try {
@@ -377,7 +603,7 @@ export default function ReimbursementsClient() {
         toast.error(error instanceof Error ? error.message : '提交失败');
       }
     },
-    [fetchList, openEditDrawer, runAction]
+    [fetchList, resolvePurchaseInvoiceRequired, runAction]
   );
 
   const handleApprove = useCallback(
@@ -422,18 +648,31 @@ export default function ReimbursementsClient() {
     [fetchList, runAction]
   );
 
-  const purchaseMap = useMemo(() => new Map(purchaseOptions.map((item) => [item.id, item])), [purchaseOptions]);
+  const resolvePurchaseEntity = useCallback(async (id: string): Promise<PurchaseRecord | null> => {
+    const found = purchaseMap.get(id);
+    if (found) return found;
+    const response = await fetch(`/api/purchases/${id}`, { headers: { Accept: 'application/json' } });
+    const payload = (await response.json()) as { success: boolean; data?: PurchaseRecord; error?: string };
+    if (!response.ok || !payload.success || !payload.data) return null;
+    return payload.data;
+  }, [purchaseMap]);
 
   const selectedPurchase = form.sourceType === 'purchase' ? purchaseMap.get(form.sourcePurchaseId?.trim() || '') ?? null : null;
-
-  const filteredPurchases = useMemo(() => {
-    const keyword = purchaseSearch.trim().toLowerCase();
-    if (!keyword) return purchaseOptions;
-    return purchaseOptions.filter((item) => {
-      const text = `${item.purchaseNumber} ${item.itemName} ${item.purpose ?? ''}`.toLowerCase();
-      return text.includes(keyword);
-    });
-  }, [purchaseOptions, purchaseSearch]);
+  const selectedPurchaseInvoiceRequired = Boolean(
+    selectedPurchase && selectedPurchase.invoiceType !== 'none' && selectedPurchase.invoiceStatus !== 'not_required'
+  );
+  const shouldShowEvidenceUpload =
+    form.sourceType !== 'purchase' || selectedPurchaseInvoiceRequired;
+  const isReadOnlyView = detailMode;
+  const currentDrawerRecord = useMemo(
+    () => (editingId ? records.find((item) => item.id === editingId) ?? null : null),
+    [editingId, records]
+  );
+  const canApproveInDrawer = Boolean(
+    currentDrawerRecord && canApprove && currentDrawerRecord.status === 'pending_approval' && !canPay
+  );
+  const canRejectInDrawer = Boolean(currentDrawerRecord && canApprove && currentDrawerRecord.status === 'pending_approval');
+  const canPayInDrawer = Boolean(currentDrawerRecord && canOperatePay(currentDrawerRecord));
 
   return (
     <section className="space-y-4">
@@ -509,6 +748,9 @@ export default function ReimbursementsClient() {
                   <TableCell>{toDateInputValue(row.occurredAt)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
+                      <Button size="sm" variant="outline" onClick={() => openDetailDrawer(row)}>
+                        详情
+                      </Button>
                       {editable(row) && (
                         <>
                           <Button size="sm" variant="outline" onClick={() => openEditDrawer(row)}>
@@ -526,12 +768,14 @@ export default function ReimbursementsClient() {
                       )}
                       {canApprove && row.status === 'pending_approval' && (
                         <>
-                          <Button size="sm" variant="outline" onClick={() => void handleApprove(row)}>
-                            通过
-                          </Button>
                           <Button size="sm" variant="outline" onClick={() => void handleReject(row)}>
                             驳回
                           </Button>
+                          {!canPay ? (
+                            <Button size="sm" variant="outline" onClick={() => void handleApprove(row)}>
+                              通过
+                            </Button>
+                          ) : null}
                         </>
                       )}
                       {canOperatePay(row) && (
@@ -556,9 +800,9 @@ export default function ReimbursementsClient() {
         }}
         direction="right"
       >
-        <DrawerContent side="right" className="w-full max-w-3xl">
+          <DrawerContent side="right" className="w-full max-w-3xl">
           <DrawerHeader>
-            <DrawerTitle>{editingId ? '编辑报销草稿' : '发起报销'}</DrawerTitle>
+            <DrawerTitle>{isReadOnlyView ? '报销详情' : editingId ? '编辑报销草稿' : '发起报销'}</DrawerTitle>
           </DrawerHeader>
           <DrawerBody className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
@@ -570,9 +814,12 @@ export default function ReimbursementsClient() {
                     setForm((prev) => ({
                       ...prev,
                       sourceType: value as ReimbursementSourceType,
+                      category: value === 'purchase' ? '采购报销' : prev.category,
+                      details: normalizeDetailsByCategory(value === 'purchase' ? '采购报销' : prev.category, prev.details),
                       sourcePurchaseId: value === 'purchase' ? prev.sourcePurchaseId ?? '' : '',
                     }))
                   }
+                disabled={isReadOnlyView}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -591,7 +838,7 @@ export default function ReimbursementsClient() {
                   onValueChange={(value) =>
                     setForm((prev) => ({ ...prev, organizationType: value as ReimbursementOrganizationType }))
                   }
-                  disabled={form.sourceType === 'purchase'}
+                  disabled={isReadOnlyView || form.sourceType === 'purchase'}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -610,40 +857,40 @@ export default function ReimbursementsClient() {
             {form.sourceType === 'purchase' && (
               <div className="space-y-3 rounded-xl border border-border/60 p-3">
                 <div className="space-y-2">
-                  <div className="text-sm font-medium">筛选采购单</div>
-                  <Input
-                    value={purchaseSearch}
-                    onChange={(event) => setPurchaseSearch(event.target.value)}
-                    placeholder="按采购单号/物品关键字筛选"
-                  />
-                </div>
-                <div className="space-y-2">
                   <div className="text-sm font-medium">关联采购单</div>
-                  <Select
+                  <SearchableEntitySelect<PurchaseRecord>
                     value={form.sourcePurchaseId?.trim() || ''}
-                    onValueChange={(value) => {
-                      const picked = purchaseMap.get(value);
+                    onChange={(value, entity) => {
+                      const picked = entity ?? purchaseMap.get(value);
                       setForm((prev) => ({
                         ...prev,
                         sourcePurchaseId: value,
                         organizationType: (picked?.organizationType ?? prev.organizationType) as ReimbursementOrganizationType,
                         title: prev.title.trim() ? prev.title : `${picked?.itemName ?? '采购'}报销`,
                         amount: Number(prev.amount) > 0 ? prev.amount : Number(picked?.totalAmount ?? 0),
+                        details: {
+                          ...(prev.details ?? {}),
+                          purchaseUsage:
+                            (prev.details?.purchaseUsage?.trim() || (picked?.purpose?.trim() ?? '')),
+                          inboundNote:
+                            (prev.details?.inboundNote?.trim() || (picked?.notes?.trim() ?? '')),
+                        },
                       }));
                     }}
-                    disabled={purchaseLoading}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={purchaseLoading ? '加载采购单中...' : '请选择采购单'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {filteredPurchases.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.purchaseNumber} · {item.itemName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    fetchEntities={fetchPurchaseEntities}
+                    resolveEntity={resolvePurchaseEntity}
+                    mapOption={(item) => ({
+                      id: item.id,
+                      label: `${item.purchaseNumber} · ${item.itemName}`,
+                      description: `${item.organizationType === 'school' ? '学校' : '单位'} · ${MONEY.format(Number(item.totalAmount) + Number(item.feeAmount ?? 0))}`,
+                      data: item,
+                    })}
+                    placeholder={purchaseLoading ? '加载采购单中...' : '请选择采购单'}
+                    searchPlaceholder="输入采购单号或物品搜索"
+                    emptyText="暂无可关联采购单"
+                    panelClassName="w-[460px]"
+                    disabled={purchaseLoading || isReadOnlyView}
+                  />
                 </div>
                 {selectedPurchase ? (
                   <div className="rounded-lg border border-dashed border-border/70 bg-muted/20 p-2 text-xs text-muted-foreground">
@@ -671,7 +918,14 @@ export default function ReimbursementsClient() {
                 <div className="text-sm font-medium">报销分类</div>
                 <Select
                   value={form.category}
-                  onValueChange={(value) => setForm((prev) => ({ ...prev, category: value }))}
+                  onValueChange={(value) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      category: value,
+                      details: normalizeDetailsByCategory(value, prev.details),
+                    }))
+                  }
+                  disabled={isReadOnlyView}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -687,13 +941,115 @@ export default function ReimbursementsClient() {
               </div>
               <div className="space-y-2">
                 <div className="text-sm font-medium">发生日期</div>
-                <Input
-                  type="date"
+                <DatePicker
                   value={form.occurredAt}
-                  onChange={(event) => setForm((prev) => ({ ...prev, occurredAt: event.target.value }))}
+                  onChange={(value) => setForm((prev) => ({ ...prev, occurredAt: value }))}
+                  clearable={false}
+                  placeholder="选择发生日期"
+                  disabled={isReadOnlyView}
                 />
               </div>
             </div>
+
+            {(REIMBURSEMENT_CATEGORY_FIELDS[form.category] ?? []).length > 0 ? (
+              <div className="space-y-3 rounded-xl border border-border/60 p-3">
+                <div className="text-sm font-medium">分类信息</div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {(REIMBURSEMENT_CATEGORY_FIELDS[form.category] ?? []).map((field) => {
+                    const value = form.details?.[field.key] ?? '';
+                    const label = (
+                      <div className="text-sm font-medium">
+                        {field.label}
+                        {field.required ? <span className="ml-1 text-destructive">*</span> : null}
+                      </div>
+                    );
+                    if (field.type === 'textarea') {
+                      return (
+                        <div key={field.key} className="space-y-2 md:col-span-2">
+                          {label}
+                          <Textarea
+                            value={value}
+                            onChange={(event) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                details: { ...(prev.details ?? {}), [field.key]: event.target.value },
+                              }))
+                            }
+                            placeholder={field.placeholder}
+                            rows={3}
+                            disabled={isReadOnlyView}
+                          />
+                        </div>
+                      );
+                    }
+                    if (field.type === 'select' && field.options?.length) {
+                      return (
+                        <div key={field.key} className="space-y-2">
+                          {label}
+                          <Select
+                            value={value}
+                            onValueChange={(nextValue) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                details: { ...(prev.details ?? {}), [field.key]: nextValue },
+                              }))
+                            }
+                            disabled={isReadOnlyView}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder={field.placeholder || `请选择${field.label}`} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {field.options.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      );
+                    }
+                    if (field.type === 'date') {
+                      return (
+                        <div key={field.key} className="space-y-2">
+                          {label}
+                          <DatePicker
+                            value={value}
+                            onChange={(nextValue) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                details: { ...(prev.details ?? {}), [field.key]: nextValue },
+                              }))
+                            }
+                            clearable={!field.required}
+                            placeholder={field.placeholder || `选择${field.label}`}
+                            disabled={isReadOnlyView}
+                          />
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={field.key} className="space-y-2">
+                        {label}
+                        <Input
+                          value={value}
+                          type={field.type === 'number' ? 'number' : 'text'}
+                          onChange={(event) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              details: { ...(prev.details ?? {}), [field.key]: event.target.value },
+                            }))
+                          }
+                          placeholder={field.placeholder}
+                          disabled={isReadOnlyView}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
@@ -702,6 +1058,7 @@ export default function ReimbursementsClient() {
                   value={form.title}
                   onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
                   placeholder="例如：打车报销（客户拜访）"
+                  disabled={isReadOnlyView}
                 />
               </div>
               <div className="space-y-2">
@@ -712,6 +1069,7 @@ export default function ReimbursementsClient() {
                   step="0.01"
                   value={form.amount}
                   onChange={(event) => setForm((prev) => ({ ...prev, amount: Number(event.target.value) }))}
+                  disabled={isReadOnlyView}
                 />
               </div>
             </div>
@@ -723,39 +1081,50 @@ export default function ReimbursementsClient() {
                 onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
                 placeholder="可选说明"
                 rows={3}
+                disabled={isReadOnlyView}
               />
             </div>
 
-            <div className="space-y-3 rounded-xl border border-border/60 p-3">
-              <div>
-                <div className="text-sm font-medium">收款凭证</div>
-                <p className="text-xs text-muted-foreground">提交前至少需要上传发票或收款凭证其中一项。</p>
-              </div>
-              <FileUpload
-                files={form.receiptImages ?? []}
-                onChange={(files) => setForm((prev) => ({ ...prev, receiptImages: files }))}
-                maxFiles={8}
-                folder="reimbursements/receipts"
-                prefix="receipt"
-                buttonLabel="上传收款凭证"
-                helperText="支持 JPG/PNG/PDF，每个文件 ≤5MB"
-                disabled={submitting}
-              />
-            </div>
+            {shouldShowEvidenceUpload ? (
+              <>
+                <div className="space-y-3 rounded-xl border border-border/60 p-3">
+                  <div>
+                    <div className="text-sm font-medium">收款凭证</div>
+                    <p className="text-xs text-muted-foreground">
+                      {form.sourceType === 'purchase'
+                        ? '该采购单标记为有发票，请在下方“发票附件”上传发票；此处可补充收款凭证。'
+                        : '直接报销需至少上传发票或收款凭证其中一项。'}
+                    </p>
+                  </div>
+                  <FileUpload
+                    files={form.receiptImages ?? []}
+                    onChange={(files) => setForm((prev) => ({ ...prev, receiptImages: files }))}
+                    maxFiles={8}
+                    folder="reimbursements/receipts"
+                    prefix="receipt"
+                    buttonLabel="上传收款凭证"
+                    helperText="支持 JPG/PNG/PDF，每个文件 ≤5MB"
+                    disabled={submitting}
+                    readOnly={isReadOnlyView}
+                  />
+                </div>
 
-            <div className="space-y-3 rounded-xl border border-border/60 p-3">
-              <div className="text-sm font-medium">发票附件</div>
-              <FileUpload
-                files={form.invoiceImages ?? []}
-                onChange={(files) => setForm((prev) => ({ ...prev, invoiceImages: files }))}
-                maxFiles={8}
-                folder="reimbursements/invoices"
-                prefix="invoice"
-                buttonLabel="上传发票"
-                helperText="支持 JPG/PNG/PDF，每个文件 ≤5MB"
-                disabled={submitting}
-              />
-            </div>
+                <div className="space-y-3 rounded-xl border border-border/60 p-3">
+                  <div className="text-sm font-medium">发票附件</div>
+                  <FileUpload
+                    files={form.invoiceImages ?? []}
+                    onChange={(files) => setForm((prev) => ({ ...prev, invoiceImages: files }))}
+                    maxFiles={8}
+                    folder="reimbursements/invoices"
+                    prefix="invoice"
+                    buttonLabel="上传发票"
+                    helperText="支持 JPG/PNG/PDF，每个文件 ≤5MB"
+                    disabled={submitting}
+                    readOnly={isReadOnlyView}
+                  />
+                </div>
+              </>
+            ) : null}
 
             <div className="space-y-3 rounded-xl border border-border/60 p-3">
               <div className="text-sm font-medium">其他附件</div>
@@ -768,22 +1137,91 @@ export default function ReimbursementsClient() {
                 buttonLabel="上传附件"
                 helperText="可上传报销明细、行程单等材料"
                 disabled={submitting}
+                readOnly={isReadOnlyView}
               />
             </div>
+
+            {editingId ? (
+              <div className="space-y-3 rounded-xl border border-border/60 p-3">
+                <div className="text-sm font-medium">流程节点</div>
+                {currentLogs.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">暂无流程记录</p>
+                ) : (
+                  <div className="space-y-2">
+                    {currentLogs.map((log) => (
+                      <div key={log.id} className="rounded-lg border border-border/60 bg-muted/20 p-2 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium">{ACTION_LABELS[log.action] ?? log.action}</span>
+                          <span className="text-muted-foreground">{formatDateTimeLocal(log.createdAt) ?? '-'}</span>
+                        </div>
+                        <p className="mt-1 text-muted-foreground">
+                          状态：{STATUS_LABELS[log.fromStatus] ?? log.fromStatus} → {STATUS_LABELS[log.toStatus] ?? log.toStatus}
+                        </p>
+                        {log.comment ? <p className="mt-1 text-foreground">备注：{log.comment}</p> : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
           </DrawerBody>
           <DrawerFooter>
             <Button variant="outline" onClick={() => setDrawerOpen(false)} disabled={submitting}>
               取消
             </Button>
-            <Button
-              onClick={() => void submitForm()}
-              disabled={
-                submitting ||
-                (form.sourceType === 'purchase' && eligibility != null && !eligibility.eligible)
-              }
-            >
-              {submitting ? '提交中...' : editingId ? '保存修改' : '保存草稿'}
-            </Button>
+            {!isReadOnlyView ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => void submitForm('draft')}
+                  disabled={
+                    submitting ||
+                    (form.sourceType === 'purchase' && eligibility != null && !eligibility.eligible)
+                  }
+                >
+                  {submitting && submitIntent === 'draft' ? '保存中...' : editingId ? '保存修改' : '保存草稿'}
+                </Button>
+                <Button
+                  onClick={() => void submitForm('submit')}
+                  disabled={
+                    submitting ||
+                    (form.sourceType === 'purchase' && eligibility != null && !eligibility.eligible)
+                  }
+                >
+                  {submitting && submitIntent === 'submit' ? '提交中...' : '提交报销'}
+                </Button>
+              </>
+            ) : (
+              <>
+                {canRejectInDrawer ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => void handleReject(currentDrawerRecord!)}
+                    disabled={submitting}
+                  >
+                    驳回
+                  </Button>
+                ) : null}
+                {canApproveInDrawer ? (
+                  <>
+                    <Button
+                      onClick={() => void handleApprove(currentDrawerRecord!)}
+                      disabled={submitting}
+                    >
+                      审批通过
+                    </Button>
+                  </>
+                ) : null}
+                {canPayInDrawer ? (
+                  <Button
+                    onClick={() => void handlePay(currentDrawerRecord!)}
+                    disabled={submitting}
+                  >
+                    标记打款
+                  </Button>
+                ) : null}
+              </>
+            )}
           </DrawerFooter>
         </DrawerContent>
       </Drawer>

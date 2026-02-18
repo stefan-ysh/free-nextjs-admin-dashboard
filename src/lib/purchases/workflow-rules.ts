@@ -42,15 +42,11 @@ export function isWorkflowActionStatusAllowed(
       if (!REIMBURSEMENT_SUBMIT_ALLOWED.has(purchase.reimbursementStatus)) return false;
       return hasInvoiceEvidence(purchase);
     case 'pay':
-      if (purchase.status !== 'approved') return false;
-      if (purchase.reimbursementStatus !== 'reimbursement_pending') return false;
-      if (purchase.paymentIssueOpen) return false;
-      if (typeof purchase.remainingAmount === 'number') return purchase.remainingAmount > 0;
-      return true;
+      return false;
     case 'issue':
-      return purchase.status === 'approved' && !purchase.paymentIssueOpen;
+      return false;
     case 'resolve_issue':
-      return purchase.status === 'approved' && Boolean(purchase.paymentIssueOpen);
+      return false;
     default:
       return false;
   }
@@ -67,15 +63,15 @@ export function getWorkflowActionBlockedMessage(action: WorkflowActionKey): stri
     case 'transfer':
       return '当前状态无法转审';
     case 'pay':
-      return '当前状态无法打款';
+      return '采购流程不包含独立打款节点';
     case 'submit_reimbursement':
       return '当前状态无法提交报销，请先确认审批与凭证信息';
     case 'withdraw':
       return '当前状态无法撤回';
     case 'issue':
-      return '当前状态无法标记异常';
+      return '采购流程不包含付款异常处理节点';
     case 'resolve_issue':
-      return '当前状态无法解除异常';
+      return '采购流程不包含付款异常处理节点';
     default:
       return '当前状态无法执行该操作';
   }

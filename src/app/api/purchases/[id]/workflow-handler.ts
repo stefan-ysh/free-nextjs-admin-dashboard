@@ -8,9 +8,6 @@ import {
   findPurchaseById,
   getPurchaseDetail,
   getPurchaseLogs,
-  markAsPaid,
-  markPurchasePaymentIssue,
-  resolvePurchasePaymentIssue,
   rejectPurchase,
   duplicatePurchase,
   submitPurchase,
@@ -72,13 +69,6 @@ function flowRoleForbiddenResponse() {
 
 function financeOrgForbiddenResponse() {
   return NextResponse.json({ success: false, error: '无权处理该组织采购单' }, { status: 403 });
-}
-
-function canHandleFinanceByOrg(role: UserRole | undefined, orgType: 'school' | 'company'): boolean {
-  if (!role) return false;
-  if (role === UserRole.FINANCE_SCHOOL) return orgType === 'school';
-  if (role === UserRole.FINANCE_COMPANY) return orgType === 'company';
-  return false;
 }
 
 function notFoundResponse() {
@@ -181,7 +171,7 @@ export async function handlePurchaseWorkflowAction(
         const updated = await approvePurchase(id, context.user.id, comment);
         if (updated.status === 'pending_approval') {
           await notifySafely('purchase_submitted', id);
-        } else if (updated.status === 'approved') {
+        } else if (updated.status === 'approved' || updated.status === 'pending_inbound' || updated.status === 'paid') {
           await notifySafely('purchase_approved', id);
         }
         return respondWithDetail(id);
@@ -228,21 +218,7 @@ export async function handlePurchaseWorkflowAction(
         return respondWithDetail(id);
       }
       case 'pay': {
-        if (permissionUser.primaryRole === UserRole.SUPER_ADMIN) return flowRoleForbiddenResponse();
-        const perm = await checkPermission(permissionUser, Permissions.PURCHASE_PAY);
-        if (!perm.allowed) return forbiddenResponse();
-        if (!canHandleFinanceByOrg(permissionUser.primaryRole, purchase.organizationType)) {
-          return financeOrgForbiddenResponse();
-        }
-        if (!isWorkflowActionStatusAllowed('pay', purchase)) {
-          return badRequestResponse(getWorkflowActionBlockedMessage('pay'));
-        }
-        const rawAmount = typeof options.amount === 'string' || typeof options.amount === 'number' ? Number(options.amount) : NaN;
-        if (!Number.isFinite(rawAmount)) return badRequestResponse('打款金额无效');
-        const note = typeof options.note === 'string' ? options.note.trim() : undefined;
-        await markAsPaid(id, context.user.id, rawAmount, note);
-        await notifySafely('purchase_paid', id);
-        return respondWithDetail(id);
+        return badRequestResponse('采购流程不包含独立打款节点');
       }
       case 'submit_reimbursement': {
         if (isReimbursementV2Enabled()) {
@@ -258,35 +234,10 @@ export async function handlePurchaseWorkflowAction(
         return respondWithDetail(id);
       }
       case 'issue': {
-        if (permissionUser.primaryRole === UserRole.SUPER_ADMIN) return flowRoleForbiddenResponse();
-        const perm = await checkPermission(permissionUser, Permissions.PURCHASE_PAY);
-        if (!perm.allowed) return forbiddenResponse();
-        if (!canHandleFinanceByOrg(permissionUser.primaryRole, purchase.organizationType)) {
-          return financeOrgForbiddenResponse();
-        }
-        if (!isWorkflowActionStatusAllowed('issue', purchase)) {
-          return badRequestResponse(getWorkflowActionBlockedMessage('issue'));
-        }
-        const comment = options.comment?.trim();
-        if (!comment) return badRequestResponse('异常说明不能为空');
-        await markPurchasePaymentIssue(id, context.user.id, comment);
-        await notifySafely('payment_issue_marked', id);
-        return respondWithDetail(id);
+        return badRequestResponse('采购流程不包含付款异常处理节点');
       }
       case 'resolve_issue': {
-        if (permissionUser.primaryRole === UserRole.SUPER_ADMIN) return flowRoleForbiddenResponse();
-        const perm = await checkPermission(permissionUser, Permissions.PURCHASE_PAY);
-        if (!perm.allowed) return forbiddenResponse();
-        if (!canHandleFinanceByOrg(permissionUser.primaryRole, purchase.organizationType)) {
-          return financeOrgForbiddenResponse();
-        }
-        if (!isWorkflowActionStatusAllowed('resolve_issue', purchase)) {
-          return badRequestResponse(getWorkflowActionBlockedMessage('resolve_issue'));
-        }
-        const comment = options.comment?.trim();
-        await resolvePurchasePaymentIssue(id, context.user.id, comment);
-        await notifySafely('payment_issue_resolved', id);
-        return respondWithDetail(id);
+        return badRequestResponse('采购流程不包含付款异常处理节点');
       }
       case 'withdraw': {
         if (context.user.id !== purchase.createdBy) return forbiddenResponse();

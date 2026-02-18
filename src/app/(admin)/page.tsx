@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { USER_ROLE_LABELS } from '@/constants/user-roles';
 import { TransactionType } from '@/types/finance';
+import { UserRole } from '@/types/user';
 
 const currencyFormatter = new Intl.NumberFormat('zh-CN', {
   style: 'currency',
@@ -92,6 +93,11 @@ function DashboardSection({ title, description, children }: { title: string; des
 export default async function AdminDashboardPage() {
   const { user } = await requireCurrentUser();
   const profile = await toPermissionUser(user);
+  const activeRole = profile.primaryRole ?? UserRole.EMPLOYEE;
+  const isSuperAdmin = activeRole === UserRole.SUPER_ADMIN;
+  const isApprovalAdmin = activeRole === UserRole.FINANCE;
+  const isFinanceOperator = activeRole === UserRole.FINANCE_SCHOOL || activeRole === UserRole.FINANCE_COMPANY;
+  const isEmployee = activeRole === UserRole.EMPLOYEE;
 
   const [
     inventoryPermission,
@@ -99,7 +105,7 @@ export default async function AdminDashboardPage() {
     hrPermission,
     purchaseCreatePermission,
     purchaseViewAllPermission,
-    purchaseViewDepartmentPermission,
+    // purchaseViewDepartmentPermission,
     purchaseApprovePermission,
   ] = await Promise.all([
     checkPermission(profile, Permissions.INVENTORY_VIEW_DASHBOARD),
@@ -107,7 +113,7 @@ export default async function AdminDashboardPage() {
     checkPermission(profile, Permissions.USER_VIEW_ALL),
     checkPermission(profile, Permissions.PURCHASE_CREATE),
     checkPermission(profile, Permissions.PURCHASE_VIEW_ALL),
-    checkPermission(profile, Permissions.PURCHASE_VIEW_DEPARTMENT),
+    // checkPermission(profile, Permissions.PURCHASE_VIEW_DEPARTMENT),
     checkPermission(profile, Permissions.PURCHASE_APPROVE),
   ]);
 
@@ -117,17 +123,24 @@ export default async function AdminDashboardPage() {
   const todayText = formatDateOnly(today) ?? today.toISOString().slice(0, 10);
 
   const purchasePermissionAllowed =
-    purchaseCreatePermission.allowed ||
-    purchaseViewAllPermission.allowed ||
-    purchaseViewDepartmentPermission.allowed ||
-    purchaseApprovePermission.allowed;
+    (isApprovalAdmin || isEmployee || isSuperAdmin) &&
+    (
+      purchaseCreatePermission.allowed ||
+      purchaseViewAllPermission.allowed ||
+      // purchaseViewDepartmentPermission.allowed ||
+      purchaseApprovePermission.allowed
+    );
+  const showFinanceOverview = financePermission.allowed && (isFinanceOperator || isSuperAdmin);
+  const showPurchaseOverview = purchasePermissionAllowed && (isApprovalAdmin || isEmployee || isSuperAdmin);
+  const showApprovalTodo = purchaseApprovePermission.allowed && (isApprovalAdmin || isSuperAdmin);
+  const showOtherOverview = (inventoryPermission.allowed || hrPermission.allowed) && isSuperAdmin;
 
   const [inventoryStats, financeStats, recentFinanceRecords, hrStats, purchaseStats, pendingPurchases] = await Promise.all([
     inventoryPermission.allowed ? getInventoryStats() : null,
-    financePermission.allowed ? getFinanceStats({ startDate: monthStartText, endDate: todayText }) : null,
-    financePermission.allowed ? getRecords({ startDate: monthStartText, endDate: todayText, limit: 6, offset: 0 }) : [],
+    showFinanceOverview ? getFinanceStats({ startDate: monthStartText, endDate: todayText }) : null,
+    showFinanceOverview ? getRecords({ startDate: monthStartText, endDate: todayText, limit: 6, offset: 0 }) : [],
     hrPermission.allowed ? getEmployeeDashboardStats() : null,
-    purchasePermissionAllowed
+    showPurchaseOverview
       ? getPurchaseStats(
           purchaseViewAllPermission.allowed
             ? {}
@@ -135,7 +148,7 @@ export default async function AdminDashboardPage() {
         )
       : null,
     // Pending purchase approvals for current user
-    purchaseApprovePermission.allowed
+    showApprovalTodo
       ? listPurchases({
           status: 'pending_approval',
           pendingApproverId: user.id,
@@ -145,15 +158,10 @@ export default async function AdminDashboardPage() {
       : null,
   ]);
 
-  const hasAnySection = [
-    inventoryPermission.allowed,
-    financePermission.allowed,
-    hrPermission.allowed,
-    purchasePermissionAllowed,
-  ].some(Boolean);
+  const hasAnySection = [showFinanceOverview, showPurchaseOverview, showApprovalTodo, showOtherOverview].some(Boolean);
 
   const greetingName = profile.displayName || profile.email;
-  const primaryRole = profile.primaryRole ? USER_ROLE_LABELS[profile.primaryRole] : '员工';
+  const primaryRole = USER_ROLE_LABELS[activeRole] ?? '员工';
   const lastLogin = formatDateTimeLocal(profile.lastLoginAt) ?? '暂无登录记录';
   const accessibleModules = (
     [
@@ -172,12 +180,32 @@ export default async function AdminDashboardPage() {
           <p className="text-xs text-muted-foreground">你好，{greetingName} · {primaryRole}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {financePermission.allowed ? (
+          {isFinanceOperator ? (
             <>
               <Button asChild size="sm" variant="outline">
                 <Link href="/finance">查看财务</Link>
               </Button>
-
+              <Button asChild size="sm">
+                <Link href="/workflow/todo">财务待办</Link>
+              </Button>
+            </>
+          ) : isApprovalAdmin ? (
+            <>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/purchases/approvals">审批处理</Link>
+              </Button>
+              <Button asChild size="sm">
+                <Link href="/workflow/todo">审批待办</Link>
+              </Button>
+            </>
+          ) : isSuperAdmin ? (
+            <>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/workflow/todo">查看流程</Link>
+              </Button>
+              <Button asChild size="sm">
+                <Link href="/purchases">查看采购</Link>
+              </Button>
             </>
           ) : (
             <>
@@ -214,7 +242,7 @@ export default async function AdminDashboardPage() {
         </Card>
       ) : (
         <div className="space-y-8">
-          {financePermission.allowed && (
+          {showFinanceOverview && (
             <DashboardSection title="财务概览" description="本月收支与最新记录">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <MetricCard label="本月收入" value={formatCurrency(financeStats?.totalIncome)} icon={<ArrowUpRight className="h-5 w-5 text-chart-5" />} tone="positive" />
@@ -272,7 +300,7 @@ export default async function AdminDashboardPage() {
             </DashboardSection>
           )}
 
-          {purchasePermissionAllowed && (
+          {showPurchaseOverview && (
             <DashboardSection title="采购与流程" description="采购申请与审批进度概览">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <MetricCard
@@ -289,16 +317,16 @@ export default async function AdminDashboardPage() {
                   tone="negative"
                 />
                 <MetricCard
-                  label="已批准金额"
+                  label="已入库金额"
                   value={formatCurrency(purchaseStats?.approvedAmount)}
-                  helper={`已批准 ${formatNumber(purchaseStats?.approvedCount)} 条`}
+                  helper={`已入库 ${formatNumber(purchaseStats?.approvedCount)} 条`}
                   icon={<ArrowUpRight className="h-5 w-5 text-chart-2" />}
                   tone="info"
                 />
                 <MetricCard
-                  label="已打款金额"
+                  label="历史已完成金额"
                   value={formatCurrency(purchaseStats?.paidAmount)}
-                  helper={`已打款 ${formatNumber(purchaseStats?.paidCount)} 条`}
+                  helper={`历史已完成 ${formatNumber(purchaseStats?.paidCount)} 条`}
                   icon={<TrendingUp className="h-5 w-5 text-chart-5" />}
                   tone="positive"
                 />
@@ -307,7 +335,7 @@ export default async function AdminDashboardPage() {
           )}
 
           {/* My Approvals Section */}
-          {pendingPurchases && pendingPurchases.items.length > 0 && (
+          {showApprovalTodo && pendingPurchases && pendingPurchases.items.length > 0 && (
             <DashboardSection title="我的待办" description="需要您处理的审批事项">
               <div className="grid gap-4">
                 {/* Pending Purchase Approvals */}
@@ -342,7 +370,7 @@ export default async function AdminDashboardPage() {
             </DashboardSection>
           )}
 
-          {(inventoryPermission.allowed || hrPermission.allowed) && (
+          {showOtherOverview && (
             <DashboardSection title="其他概览" description="模块精简展示，避免干扰">
               <div className="grid gap-4 md:grid-cols-2">
                 {inventoryPermission.allowed && (

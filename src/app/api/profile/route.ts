@@ -9,8 +9,9 @@ function buildUserShape(user: UserRecord) {
     email: user.email,
     role: user.role,
     displayName: user.display_name,
-    jobTitle: user.job_title,
+    gender: user.gender,
     phone: user.phone,
+    address: user.address,
     bio: user.bio,
     country: user.country,
     city: user.city,
@@ -61,8 +62,9 @@ export async function PUT(request: Request) {
     const body = await request.json().catch(() => ({}));
     const payload = {
       displayName: typeof body.displayName === 'string' ? body.displayName : null,
-      jobTitle: typeof body.jobTitle === 'string' ? body.jobTitle : null,
+      gender: typeof body.gender === 'string' ? body.gender : null,
       phone: typeof body.phone === 'string' ? body.phone : null,
+      address: typeof body.address === 'string' ? body.address : null,
       bio: typeof body.bio === 'string' ? body.bio : null,
       country: typeof body.country === 'string' ? body.country : null,
       city: typeof body.city === 'string' ? body.city : null,

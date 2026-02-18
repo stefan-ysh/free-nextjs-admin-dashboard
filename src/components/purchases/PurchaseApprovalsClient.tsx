@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 
 import PurchaseDetailModal from '@/components/purchases/PurchaseDetailModal';
 import PurchaseTable, { type PurchaseRowPermissions } from '@/components/purchases/PurchaseTable';
-import PurchasePayDialog from '@/components/purchases/PurchasePayDialog';
 import RejectionReasonDialog from '@/components/purchases/RejectionReasonDialog';
 import ApprovalCommentDialog from '@/components/purchases/ApprovalCommentDialog';
 import TransferApprovalDialog from '@/components/purchases/TransferApprovalDialog';
@@ -18,7 +17,6 @@ import {
   type PurchaseRecord,
   type PurchaseStatus,
   isPurchaseApprovable,
-  isPurchasePayable,
 } from '@/types/purchase';
 
 type PurchaseListResponse = {
@@ -46,7 +44,6 @@ type PermissionSnapshot = {
   canApprove: boolean;
   canTransfer: boolean;
   canReject: boolean;
-  canPay: boolean;
 };
 
 export default function PurchaseApprovalsClient() {
@@ -71,10 +68,6 @@ export default function PurchaseApprovalsClient() {
     open: false,
     purchase: null,
   });
-  const [payDialog, setPayDialog] = useState<{ open: boolean; purchase: PurchaseRecord | PurchaseDetail | null }>({
-    open: false,
-    purchase: null,
-  });
   const [approveDialog, setApproveDialog] = useState<{ open: boolean; purchase: PurchaseRecord | PurchaseDetail | null }>({
     open: false,
     purchase: null,
@@ -89,12 +82,11 @@ export default function PurchaseApprovalsClient() {
       canApprove: hasPermission('PURCHASE_APPROVE'),
       canTransfer: hasPermission('PURCHASE_APPROVE'),
       canReject: hasPermission('PURCHASE_REJECT'),
-      canPay: hasPermission('PURCHASE_PAY'),
     }),
     [hasPermission]
   );
 
-  const canAccess = permissions.canApprove || permissions.canReject || permissions.canPay;
+  const canAccess = permissions.canApprove || permissions.canReject;
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -218,15 +210,6 @@ export default function PurchaseApprovalsClient() {
     setRejectDialog({ open: false, purchase: null });
   };
 
-  const handlePay = useCallback((purchase: PurchaseRecord | PurchaseDetail) => {
-    setPayDialog({ open: true, purchase });
-  }, []);
-
-  const handlePayDialogClose = () => {
-    if (mutatingId && payDialog.purchase && mutatingId === payDialog.purchase.id) return;
-    setPayDialog({ open: false, purchase: null });
-  };
-
   const handleApproveDialogClose = () => {
     if (mutatingId && approveDialog.purchase && mutatingId === approveDialog.purchase.id) return;
     setApproveDialog({ open: false, purchase: null });
@@ -242,19 +225,6 @@ export default function PurchaseApprovalsClient() {
     );
     if (success) {
       setApproveDialog({ open: false, purchase: null });
-    }
-  };
-
-  const handlePaySubmit = async (amount: number, note?: string) => {
-    if (!payDialog.purchase) return;
-    const success = await performAction(
-      payDialog.purchase.id,
-      'pay',
-      { amount, note },
-      { successMessage: '已记录打款' }
-    );
-    if (success) {
-      setPayDialog({ open: false, purchase: null });
     }
   };
 
@@ -307,13 +277,13 @@ export default function PurchaseApprovalsClient() {
         dueAmount: purchase.totalAmount + (purchase.feeAmount ?? 0),
         purchaser: {
           id: purchase.purchaserId,
-          displayName: purchase.purchaserId,
+          displayName: purchase.purchaserName || '未知用户',
           employeeCode: null,
           department: null,
         },
         approver: null,
         pendingApprover: purchase.pendingApproverId
-          ? { id: purchase.pendingApproverId, displayName: purchase.pendingApproverId }
+          ? { id: purchase.pendingApproverId, displayName: purchase.pendingApproverName || '未分配' }
           : null,
         rejecter: null,
         payer: null,
@@ -340,13 +310,11 @@ export default function PurchaseApprovalsClient() {
       canApprove: permissions.canApprove && isPurchaseApprovable(purchase.status),
       canTransfer: permissions.canTransfer && isPurchaseApprovable(purchase.status),
       canReject: permissions.canReject && isPurchaseApprovable(purchase.status),
-      canPay:
-        permissions.canPay &&
-        isPurchasePayable(purchase.status) &&
-        purchase.reimbursementStatus === 'reimbursement_pending',
+      canPay: false,
       canSubmitReimbursement: false,
+      canReceive: false,
     }),
-    [permissions.canApprove, permissions.canPay, permissions.canReject, permissions.canTransfer]
+    [permissions.canApprove, permissions.canReject, permissions.canTransfer]
   );
 
   const handleManualRefresh = () => {
@@ -366,11 +334,9 @@ export default function PurchaseApprovalsClient() {
         permissions.canTransfer && isPurchaseApprovable(selectedPurchase.status as PurchaseStatus),
       canReject:
         permissions.canReject && isPurchaseApprovable(selectedPurchase.status as PurchaseStatus),
-      canPay:
-        permissions.canPay &&
-        isPurchasePayable(selectedPurchase.status as PurchaseStatus) &&
-        selectedPurchase.reimbursementStatus === 'reimbursement_pending',
+      canPay: false,
       canSubmitReimbursement: false,
+      canReceive: false,
     }
     : undefined;
 
@@ -385,7 +351,7 @@ export default function PurchaseApprovalsClient() {
   if (!canAccess) {
     return (
       <div className="alert-box alert-danger p-6 text-sm">
-        当前账户无权审批采购。需要 PURCHASE_APPROVE / PURCHASE_REJECT / PURCHASE_PAY 权限，请联系管理员。
+        当前账户无权审批采购。需要 PURCHASE_APPROVE / PURCHASE_REJECT 权限，请联系管理员。
       </div>
     );
   }
@@ -460,8 +426,9 @@ export default function PurchaseApprovalsClient() {
             onTransfer={handleTransfer}
             onReject={handleReject}
             onWithdraw={() => {}}
-            onPay={handlePay}
+            onPay={() => {}}
             onSubmitReimbursement={() => {}}
+            onReceive={() => {}}
           />
         </div>
       </div>
@@ -478,7 +445,6 @@ export default function PurchaseApprovalsClient() {
           onApprove={permissions.canApprove ? (purchase) => handleApprove(purchase) : undefined}
           onTransfer={permissions.canTransfer ? (purchase) => handleTransfer(purchase) : undefined}
           onReject={permissions.canReject ? (purchase) => handleReject(purchase) : undefined}
-          onPay={permissions.canPay ? (purchase) => handlePay(purchase) : undefined}
         />
       )}
 
@@ -488,16 +454,6 @@ export default function PurchaseApprovalsClient() {
         onSubmit={(reason) => handleRejectSubmit(reason)}
         defaultReason={rejectDialog.purchase?.rejectionReason ?? '资料不完整'}
         submitting={rejecting}
-      />
-
-      <PurchasePayDialog
-        open={payDialog.open}
-        purchase={payDialog.purchase}
-        onOpenChange={(open) => {
-          if (!open) handlePayDialogClose();
-        }}
-        onSubmit={handlePaySubmit}
-        busy={Boolean(mutatingId && payDialog.purchase && mutatingId === payDialog.purchase.id)}
       />
 
       <ApprovalCommentDialog

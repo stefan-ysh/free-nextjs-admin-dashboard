@@ -6,15 +6,12 @@ import PaymentQueueClient from '@/components/finance/PaymentQueueClient';
 export default async function FinancePaymentsPage() {
   const context = await requireCurrentUser();
   const permissionUser = await toPermissionUser(context.user);
-  const [canPay, canViewFinance] = await Promise.all([
-    checkPermission(permissionUser, Permissions.PURCHASE_PAY),
-    checkPermission(permissionUser, Permissions.FINANCE_VIEW_ALL),
-  ]);
+  const canPay = await checkPermission(permissionUser, Permissions.REIMBURSEMENT_PAY);
 
-  if (!canPay.allowed && !canViewFinance.allowed) {
+  if (!canPay.allowed) {
     return (
       <section className="surface-panel p-6">
-        <p className="text-sm text-muted-foreground">无权访问付款任务队列。</p>
+        <p className="text-sm text-muted-foreground">无权访问报销付款处理。</p>
       </section>
     );
   }

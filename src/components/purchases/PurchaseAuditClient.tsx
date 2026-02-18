@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 import DataState from '@/components/common/DataState';
 import { Button } from '@/components/ui/button';
@@ -84,10 +85,11 @@ export default function PurchaseAuditClient() {
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<PurchaseAuditLogItem[]>([]);
   const [total, setTotal] = useState(0);
+  const [groupByPurchase, setGroupByPurchase] = useState(true);
+  const [expandedPurchaseNumbers, setExpandedPurchaseNumbers] = useState<Record<string, boolean>>({});
 
   const canAccess = useMemo(
-    () =>
-      hasPermission('PURCHASE_VIEW_ALL') || hasPermission('PURCHASE_APPROVE') || hasPermission('PURCHASE_PAY'),
+    () => hasPermission('PURCHASE_AUDIT_VIEW'),
     [hasPermission]
   );
 
@@ -125,12 +127,47 @@ export default function PurchaseAuditClient() {
     }
   }, [permissionLoading, canAccess, fetchData]);
 
+  useEffect(() => {
+    if (!groupByPurchase) return;
+    const next: Record<string, boolean> = {};
+    for (const item of items) {
+      if (!(item.purchaseNumber in next)) {
+        next[item.purchaseNumber] = expandedPurchaseNumbers[item.purchaseNumber] ?? false;
+      }
+    }
+    setExpandedPurchaseNumbers(next);
+  }, [groupByPurchase, items]);
+
+  const groupedItems = useMemo(() => {
+    const map = new Map<string, PurchaseAuditLogItem[]>();
+    for (const item of items) {
+      const key = item.purchaseNumber;
+      const group = map.get(key);
+      if (group) {
+        group.push(item);
+      } else {
+        map.set(key, [item]);
+      }
+    }
+    return Array.from(map.entries()).map(([purchaseNumber, logs]) => {
+      const first = logs[0];
+      return {
+        purchaseNumber,
+        itemName: first?.itemName ?? '-',
+        latestCreatedAt: first?.createdAt ?? '',
+        latestAction: first?.action ?? 'submit',
+        count: logs.length,
+        logs,
+      };
+    });
+  }, [items]);
+
   if (permissionLoading) {
     return <DataState variant="loading" title="加载中" description="正在校验权限" className="min-h-[220px]" />;
   }
 
   if (!canAccess) {
-    return <DataState variant="error" title="无权访问" description="需要采购查看或审批权限" className="min-h-[220px]" />;
+    return <DataState variant="error" title="无权访问" description="仅审批管理员及超级管理员可访问" className="min-h-[220px]" />;
   }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -182,6 +219,9 @@ export default function PurchaseAuditClient() {
         <div className="mt-3 flex flex-wrap gap-2">
           <Button size="sm" onClick={() => { setPage(1); void fetchData(); }} disabled={loading}>查询</Button>
           <Button variant="outline" size="sm" onClick={() => exportCsv(items)} disabled={items.length === 0}>导出当前页</Button>
+          <Button variant={groupByPurchase ? 'default' : 'outline'} size="sm" onClick={() => setGroupByPurchase((v) => !v)}>
+            {groupByPurchase ? '已按单号归纳' : '按单号归纳'}
+          </Button>
         </div>
       </div>
 
@@ -202,17 +242,63 @@ export default function PurchaseAuditClient() {
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
-              <tr key={item.id} className="border-b border-border/40">
-                <td className="px-3 py-2">{toDateTime(item.createdAt)}</td>
-                <td className="px-3 py-2">{item.purchaseNumber}</td>
-                <td className="px-3 py-2">{item.itemName}</td>
-                <td className="px-3 py-2">{ACTION_LABELS[item.action] ?? item.action}</td>
-                <td className="px-3 py-2">{getPurchaseStatusText(item.fromStatus)} {'->'} {getPurchaseStatusText(item.toStatus)}</td>
-                <td className="px-3 py-2">{item.operatorName}</td>
-                <td className="px-3 py-2">{item.comment || '-'}</td>
-              </tr>
-            ))}
+            {groupByPurchase
+              ? groupedItems.map((group) => {
+                  const isExpanded = expandedPurchaseNumbers[group.purchaseNumber] ?? true;
+                  return (
+                    <Fragment key={`group-${group.purchaseNumber}`}>
+                      <tr className="border-b border-border/50 bg-muted/10">
+                        <td className="px-3 py-2">{toDateTime(group.latestCreatedAt)}</td>
+                        <td className="px-3 py-2">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 font-medium hover:text-primary"
+                            onClick={() =>
+                              setExpandedPurchaseNumbers((prev) => ({
+                                ...prev,
+                                [group.purchaseNumber]: !isExpanded,
+                              }))
+                            }
+                          >
+                            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            {group.purchaseNumber}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2">{group.itemName}</td>
+                        <td className="px-3 py-2">{ACTION_LABELS[group.latestAction] ?? group.latestAction}</td>
+                        <td className="px-3 py-2">共 {group.count} 条操作记录</td>
+                        <td className="px-3 py-2">-</td>
+                        <td className="px-3 py-2">点击单号展开/收起</td>
+                      </tr>
+                      {isExpanded
+                        ? group.logs.map((item) => (
+                            <tr key={item.id} className="border-b border-border/30 text-muted-foreground">
+                              <td className="px-3 py-2">{toDateTime(item.createdAt)}</td>
+                              <td className="px-3 py-2 pl-8">{item.purchaseNumber}</td>
+                              <td className="px-3 py-2">{item.itemName}</td>
+                              <td className="px-3 py-2">{ACTION_LABELS[item.action] ?? item.action}</td>
+                              <td className="px-3 py-2">
+                                {getPurchaseStatusText(item.fromStatus)} {'->'} {getPurchaseStatusText(item.toStatus)}
+                              </td>
+                              <td className="px-3 py-2">{item.operatorName}</td>
+                              <td className="px-3 py-2">{item.comment || '-'}</td>
+                            </tr>
+                          ))
+                        : null}
+                    </Fragment>
+                  );
+                })
+              : items.map((item) => (
+                  <tr key={item.id} className="border-b border-border/40">
+                    <td className="px-3 py-2">{toDateTime(item.createdAt)}</td>
+                    <td className="px-3 py-2">{item.purchaseNumber}</td>
+                    <td className="px-3 py-2">{item.itemName}</td>
+                    <td className="px-3 py-2">{ACTION_LABELS[item.action] ?? item.action}</td>
+                    <td className="px-3 py-2">{getPurchaseStatusText(item.fromStatus)} {'->'} {getPurchaseStatusText(item.toStatus)}</td>
+                    <td className="px-3 py-2">{item.operatorName}</td>
+                    <td className="px-3 py-2">{item.comment || '-'}</td>
+                  </tr>
+                ))}
           </tbody>
         </table>
         {!loading && items.length === 0 ? <p className="p-4 text-sm text-muted-foreground">暂无审计日志</p> : null}

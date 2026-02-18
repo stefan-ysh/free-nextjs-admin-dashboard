@@ -41,7 +41,7 @@ export interface InvoiceInfo {
 }
 
 // 财务记录接口
-export type FinanceSourceType = 'manual' | 'purchase' | 'import' | 'inventory';
+export type FinanceSourceType = 'manual' | 'reimbursement' | 'budget_adjustment' | 'inventory';
 export type FinanceRecordStatus = 'draft' | 'cleared';
 export type FinanceRecordMetadata = Record<string, unknown>;
 
@@ -75,7 +75,7 @@ export interface FinanceRecord {
   tags?: string[];                 // 标签
   sourceType?: FinanceSourceType;  // 数据来源
   purchaseId?: string | null;      // 关联采购记录
-  purchasePaymentId?: string | null; // 关联采购打款记录
+  reimbursementId?: string | null; // 关联报销记录
   inventoryMovementId?: string | null; // 关联库存流水
   metadata?: FinanceRecordMetadata; // 额外元数据(JSON)
 
@@ -170,4 +170,19 @@ export interface FinanceApiResponse<T> {
     total: number;
     totalPages: number;
   };
+}
+
+export type BudgetAdjustmentType = 'increase' | 'decrease';
+export type BudgetAdjustmentOrgType = 'school' | 'company';
+
+export interface BudgetAdjustmentRecord {
+  id: string;
+  organizationType: BudgetAdjustmentOrgType;
+  adjustmentType: BudgetAdjustmentType;
+  amount: number;
+  title: string;
+  note?: string | null;
+  occurredAt: string;
+  createdBy: string;
+  createdAt: string;
 }

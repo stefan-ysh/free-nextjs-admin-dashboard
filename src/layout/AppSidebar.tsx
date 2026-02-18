@@ -53,14 +53,17 @@ const navItems: NavItem[] = [
       "PURCHASE_VIEW_ALL",
       "PURCHASE_APPROVE",
       "PURCHASE_REJECT",
-      "PURCHASE_PAY",
+      "INVENTORY_OPERATE_INBOUND",
+      "INVENTORY_INBOUND_CREATE_OWN_PURCHASE_ONLY",
+      "REIMBURSEMENT_APPROVE",
+      "REIMBURSEMENT_PAY",
     ],
   },
 
   {
     icon: <FinanceIcon />,
     name: "财务中心",
-    requiredAnyPermissions: ["FINANCE_VIEW_ALL", "PURCHASE_PAY"],
+    requiredAnyPermissions: ["FINANCE_VIEW_ALL", "REIMBURSEMENT_PAY"],
     subItems: [
       {
         name: "收支流水",
@@ -70,7 +73,7 @@ const navItems: NavItem[] = [
       {
         name: "付款处理",
         path: "/finance/payments",
-        requiredPermission: "PURCHASE_PAY",
+        requiredPermission: "REIMBURSEMENT_PAY",
       },
     ],
   },
@@ -83,7 +86,6 @@ const navItems: NavItem[] = [
       "PURCHASE_VIEW_ALL",
       "PURCHASE_APPROVE",
       "PURCHASE_REJECT",
-      "PURCHASE_PAY",
     ],
     subItems: [
       {
@@ -99,12 +101,12 @@ const navItems: NavItem[] = [
       {
         name: "进度监控",
         path: "/purchases/monitor",
-        requiredAnyPermissions: ["PURCHASE_VIEW_ALL", "PURCHASE_APPROVE", "PURCHASE_REJECT", "PURCHASE_PAY"],
+        requiredPermission: "PURCHASE_MONITOR_VIEW",
       },
       {
         name: "审计记录",
         path: "/purchases/audit",
-        requiredAnyPermissions: ["PURCHASE_VIEW_ALL", "PURCHASE_APPROVE", "PURCHASE_PAY"],
+        requiredPermission: "PURCHASE_AUDIT_VIEW",
       },
     ],
   },
@@ -136,6 +138,11 @@ const navItems: NavItem[] = [
     icon: <InventoryIcon />,
     name: "库存管理",
     subItems: [
+      {
+        name: "到货入库",
+        path: "/inventory/inbound",
+        requiredAnyPermissions: ["INVENTORY_OPERATE_INBOUND", "INVENTORY_INBOUND_CREATE_OWN_PURCHASE_ONLY"],
+      },
       {
         name: "库存总览",
         path: "/inventory",
@@ -274,9 +281,11 @@ const AppSidebar: React.FC = () => {
   const refreshTodoCount = useCallback(async () => {
     if (permissionLoading) return;
     const canTodo = [
+      "PURCHASE_CREATE",
       "PURCHASE_APPROVE",
       "PURCHASE_REJECT",
-      "PURCHASE_PAY",
+      "INVENTORY_OPERATE_INBOUND",
+      "INVENTORY_INBOUND_CREATE_OWN_PURCHASE_ONLY",
       "REIMBURSEMENT_APPROVE",
       "REIMBURSEMENT_PAY",
     ].some((perm) =>
@@ -287,15 +296,22 @@ const AppSidebar: React.FC = () => {
       return;
     }
 
-    const canPay = hasPermission("PURCHASE_PAY");
+    const canInbound =
+      hasPermission("INVENTORY_OPERATE_INBOUND") ||
+      hasPermission("INVENTORY_INBOUND_CREATE_OWN_PURCHASE_ONLY");
+    const canPurchaseCreate = hasPermission("PURCHASE_CREATE");
     const canReimbursementApprove = hasPermission("REIMBURSEMENT_APPROVE");
     const canReimbursementPay = hasPermission("REIMBURSEMENT_PAY");
-    const [approvalRes, paymentRes, reimbursementApprovalRes, reimbursementPayRes] = await Promise.allSettled([
+    const showReimbursementApprovals = canReimbursementApprove && !canReimbursementPay;
+    const [approvalRes, inboundRes, rejectedRes, reimbursementApprovalRes, reimbursementPayRes] = await Promise.allSettled([
       fetch("/api/purchases/approvals?page=1&pageSize=1", { headers: { Accept: "application/json" } }),
-      canPay
-        ? fetch("/api/finance/payments?status=pending&page=1&pageSize=1", { headers: { Accept: "application/json" } })
+      canInbound
+        ? fetch("/api/purchases?status=pending_inbound&page=1&pageSize=1", { headers: { Accept: "application/json" } })
         : Promise.resolve(null),
-      canReimbursementApprove
+      canPurchaseCreate
+        ? fetch("/api/purchases?status=rejected&page=1&pageSize=1", { headers: { Accept: "application/json" } })
+        : Promise.resolve(null),
+      showReimbursementApprovals
         ? fetch("/api/reimbursements?scope=approval&page=1&pageSize=1", { headers: { Accept: "application/json" } })
         : Promise.resolve(null),
       canReimbursementPay
@@ -313,18 +329,28 @@ const AppSidebar: React.FC = () => {
       }
     }
 
-    let payments = 0;
-    if (canPay && paymentRes.status === "fulfilled" && paymentRes.value) {
-      const payload = (await paymentRes.value.json().catch(() => null)) as
+    let inbound = 0;
+    if (canInbound && inboundRes.status === "fulfilled" && inboundRes.value) {
+      const payload = (await inboundRes.value.json().catch(() => null)) as
         | { success?: boolean; data?: { total?: number } }
         | null;
-      if (paymentRes.value.ok && payload?.success) {
-        payments = Number(payload.data?.total ?? 0);
+      if (inboundRes.value.ok && payload?.success) {
+        inbound = Number(payload.data?.total ?? 0);
+      }
+    }
+
+    let rejected = 0;
+    if (canPurchaseCreate && rejectedRes.status === "fulfilled" && rejectedRes.value) {
+      const payload = (await rejectedRes.value.json().catch(() => null)) as
+        | { success?: boolean; data?: { total?: number } }
+        | null;
+      if (rejectedRes.value.ok && payload?.success) {
+        rejected = Number(payload.data?.total ?? 0);
       }
     }
 
     let reimbursementApprovals = 0;
-    if (canReimbursementApprove && reimbursementApprovalRes.status === "fulfilled" && reimbursementApprovalRes.value) {
+    if (showReimbursementApprovals && reimbursementApprovalRes.status === "fulfilled" && reimbursementApprovalRes.value) {
       const payload = (await reimbursementApprovalRes.value.json().catch(() => null)) as
         | { success?: boolean; data?: { total?: number } }
         | null;
@@ -343,7 +369,7 @@ const AppSidebar: React.FC = () => {
       }
     }
 
-    setTodoCount(Math.max(0, approvals + payments + reimbursementApprovals + reimbursementPays));
+    setTodoCount(Math.max(0, approvals + inbound + rejected + reimbursementApprovals + reimbursementPays));
   }, [hasPermission, permissionLoading]);
 
   useEffect(() => {

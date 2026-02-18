@@ -6,6 +6,7 @@ import { logAuthAudit } from '@/lib/auth/audit';
 import { getEmployeeById } from '@/lib/hr/employees';
 import { updateUserRoles } from '@/lib/users';
 import { checkPermission, Permissions } from '@/lib/permissions';
+import { ASSIGNABLE_USER_ROLES } from '@/constants/user-roles';
 import { UserRole } from '@/types/user';
 
 function unauthorizedResponse() {
@@ -24,7 +25,7 @@ function badRequestResponse(message: string) {
   return NextResponse.json({ success: false, error: message }, { status: 400 });
 }
 
-const ALLOWED_ROLE_VALUES = new Set<string>(Object.values(UserRole));
+const ALLOWED_ROLE_VALUES = new Set<string>(ASSIGNABLE_USER_ROLES);
 
 function normalizeRoles(input: unknown): UserRole[] {
   if (!Array.isArray(input)) return [];

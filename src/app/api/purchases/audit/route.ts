@@ -24,14 +24,8 @@ export async function GET(request: Request) {
   try {
     const context = await requireCurrentUser();
     const permissionUser = await toPermissionUser(context.user);
-
-    const [canViewAll, canApprove, canPay] = await Promise.all([
-      checkPermission(permissionUser, Permissions.PURCHASE_VIEW_ALL),
-      checkPermission(permissionUser, Permissions.PURCHASE_APPROVE),
-      checkPermission(permissionUser, Permissions.PURCHASE_PAY),
-    ]);
-
-    if (!canViewAll.allowed && !canApprove.allowed && !canPay.allowed) {
+    const canAudit = await checkPermission(permissionUser, Permissions.PURCHASE_AUDIT_VIEW);
+    if (!canAudit.allowed) {
       return forbiddenResponse();
     }
 

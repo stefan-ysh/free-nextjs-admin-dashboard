@@ -110,6 +110,8 @@ export default function MobileNotificationsClient() {
       all: items.length,
       purchase_submitted: 0,
       purchase_approved: 0,
+      purchase_rejected: 0,
+      purchase_transferred: 0,
       reimbursement_submitted: 0,
       purchase_paid: 0,
       payment_issue_marked: 0,
@@ -126,8 +128,10 @@ export default function MobileNotificationsClient() {
   const typeLabel: Record<string, string> = {
     purchase_submitted: '待审批',
     purchase_approved: '已审批',
+    purchase_rejected: '已驳回',
+    purchase_transferred: '转审',
     reimbursement_submitted: '待财务',
-    purchase_paid: '已打款',
+    purchase_paid: '已完成',
     payment_issue_marked: '付款异常',
     payment_issue_resolved: '异常解除',
   };
@@ -163,8 +167,10 @@ export default function MobileNotificationsClient() {
             { key: 'all', label: '全部', count: counters.all },
             { key: 'purchase_submitted', label: '待审批', count: counters.purchase_submitted },
             { key: 'purchase_approved', label: '已审批', count: counters.purchase_approved },
+            { key: 'purchase_rejected', label: '已驳回', count: counters.purchase_rejected },
+            { key: 'purchase_transferred', label: '转审', count: counters.purchase_transferred },
             { key: 'reimbursement_submitted', label: '待财务', count: counters.reimbursement_submitted },
-            { key: 'purchase_paid', label: '已打款', count: counters.purchase_paid },
+            { key: 'purchase_paid', label: '已完成', count: counters.purchase_paid },
             { key: 'payment_issue_marked', label: '付款异常', count: counters.payment_issue_marked },
             { key: 'payment_issue_resolved', label: '异常解除', count: counters.payment_issue_resolved },
           ].map((item) => (

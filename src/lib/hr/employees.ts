@@ -9,9 +9,6 @@ import { invalidateSessionsForUser } from '@/lib/auth/session';
 import type { UserRole } from '@/types/user';
 
 import { ensureHrSchema } from './schema';
-import type { JobGradeRecord } from './types';
-export type { DepartmentRecord, JobGradeRecord } from './types';
-
 export type EmploymentStatus = 'active' | 'on_leave' | 'terminated';
 export type EmployeeGender = 'male' | 'female' | 'other';
 
@@ -30,22 +27,11 @@ export type EmployeeRecord = {
   displayName: string | null;
   email: string | null;
   phone: string | null;
-  department: string | null;
-  departmentId: string | null;
-  departmentCode: string | null;
-  jobTitle: string | null;
-  jobGradeId: string | null;
-  jobGrade: string | null;
-  jobGradeLevel: number | null;
-  nationalId: string | null;
   gender: EmployeeGender | null;
   address: string | null;
-  organization: string | null;
-  educationBackground: string | null;
   employmentStatus: EmploymentStatus;
   hireDate: string | null;
   terminationDate: string | null;
-  managerId: string | null;
   location: string | null;
   customFields: Record<string, unknown>;
   createdAt: string;
@@ -73,7 +59,6 @@ export type EmployeeDashboardStats = {
     id: string;
     employeeId: string;
     employeeName: string;
-    department: string | null;
     previousStatus: EmploymentStatus;
     nextStatus: EmploymentStatus;
     note: string | null;
@@ -97,34 +82,21 @@ const BASE_EMPLOYEE_SELECT = `
     he.display_name,
     he.email,
     he.phone,
-    he.department,
-    he.department_id,
-    d.code AS department_code,
-    he.job_title,
-    he.job_grade_id,
-    j.name AS job_grade_name,
-    j.level AS job_grade_level,
-    he.national_id,
     he.gender,
     he.address,
-    he.organization,
-    he.education_background,
     he.employment_status,
     he.hire_date,
     he.termination_date,
-    he.manager_id,
     he.location,
     he.custom_fields,
     he.created_at,
     he.updated_at
   FROM hr_employees he
-  LEFT JOIN hr_departments d ON d.id = he.department_id
-  LEFT JOIN hr_job_grades j ON j.id = he.job_grade_id
 `;
 
 type EmployeeFilterOptions = Pick<
   ListEmployeesParams,
-  'search' | 'department' | 'departmentId' | 'jobGradeId' | 'status'
+  'search' | 'status'
 >;
 
 type MatchField = 'id' | 'employeeCode' | 'email';
@@ -138,22 +110,11 @@ type RawEmployeeRow = RowDataPacket & {
   display_name: string | null;
   email: string | null;
   phone: string | null;
-  department: string | null;
-  department_id: string | null;
-  department_code: string | null;
-  job_title: string | null;
-  job_grade_id: string | null;
-  job_grade_name: string | null;
-  job_grade_level: number | null;
-  national_id: string | null;
   gender: string | null;
   address: string | null;
-  organization: string | null;
-  education_background: string | null;
   employment_status: EmploymentStatus;
   hire_date: string | null;
   termination_date: string | null;
-  manager_id: string | null;
   location: string | null;
   custom_fields: unknown;
   created_at: string;
@@ -183,7 +144,6 @@ type RecentChangeRow = RowDataPacket & {
   id: string;
   employee_id: string;
   display_name: string | null;
-  department: string | null;
   previous_status: EmploymentStatus;
   next_status: EmploymentStatus;
   note: string | null;
@@ -255,22 +215,11 @@ function mapEmployee(row: RawEmployeeRow | undefined): EmployeeRecord | null {
     displayName: row.display_name,
     email: row.email,
     phone: row.phone,
-    department: row.department ?? row.department_code ?? null,
-    departmentId: row.department_id,
-    departmentCode: row.department_code,
-    jobTitle: row.job_title,
-    jobGradeId: row.job_grade_id,
-    jobGrade: row.job_grade_name,
-    jobGradeLevel: row.job_grade_level ?? null,
-    nationalId: row.national_id,
     gender: normalizeGenderValue(row.gender),
     address: row.address,
-    organization: row.organization,
-    educationBackground: row.education_background,
     employmentStatus: row.employment_status,
     hireDate,
     terminationDate,
-    managerId: row.manager_id,
     location: row.location,
     customFields: parseJsonObject(row.custom_fields),
     createdAt,
@@ -414,43 +363,12 @@ async function insertStatusLog(params: {
   `;
 }
 
-async function resolveDepartmentId(value: string | null | undefined): Promise<string | null> {
-  if (value == null) return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const [rows] = await pool.query<Array<RowDataPacket & { id: string }>>(
-    'SELECT id FROM hr_departments WHERE id = ? LIMIT 1',
-    [trimmed]
-  );
-  if (!rows[0]) {
-    throw new Error('DEPARTMENT_NOT_FOUND');
-  }
-  return trimmed;
-}
-
-async function resolveJobGradeId(value: string | null | undefined): Promise<string | null> {
-  if (value == null) return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const [rows] = await pool.query<Array<RowDataPacket & { id: string }>>(
-    'SELECT id FROM hr_job_grades WHERE id = ? LIMIT 1',
-    [trimmed]
-  );
-  if (!rows[0]) {
-    throw new Error('JOB_GRADE_NOT_FOUND');
-  }
-  return trimmed;
-}
-
 export type ListEmployeesParams = {
   search?: string;
-  department?: string | null;
-  departmentId?: string | null;
-  jobGradeId?: string | null;
   status?: EmploymentStatus | 'all' | null;
   page?: number;
   pageSize?: number;
-  sortBy?: 'createdAt' | 'updatedAt' | 'displayName' | 'department' | 'status';
+  sortBy?: 'createdAt' | 'updatedAt' | 'displayName' | 'status';
   sortOrder?: 'asc' | 'desc';
 };
 
@@ -465,7 +383,6 @@ const SORT_COLUMN_MAP: Record<NonNullable<ListEmployeesParams['sortBy']>, string
   createdAt: 'created_at',
   updatedAt: 'updated_at',
   displayName: 'display_name',
-  department: 'department',
   status: 'employment_status',
 };
 
@@ -481,21 +398,6 @@ function buildEmployeeWhereClause(filters: EmployeeFilterOptions = {}) {
     ].join(' OR ');
     conditions.push(`(${searchCondition})`);
     values.push(search, search);
-  }
-
-  if (filters.department) {
-    conditions.push('he.department = ?');
-    values.push(filters.department.trim());
-  }
-
-  if (filters.departmentId) {
-    conditions.push('he.department_id = ?');
-    values.push(filters.departmentId.trim());
-  }
-
-  if (filters.jobGradeId) {
-    conditions.push('he.job_grade_id = ?');
-    values.push(filters.jobGradeId.trim());
   }
 
   if (filters.status && filters.status !== 'all') {
@@ -573,21 +475,11 @@ const EMPLOYEE_EXPORT_COLUMNS: EmployeeExportColumn[] = [
   { key: 'displayName', header: '姓名' },
   { key: 'email', header: '邮箱' },
   { key: 'phone', header: '电话' },
-  { key: 'department', header: '部门名称' },
-  { key: 'departmentCode', header: '部门编码' },
-  { key: 'departmentId', header: '部门ID' },
-  { key: 'jobTitle', header: '职位' },
-  { key: 'jobGrade', header: '职级名称' },
-  { key: 'jobGradeLevel', header: '职级等级' },
-  { key: 'jobGradeId', header: '职级ID' },
-  { key: 'nationalId', header: '身份证号' },
   {
     key: 'gender',
     header: '性别',
     transform: (value) => (value ? EMPLOYEE_GENDER_LABELS[value as EmployeeGender] ?? (value as string) : ''),
   },
-  { key: 'organization', header: '所在机关' },
-  { key: 'educationBackground', header: '教育背景' },
   { key: 'address', header: '住址' },
   { key: 'employmentStatus', header: '员工状态' },
   {
@@ -600,7 +492,6 @@ const EMPLOYEE_EXPORT_COLUMNS: EmployeeExportColumn[] = [
     header: '离职日期',
     transform: (value) => (value ? formatDateTimeLocal(value as string) ?? (value as string) : ''),
   },
-  { key: 'managerId', header: '直属主管ID' },
   { key: 'location', header: '工作地点' },
   { key: 'userId', header: '用户ID' },
   {
@@ -652,19 +543,11 @@ export type CreateEmployeeInput = {
   email?: string | null;
   phone?: string | null;
   initialPassword?: string | null;
-  department?: string | null;
-  departmentId?: string | null;
-  jobTitle?: string | null;
-  jobGradeId?: string | null;
-  nationalId?: string | null;
   gender?: EmployeeGender | null;
   address?: string | null;
-  organization?: string | null;
-  educationBackground?: string | null;
   employmentStatus?: EmploymentStatus;
   hireDate?: string | null;
   terminationDate?: string | null;
-  managerId?: string | null;
   location?: string | null;
   customFields?: Record<string, unknown> | null;
 };
@@ -712,19 +595,11 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
     displayName: requireText(input.displayName, 'display_name'),
     email: sanitizeNullableText(input.email ?? null),
     phone: sanitizeNullableText(input.phone ?? null),
-    department: sanitizeNullableText(input.department ?? null),
-    departmentId: await resolveDepartmentId(input.departmentId),
-    jobTitle: sanitizeNullableText(input.jobTitle ?? null),
-    jobGradeId: await resolveJobGradeId(input.jobGradeId),
-    nationalId: sanitizeNullableText(input.nationalId ?? null),
     gender: normalizeGenderValue(input.gender ?? null),
     address: sanitizeNullableText(input.address ?? null),
-    organization: sanitizeNullableText(input.organization ?? null),
-    educationBackground: sanitizeNullableText(input.educationBackground ?? null),
     employmentStatus: sanitizeStatus(input.employmentStatus ?? 'active'),
     hireDate: sanitizeDate(input.hireDate ?? null),
     terminationDate: sanitizeDate(input.terminationDate ?? null),
-    managerId: sanitizeNullableText(input.managerId ?? null),
     location: sanitizeNullableText(input.location ?? null),
     customFields: input.customFields && typeof input.customFields === 'object' ? input.customFields : {},
   };
@@ -741,19 +616,11 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
       email,
       phone,
       password_hash,
-      department,
-      department_id,
-      job_title,
-      job_grade_id,
-      national_id,
       gender,
       address,
-      organization,
-      education_background,
       employment_status,
       hire_date,
       termination_date,
-      manager_id,
       location,
       custom_fields
     )
@@ -764,19 +631,11 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
       ${payload.email},
       ${payload.phone},
       ${passwordHash},
-      ${payload.department},
-      ${payload.departmentId},
-      ${payload.jobTitle},
-      ${payload.jobGradeId},
-      ${payload.nationalId},
       ${payload.gender},
       ${payload.address},
-      ${payload.organization},
-      ${payload.educationBackground},
       ${payload.employmentStatus},
       ${payload.hireDate},
       ${payload.terminationDate},
-      ${payload.managerId},
       ${payload.location},
       ${JSON.stringify(payload.customFields)}
     )
@@ -837,35 +696,13 @@ export async function updateEmployee(id: string, input: UpdateEmployeeInput): Pr
   if (input.phone !== undefined) {
     pushField('phone', sanitizeNullableText(input.phone ?? null));
   }
-  if (input.department !== undefined) {
-    pushField('department', sanitizeNullableText(input.department ?? null));
-  }
-  if (input.departmentId !== undefined) {
-    const departmentId = await resolveDepartmentId(input.departmentId);
-    pushField('department_id', departmentId);
-  }
-  if (input.jobTitle !== undefined) {
-    pushField('job_title', sanitizeNullableText(input.jobTitle ?? null));
-  }
-  if (input.jobGradeId !== undefined) {
-    const jobGradeId = await resolveJobGradeId(input.jobGradeId);
-    pushField('job_grade_id', jobGradeId);
-  }
-  if (input.nationalId !== undefined) {
-    pushField('national_id', sanitizeNullableText(input.nationalId ?? null));
-  }
   if (input.gender !== undefined) {
-    pushField('gender', normalizeGenderValue(input.gender));
+    pushField('gender', normalizeGenderValue(input.gender ?? null));
   }
   if (input.address !== undefined) {
     pushField('address', sanitizeNullableText(input.address ?? null));
   }
-  if (input.organization !== undefined) {
-    pushField('organization', sanitizeNullableText(input.organization ?? null));
-  }
-  if (input.educationBackground !== undefined) {
-    pushField('education_background', sanitizeNullableText(input.educationBackground ?? null));
-  }
+
   if (input.employmentStatus !== undefined) {
     const normalizedStatus = sanitizeStatus(input.employmentStatus);
     const [statusRows] = await pool.query<Array<RowDataPacket & { employment_status: EmploymentStatus }>>(
@@ -897,9 +734,6 @@ export async function updateEmployee(id: string, input: UpdateEmployeeInput): Pr
   }
   if (input.terminationDate !== undefined) {
     pushField('termination_date', sanitizeDate(input.terminationDate ?? null));
-  }
-  if (input.managerId !== undefined) {
-    pushField('manager_id', sanitizeNullableText(input.managerId ?? null));
   }
   if (input.location !== undefined) {
     pushField('location', sanitizeNullableText(input.location ?? null));
@@ -1032,25 +866,6 @@ export async function setEmployeeStatus(id: string, status: EmploymentStatus): P
   return updateEmployee(id, { employmentStatus: status });
 }
 
-export async function getAvailableDepartments(): Promise<string[]> {
-	await ensureHrSchema();
-	const result = await mysqlQuery<RowDataPacket & { department: string }>`
-    SELECT DISTINCT department
-    FROM hr_employees
-    WHERE department IS NOT NULL AND TRIM(department) != ''
-    ORDER BY department ASC
-  `;
-	return result.rows.map((row) => row.department);
-}
-
-export async function listJobGradeOptions(): Promise<Array<Pick<JobGradeRecord, 'id' | 'name' | 'code' | 'level'>>> {
-  await ensureHrSchema();
-  const [rows] = await pool.query<
-    Array<RowDataPacket & { id: string; name: string; code: string | null; level: number | null }>
-  >(`SELECT id, name, code, level FROM hr_job_grades ORDER BY level ASC, name ASC`);
-  return rows.map((row) => ({ id: row.id, name: row.name, code: row.code, level: row.level ?? null }));
-}
-
 export async function listEmployeeStatusLogs(employeeId: string, limit = 20): Promise<EmployeeStatusLogRecord[]> {
   await ensureHrSchema();
   const normalizedLimit = Math.min(Math.max(limit, 1), 100);
@@ -1067,8 +882,6 @@ export async function listEmployeeStatusLogs(employeeId: string, limit = 20): Pr
 
 export type BulkEmployeeImportRow = Partial<CreateEmployeeInput> & {
   id?: string | null;
-  departmentCode?: string | null;
-  jobGradeCode?: string | null;
   matchBy?: MatchField[];
   statusChangeNote?: string | null;
 };
@@ -1176,7 +989,6 @@ export async function getEmployeeDashboardStats(limit = 6): Promise<EmployeeDash
        l.id,
        l.employee_id,
        he.display_name,
-       he.department,
        l.previous_status,
        l.next_status,
        l.note,
@@ -1208,7 +1020,6 @@ export async function getEmployeeDashboardStats(limit = 6): Promise<EmployeeDash
         id: row.id,
         employeeId: row.employee_id,
         employeeName: row.display_name?.trim() || '未命名员工',
-        department: row.department ?? null,
         previousStatus: row.previous_status,
         nextStatus: row.next_status,
         note: row.note ?? null,
@@ -1299,49 +1110,11 @@ async function findEmployeeIdByPhone(phone: string): Promise<string | null> {
   return rows[0]?.id ?? null;
 }
 
-async function findDepartmentIdByCode(code: string | null | undefined): Promise<string | null> {
-  if (!code) return null;
-  const normalized = code.trim().toUpperCase();
-  if (!normalized) return null;
-  const [rows] = await pool.query<Array<RowDataPacket & { id: string }>>(
-    'SELECT id FROM hr_departments WHERE UPPER(code) = ? LIMIT 1',
-    [normalized]
-  );
-  return rows[0]?.id ?? null;
-}
-
-async function findJobGradeIdByCode(code: string | null | undefined): Promise<string | null> {
-  if (!code) return null;
-  const normalized = code.trim().toUpperCase();
-  if (!normalized) return null;
-  const [rows] = await pool.query<Array<RowDataPacket & { id: string }>>(
-    'SELECT id FROM hr_job_grades WHERE UPPER(code) = ? LIMIT 1',
-    [normalized]
-  );
-  return rows[0]?.id ?? null;
-}
-
 async function normalizeBulkImportRow(
   row: BulkEmployeeImportRow,
   options: BulkEmployeeImportOptions
 ): Promise<CreateEmployeeInput> {
   const resolvedDisplayName = sanitizeNullableText(row.displayName ?? null) ?? '未命名员工';
-
-  let departmentId = row.departmentId ?? null;
-  if (!departmentId && row.departmentCode) {
-    departmentId = await findDepartmentIdByCode(row.departmentCode);
-    if (!departmentId && row.departmentCode) {
-      throw new Error(`DEPARTMENT_CODE_NOT_FOUND:${row.departmentCode}`);
-    }
-  }
-
-  let jobGradeId = row.jobGradeId ?? null;
-  if (!jobGradeId && row.jobGradeCode) {
-    jobGradeId = await findJobGradeIdByCode(row.jobGradeCode);
-    if (!jobGradeId && row.jobGradeCode) {
-      throw new Error(`JOB_GRADE_CODE_NOT_FOUND:${row.jobGradeCode}`);
-    }
-  }
 
   const customFields =
     row.customFields && typeof row.customFields === 'object' && !Array.isArray(row.customFields)
@@ -1360,19 +1133,11 @@ async function normalizeBulkImportRow(
     email: row.email ?? null,
     phone: row.phone ?? null,
     initialPassword: resolvedPassword,
-    department: row.department ?? null,
-    departmentId,
-    jobTitle: row.jobTitle ?? null,
-    jobGradeId,
-    nationalId: row.nationalId ?? null,
     gender: normalizeGenderValue(row.gender ?? null),
     address: row.address ?? null,
-    organization: row.organization ?? null,
-    educationBackground: row.educationBackground ?? null,
     employmentStatus: row.employmentStatus ?? options.defaultStatus ?? 'active',
     hireDate: row.hireDate ?? null,
     terminationDate: row.terminationDate ?? null,
-    managerId: row.managerId ?? null,
     location: row.location ?? null,
     customFields,
   };

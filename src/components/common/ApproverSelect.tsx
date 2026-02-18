@@ -11,6 +11,10 @@ import {
 import { UserProfile } from '@/types/user';
 import { USER_ROLE_LABELS } from '@/constants/user-roles';
 
+type ApproverOption = UserProfile & {
+    pendingApprovalCount?: number;
+};
+
 interface ApproverSelectProps {
     value?: string | null;
     onChange: (value: string) => void;
@@ -30,7 +34,7 @@ export default function ApproverSelect({
     placeholder = '选择审批人...',
     className,
 }: ApproverSelectProps) {
-    const [users, setUsers] = useState<UserProfile[]>([]);
+    const [users, setUsers] = useState<ApproverOption[]>([]);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -54,6 +58,12 @@ export default function ApproverSelect({
         fetchApprovers();
     }, []);
 
+    useEffect(() => {
+        if (!value && users.length > 0 && !disabled) {
+            onChange(users[0].id);
+        }
+    }, [disabled, onChange, users, value]);
+
     return (
         <Select
             value={value || undefined}
@@ -70,11 +80,12 @@ export default function ApproverSelect({
                     return (
                         <SelectItem key={user.id} value={user.id}>
                             <span>{displayName}</span>
-                            {user.primaryRole && (
-                                <span className="ml-1 text-xs text-muted-foreground">
-                                    ({USER_ROLE_LABELS[user.primaryRole] || user.primaryRole})
-                                </span>
-                            )}
+                            <span className="ml-1 text-xs text-muted-foreground">
+                                ({USER_ROLE_LABELS[user.primaryRole] || user.primaryRole})
+                                {' · '}
+                                待审 {Number(user.pendingApprovalCount ?? 0)}
+                                {users[0]?.id === user.id ? ' · 推荐' : ''}
+                            </span>
                         </SelectItem>
                     );
                 })}

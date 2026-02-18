@@ -36,6 +36,7 @@ type PurchaseRowPermissions = {
 	canPay: boolean;
 	canSubmitReimbursement: boolean;
 	canWithdraw: boolean;
+	canReceive: boolean;
 };
 
 type PurchaseTableProps = {
@@ -55,11 +56,17 @@ type PurchaseTableProps = {
 	onWithdraw: (purchase: PurchaseRecord) => void;
 	onPay: (purchase: PurchaseRecord) => void;
 	onSubmitReimbursement: (purchase: PurchaseRecord) => void;
+	onReceive: (purchase: PurchaseRecord) => void;
 	getRowClassName?: (purchase: PurchaseRecord) => string;
 };
 
 function formatDate(value: string): string {
 	return formatDateOnly(value) ?? value;
+}
+
+function formatQuantity(value: number): string {
+	if (!Number.isFinite(value)) return '0';
+	return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
 }
 
 export default function PurchaseTable({
@@ -79,6 +86,7 @@ export default function PurchaseTable({
 	onWithdraw,
 	onPay,
 	onSubmitReimbursement,
+	onReceive,
 	getRowClassName,
 }: PurchaseTableProps) {
 	const scrollContainerClassName = cn(
@@ -117,12 +125,18 @@ export default function PurchaseTable({
 						const permissions = getRowPermissions(purchase);
 						const rowBusy = mutatingId === purchase.id;
 						const rowClassName = getRowClassName?.(purchase);
+						const inboundQuantity = Number(purchase.inboundQuantity ?? 0);
+						const totalQuantity = Number(purchase.quantity ?? 0);
+						const remainingInboundQuantity = Math.max(0, totalQuantity - inboundQuantity);
 						return (
 							<div key={purchase.id} className={cn("rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm", rowClassName)}>
 								<div className="flex items-start justify-between gap-3">
 									<div>
 										<div className="text-sm font-semibold text-foreground">{purchase.itemName}</div>
 										<div className="mt-1 text-xs text-muted-foreground">单号：{purchase.purchaseNumber}</div>
+										<div className="mt-1 text-xs text-muted-foreground">
+											入库进度：{formatQuantity(inboundQuantity)} / {formatQuantity(totalQuantity)}（剩余 {formatQuantity(remainingInboundQuantity)}）
+										</div>
 									</div>
 									<PurchaseStatusBadge status={purchase.status} />
 								</div>
@@ -147,12 +161,21 @@ export default function PurchaseTable({
 									</div>
 								</div>
 								<div className="mt-4 flex flex-wrap justify-end gap-2 text-xs">
-									<button
-										onClick={() => onView(purchase)}
+										<button
+											onClick={() => onView(purchase)}
 										className="rounded-lg border border-border px-3 py-1 text-foreground hover:bg-muted/50"
 									>
 										详情
-									</button>
+										</button>
+									{permissions.canReceive && (
+										<button
+											onClick={() => onReceive(purchase)}
+											disabled={rowBusy}
+											className="rounded-lg border border-primary px-3 py-1 text-primary hover:bg-primary/10 disabled:opacity-60"
+										>
+											到货入库
+										</button>
+									)}
 									{permissions.canEdit && (
 										<button
 											onClick={() => onEdit(purchase)}
@@ -271,11 +294,17 @@ export default function PurchaseTable({
 							const permissions = getRowPermissions(purchase);
 							const rowBusy = mutatingId === purchase.id;
 							const rowClassName = getRowClassName?.(purchase);
+							const inboundQuantity = Number(purchase.inboundQuantity ?? 0);
+							const totalQuantity = Number(purchase.quantity ?? 0);
+							const remainingInboundQuantity = Math.max(0, totalQuantity - inboundQuantity);
 							return (
 								<TableRow key={purchase.id} className={cn("text-foreground", rowClassName)}>
 									<TableCell className="px-4 py-4 text-sm text-foreground whitespace-normal">
 										<div className="font-semibold text-foreground">{purchase.purchaseNumber}</div>
 										<div className="text-xs text-muted-foreground">{purchase.itemName}</div>
+										<div className="mt-1 text-xs text-muted-foreground">
+											入库进度：{formatQuantity(inboundQuantity)} / {formatQuantity(totalQuantity)}（剩余 {formatQuantity(remainingInboundQuantity)}）
+										</div>
 									</TableCell>
 									<TableCell className="px-4 py-4 font-semibold text-foreground">
 										{currencyFormatter.format(purchase.totalAmount)}
@@ -300,6 +329,15 @@ export default function PurchaseTable({
 											>
 												详情
 											</button>
+											{permissions.canReceive && (
+												<button
+													onClick={() => onReceive(purchase)}
+													disabled={rowBusy}
+													className="rounded-lg border border-primary px-3 py-1 text-primary hover:bg-primary/10 disabled:opacity-60"
+												>
+													到货入库
+												</button>
+											)}
 											{permissions.canEdit && (
 												<button
 													onClick={() => onEdit(purchase)}
