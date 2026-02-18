@@ -28,6 +28,7 @@ import type {
 import { REIMBURSEMENT_CATEGORY_FIELDS, REIMBURSEMENT_CATEGORY_OPTIONS } from '@/types/reimbursement';
 import { UserRole } from '@/types/user';
 import type { PurchaseRecord } from '@/types/purchase';
+import { ExportUtils } from '@/lib/export-utils';
 
 type ListResponse = { success: boolean; data?: ListReimbursementsResult; error?: string };
 type ActionResponse = { success: boolean; data?: ReimbursementRecord; error?: string };
@@ -183,12 +184,20 @@ export default function ReimbursementsClient() {
   useEffect(() => {
     const queryScope = searchParams.get('scope');
     const hasScopeKey = searchParams.has('scope');
-    if (!hasScopeKey) return;
     const allowed = new Set(scopeOptions.map((item) => item.value));
-    if (queryScope && allowed.has(queryScope as 'mine' | 'approval' | 'pay' | 'all')) {
+
+    if (hasScopeKey && queryScope && allowed.has(queryScope as 'mine' | 'approval' | 'pay' | 'all')) {
       setScope(queryScope as 'mine' | 'approval' | 'pay' | 'all');
       return;
     }
+
+    // Default behaviors when no URL param is present
+    // For finance users/admins: default to 'all' to facilitate export/management
+    if (canViewAll && allowed.has('all')) {
+      setScope('all');
+      return;
+    }
+    // Then approval/pay tasks
     if (allowed.has('approval')) {
       setScope('approval');
       return;
@@ -197,8 +206,9 @@ export default function ReimbursementsClient() {
       setScope('pay');
       return;
     }
+    
     setScope('mine');
-  }, [scopeOptions, searchParams]);
+  }, [scopeOptions, searchParams, canViewAll]);
 
   const role = user?.primaryRole;
 
@@ -225,7 +235,7 @@ export default function ReimbursementsClient() {
     [isOwner]
   );
 
-  const fetchList = useCallback(async () => {
+  const fetchList = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -233,18 +243,117 @@ export default function ReimbursementsClient() {
       params.set('page', '1');
       params.set('pageSize', '50');
       if (search.trim()) params.set('search', search.trim());
-      const response = await fetch(`/api/reimbursements?${params.toString()}`, { headers: { Accept: 'application/json' } });
+      
+      const response = await fetch(`/api/reimbursements?${params.toString()}`, { 
+        headers: { Accept: 'application/json' },
+        signal
+      });
+      
       const payload = (await response.json()) as ListResponse;
       if (!response.ok || !payload.success || !payload.data) {
         throw new Error(payload.error ?? '加载报销列表失败');
       }
-      setRecords(payload.data.items);
-    } catch (error) {
+      if (!signal?.aborted) {
+        setRecords(payload.data.items);
+      }
+    } catch (error: any) {
+      if (error?.name === 'AbortError' || error?.toString().includes('AbortError')) return;
+      // Ignore abort errors from signal
+      if (signal?.aborted) return;
+      
+      console.error('Fetch error:', error);
       toast.error(error instanceof Error ? error.message : '加载报销列表失败');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   }, [scope, search]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    
+    // Debounce the fetch to avoid rapid duplicate calls (e.g. strict mode or rapid scope changes)
+    const timer = setTimeout(() => {
+      void fetchList(controller.signal);
+    }, 50);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [fetchList]);
+
+  const handleExport = useCallback(async () => {
+    if (loading) return;
+    try {
+      toast.info('正在准备导出...');
+      const params = new URLSearchParams();
+      params.set('scope', scope);
+      params.set('page', '1');
+      params.set('pageSize', '1000'); // Export limit
+      if (search.trim()) params.set('search', search.trim());
+      
+      const response = await fetch(`/api/reimbursements?${params.toString()}`, { headers: { Accept: 'application/json' } });
+      const payload = (await response.json()) as ListResponse;
+      
+      if (!response.ok || !payload.success || !payload.data) {
+        throw new Error(payload.error ?? '导出失败：无法获取数据');
+      }
+
+      const items = payload.data.items;
+      if (items.length === 0) {
+        toast.info('没有可导出的数据');
+        return;
+      }
+
+      const today = formatDateOnly(new Date()) ?? new Date().toISOString().split('T')[0];
+      
+      const exportData = items.map(item => ({
+        reimbursementNumber: item.reimbursementNumber,
+        title: item.title,
+        sourceType: SOURCE_LABELS[item.sourceType] || item.sourceType,
+        purchaseNumber: item.sourcePurchaseNumber || '',
+        organizationType: ORG_LABELS[item.organizationType] || item.organizationType,
+        category: item.category,
+        amount: item.amount,
+        status: STATUS_LABELS[item.status] || item.status,
+        occurredAt: formatDateOnly(item.occurredAt),
+        applicantName: item.applicantName || '未知',
+        // Images
+        invoiceImages: item.invoiceImages,
+        receiptImages: item.receiptImages,
+      }));
+
+      const columns = [
+        { header: '报销单号', key: 'reimbursementNumber', width: 20 },
+        { header: '标题', key: 'title', width: 25 },
+        { header: '来源', key: 'sourceType', width: 12 },
+        { header: '关联采购单', key: 'purchaseNumber', width: 20 },
+        { header: '组织', key: 'organizationType', width: 12 },
+        { header: '分类', key: 'category', width: 12 },
+        { header: '金额', key: 'amount', width: 12 },
+        { header: '状态', key: 'status', width: 12 },
+        { header: '发生日期', key: 'occurredAt', width: 15 },
+        { header: '申请人', key: 'applicantName', width: 15 },
+        { header: '发票图片', key: 'invoiceImages', width: 18 },
+        { header: '收款凭证', key: 'receiptImages', width: 18 },
+      ];
+
+      await ExportUtils.exportToExcel({
+        filename: `报销清单-${today}`,
+        sheetName: '报销记录',
+        columns,
+        data: exportData,
+        imageKeys: ['invoiceImages', 'receiptImages'],
+      });
+
+      toast.success(`成功导出 ${items.length} 条记录`);
+    } catch (error) {
+      console.error('导出失败', error);
+      toast.error(error instanceof Error ? error.message : '导出失败');
+    }
+  }, [loading, scope, search]);
 
   const filterEligiblePurchases = useCallback(
     async (items: PurchaseRecord[], excludeReimbursementId?: string | null): Promise<PurchaseRecord[]> => {
@@ -383,8 +492,9 @@ export default function ReimbursementsClient() {
     setDetailMode(false);
     setEligibility(null);
     setCurrentLogs([]);
-    setForm(buildDefaultForm());
-  }, []);
+    const defaultOrg: ReimbursementOrganizationType = user?.primaryRole === UserRole.FINANCE_SCHOOL ? 'school' : 'company';
+    setForm({ ...buildDefaultForm(), organizationType: defaultOrg });
+  }, [user]);
 
   const applyRecordToForm = useCallback((row: ReimbursementRecord) => {
     setForm({
@@ -678,24 +788,29 @@ export default function ReimbursementsClient() {
     <section className="space-y-4">
       <div className="surface-card p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={scope} onValueChange={(value) => setScope(value as typeof scope)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {scopeOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {scopeOptions.length > 1 && (
+            <Select value={scope} onValueChange={(value) => setScope(value as typeof scope)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {scopeOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="按单号/标题/分类搜索"
             className="w-[260px]"
           />
+          <Button variant="outline" onClick={handleExport} disabled={loading}>
+            导出
+          </Button>
           <Button variant="outline" onClick={() => void fetchList()} disabled={loading}>
             刷新
           </Button>

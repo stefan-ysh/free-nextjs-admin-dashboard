@@ -27,14 +27,26 @@ export async function GET(request: Request) {
     const context = await requireCurrentUser();
     const permissionUser = await toPermissionUser(context.user);
     const isSuperAdmin = permissionUser.primaryRole === UserRole.SUPER_ADMIN;
+    const isFinanceSchool = permissionUser.primaryRole === UserRole.FINANCE_SCHOOL;
+    const isFinanceCompany = permissionUser.primaryRole === UserRole.FINANCE_COMPANY;
+    
     const { searchParams } = new URL(request.url);
     const scope = searchParams.get('scope');
     const params = parsePurchaseListParams(searchParams);
+    
     params.currentUserId = context.user.id;
+
     if (!isSuperAdmin) {
       if (scope === 'workflow_done') {
         params.relatedUserId = context.user.id;
+      } else if (isFinanceSchool) {
+        // School Finance sees all school purchases
+        params.organizationType = 'school';
+      } else if (isFinanceCompany) {
+        // Company Finance sees all company purchases
+        params.organizationType = 'company';
       } else {
+        // Regular employees only see their own
         params.purchaserId = context.user.id;
       }
     }

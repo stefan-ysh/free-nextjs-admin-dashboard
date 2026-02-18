@@ -13,7 +13,6 @@ import {
   ChevronDown,
   LayoutGrid as DashboardIcon,
   LineChart as FinanceIcon,
-  ReceiptText as ReimbursementIcon,
   ShoppingCart as PurchaseIcon,
   CircleGauge as PerformanceIcon,
 } from "lucide-react";
@@ -63,7 +62,7 @@ const navItems: NavItem[] = [
   {
     icon: <FinanceIcon />,
     name: "财务中心",
-    requiredAnyPermissions: ["FINANCE_VIEW_ALL", "REIMBURSEMENT_PAY"],
+    requiredAnyPermissions: ["FINANCE_VIEW_ALL", "REIMBURSEMENT_PAY", "REIMBURSEMENT_VIEW_ALL", "REIMBURSEMENT_CREATE"],
     subItems: [
       {
         name: "收支流水",
@@ -74,6 +73,17 @@ const navItems: NavItem[] = [
         name: "付款处理",
         path: "/finance/payments",
         requiredPermission: "REIMBURSEMENT_PAY",
+      },
+      {
+        name: "报销申请",
+        path: "/reimbursements",
+        requiredAnyPermissions: [
+          "REIMBURSEMENT_CREATE",
+          "REIMBURSEMENT_VIEW_ALL",
+          "REIMBURSEMENT_APPROVE",
+          "REIMBURSEMENT_REJECT",
+          "REIMBURSEMENT_PAY",
+        ],
       },
     ],
   },
@@ -110,30 +120,7 @@ const navItems: NavItem[] = [
       },
     ],
   },
-  {
-    icon: <ReimbursementIcon />,
-    name: "报销中心",
-    requiredAnyPermissions: [
-      "REIMBURSEMENT_CREATE",
-      "REIMBURSEMENT_VIEW_ALL",
-      "REIMBURSEMENT_APPROVE",
-      "REIMBURSEMENT_REJECT",
-      "REIMBURSEMENT_PAY",
-    ],
-    subItems: [
-      {
-        name: "报销申请",
-        path: "/reimbursements",
-        requiredAnyPermissions: [
-          "REIMBURSEMENT_CREATE",
-          "REIMBURSEMENT_VIEW_ALL",
-          "REIMBURSEMENT_APPROVE",
-          "REIMBURSEMENT_REJECT",
-          "REIMBURSEMENT_PAY",
-        ],
-      },
-    ],
-  },
+
   {
     icon: <InventoryIcon />,
     name: "库存管理",
@@ -302,9 +289,12 @@ const AppSidebar: React.FC = () => {
     const canPurchaseCreate = hasPermission("PURCHASE_CREATE");
     const canReimbursementApprove = hasPermission("REIMBURSEMENT_APPROVE");
     const canReimbursementPay = hasPermission("REIMBURSEMENT_PAY");
+    const canPurchaseApprove = hasPermission("PURCHASE_APPROVE");
     const showReimbursementApprovals = canReimbursementApprove && !canReimbursementPay;
     const [approvalRes, inboundRes, rejectedRes, reimbursementApprovalRes, reimbursementPayRes] = await Promise.allSettled([
-      fetch("/api/purchases/approvals?page=1&pageSize=1", { headers: { Accept: "application/json" } }),
+      canPurchaseApprove
+        ? fetch("/api/purchases/approvals?page=1&pageSize=1", { headers: { Accept: "application/json" } })
+        : Promise.resolve(null),
       canInbound
         ? fetch("/api/purchases?status=pending_inbound&page=1&pageSize=1", { headers: { Accept: "application/json" } })
         : Promise.resolve(null),
@@ -320,7 +310,7 @@ const AppSidebar: React.FC = () => {
     ]);
 
     let approvals = 0;
-    if (approvalRes.status === "fulfilled") {
+    if (approvalRes.status === "fulfilled" && approvalRes.value) {
       const payload = (await approvalRes.value.json().catch(() => null)) as
         | { success?: boolean; data?: { total?: number } }
         | null;

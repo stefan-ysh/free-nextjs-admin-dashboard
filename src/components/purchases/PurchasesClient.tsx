@@ -46,6 +46,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useConfirm } from '@/hooks/useConfirm';
 import { formatDateOnly } from '@/lib/dates';
 import { formatCurrency } from '@/lib/format';
+import { ExportUtils } from '@/lib/export-utils';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
@@ -409,43 +410,89 @@ export default function PurchasesClient() {
     }
   };
 
+  /* import { ExportUtils } from '@/lib/export-utils'; */ // Ensure this is imported at the top
+
   const handleExport = useCallback(async () => {
     if (exporting) return;
     setExporting(true);
     try {
-      const query = buildQuery(filters, 1, pageSize, sortBy, sortOrder);
-      const response = await fetch(`/api/purchases/export?${query}`, {
-        headers: { Accept: 'text/csv' },
+      // 1. Fetch all data matching current filters (limit to 1000 for safety)
+      // Note: We use a large pageSize to get "all" data for export
+      const query = buildQuery(filters, 1, 1000, sortBy, sortOrder);
+      const response = await fetch(`/api/purchases?${query}`, {
+        headers: { Accept: 'application/json' },
       });
+      
       if (!response.ok) {
-        let errorMessage = '导出失败，请稍后再试';
-        try {
-          const payload = await response.json();
-          if (payload?.error) errorMessage = payload.error;
-        } catch (parseError) {
-          console.warn('无法解析导出错误信息', parseError);
-        }
-        throw new Error(errorMessage);
+        throw new Error('获取导出数据失败');
+      }
+      
+      const payload: PurchaseListResponse = await response.json();
+      if (!payload.success || !payload.data) {
+        throw new Error(payload.error || '获取数据为空');
       }
 
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
+      const items = payload.data.items;
+      if (items.length === 0) {
+        toast.info('没有可导出的数据');
+        setExporting(false);
+        return;
+      }
+
       const today = formatDateOnly(new Date()) ?? new Date().toISOString().split('T')[0];
-      link.download = `purchases-${today}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      toast.success('采购列表已导出');
+      
+      // 2. Map data to export format
+      const exportData = items.map(item => ({
+        purchaseNumber: item.purchaseNumber,
+        itemName: item.itemName,
+        specification: item.specification || '',
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalAmount: item.totalAmount, // Will be formatted by column type 'currency' if we supported it, but we can just pass number
+        purchaserName: item.purchaserName || '未知',
+        purchaseDate: item.purchaseDate,
+        status: getPurchaseStatusText(item.status),
+        organizationType: PURCHASE_ORGANIZATION_LABELS[item.organizationType] || item.organizationType,
+        paymentMethod: PAYMENT_METHOD_LABELS[item.paymentMethod] || item.paymentMethod,
+        // Images: pass array of URLs
+        receiptImages: item.receiptImages,
+        invoiceImages: item.invoiceImages,
+      }));
+
+      // 3. Define columns
+      const columns = [
+        { header: '采购单号', key: 'purchaseNumber', width: 20 },
+        { header: '物品名称', key: 'itemName', width: 25 },
+        { header: '规格/备注', key: 'specification', width: 25 },
+        { header: '数量', key: 'quantity', width: 10 },
+        { header: '单价', key: 'unitPrice', width: 12 },
+        { header: '总价', key: 'totalAmount', width: 12 },
+        { header: '申请人', key: 'purchaserName', width: 15 },
+        { header: '采购日期', key: 'purchaseDate', width: 15 },
+        { header: '状态', key: 'status', width: 12 },
+        { header: '采购组织', key: 'organizationType', width: 12 },
+        { header: '付款方式', key: 'paymentMethod', width: 12 },
+        { header: '采购凭证', key: 'receiptImages', width: 18 },
+        { header: '发票图片', key: 'invoiceImages', width: 18 },
+      ];
+
+      // 4. Generate Excel
+      await ExportUtils.exportToExcel({
+        filename: `采购清单-${today}`,
+        sheetName: '采购记录',
+        columns,
+        data: exportData,
+        imageKeys: ['receiptImages', 'invoiceImages'],
+      });
+
+      toast.success(`成功导出 ${items.length} 条记录`);
     } catch (error) {
       console.error('导出采购失败', error);
       toast.error(error instanceof Error ? error.message : '导出失败，请稍后再试');
     } finally {
       setExporting(false);
     }
-  }, [exporting, filters, pageSize, sortBy, sortOrder]);
+  }, [exporting, filters, sortBy, sortOrder]);
 
   const handleAmountFilterChange = useCallback(
     (field: 'minAmount' | 'maxAmount', rawValue: string) => {
@@ -1063,7 +1110,7 @@ export default function PurchasesClient() {
               disabled={loading || exporting}
               className="h-10"
             >
-              {exporting ? '导出中...' : '导出 CSV'}
+              {exporting ? '导出中...' : '导出 Excel'}
             </Button>
             {permissions.canCreate && (
               <Button asChild size="sm" className="h-10">

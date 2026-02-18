@@ -467,6 +467,14 @@ export async function listReimbursements(params: ListReimbursementsParams): Prom
       where.push('r.organization_type = ?');
       values.push(params.financeOrgType);
     }
+  } else if (scope === 'all') {
+    // For finance roles viewing "all", restrict to their organization
+    if (params.financeOrgType) {
+      where.push('r.organization_type = ?');
+      values.push(params.financeOrgType);
+    }
+    // Only show submitted records (exclude drafts) in "All" view
+    where.push("r.status != 'draft'");
   }
 
   const whereClause = `WHERE ${where.join(' AND ')}`;
