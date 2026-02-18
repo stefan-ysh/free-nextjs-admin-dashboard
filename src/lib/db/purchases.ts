@@ -437,6 +437,12 @@ function buildPurchaseFilterClause(params: ListPurchasesParams = {}, tableAlias 
     values.push(params.status);
   }
 
+  if (params.statusList && params.statusList.length > 0) {
+    const placeholders = params.statusList.map(() => '?').join(', ');
+    conditions.push(`${column('status')} IN (${placeholders})`);
+    values.push(...params.statusList);
+  }
+
   if (params.purchaserId) {
     conditions.push(`${column('purchaser_id')} = ?`);
     values.push(params.purchaserId);
@@ -505,6 +511,12 @@ function buildPurchaseFilterClause(params: ListPurchasesParams = {}, tableAlias 
   if (params.maxAmount != null) {
     conditions.push(`${column('total_amount')} <= ?`);
     values.push(params.maxAmount);
+  }
+
+  if (params.paymentStatus === 'paid') {
+    conditions.push(`${column('paid_at')} IS NOT NULL`);
+  } else if (params.paymentStatus === 'unpaid') {
+    conditions.push(`${column('paid_at')} IS NULL`);
   }
 
   return {
@@ -1671,4 +1683,63 @@ export async function getPurchaseLogs(purchaseId: string): Promise<Reimbursement
     ...mapLog(r)!,
     operatorName: r.operator_name || null,
   })).filter(Boolean) as ReimbursementLog[];
+}
+export async function payPurchase(
+  id: string,
+  operatorId: string,
+  note?: string | null
+): Promise<PurchaseRecord> {
+  await ensurePurchasesSchema();
+  const purchase = await findPurchaseById(id);
+  if (!purchase) {
+    throw new Error('PURCHASE_NOT_FOUND');
+  }
+
+  // Only approved or pending_inbound purchases can be paid
+  if (purchase.status !== 'approved' && purchase.status !== 'pending_inbound') {
+    throw new Error('PURCHASE_NOT_READY_FOR_PAYMENT');
+  }
+
+  if (purchase.paidAt) {
+    throw new Error('PURCHASE_ALREADY_PAID');
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    await connection.query(
+      `UPDATE purchases
+       SET status = 'paid',
+           paid_at = NOW(),
+           paid_by = ?,
+           notes = COALESCE(?, notes),
+           updated_at = NOW()
+       WHERE id = ?`,
+      [operatorId, note || null, id]
+    );
+
+    // If it was pending inbound, it might still need inbound, but payment is done.
+    // If it was approved, it is now paid.
+    // The status 'paid' implies the financial transaction is complete.
+
+    await insertLog(
+      id,
+      'pay',
+      purchase.status,
+      'paid',
+      operatorId,
+      note || '财务打款',
+      connection
+    );
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+
+  return (await findPurchaseById(id))!;
 }

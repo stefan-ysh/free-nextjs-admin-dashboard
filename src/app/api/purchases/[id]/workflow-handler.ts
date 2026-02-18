@@ -13,7 +13,9 @@ import {
   submitPurchase,
   submitReimbursement,
   transferPurchaseApprover,
+
   withdrawPurchase,
+  payPurchase,
 } from '@/lib/db/purchases';
 import { checkPermission, Permissions } from '@/lib/permissions';
 import { mapPurchaseValidationError } from '@/lib/purchases/error-messages';
@@ -218,7 +220,23 @@ export async function handlePurchaseWorkflowAction(
         return respondWithDetail(id);
       }
       case 'pay': {
-        return badRequestResponse('采购流程不包含独立打款节点');
+        const canPay = await checkPermission(permissionUser, Permissions.REIMBURSEMENT_PAY);
+        if (!canPay.allowed) return forbiddenResponse();
+
+        const orgType = purchase.organizationType;
+        const role = permissionUser.primaryRole;
+        let allowedOrg = false;
+        if (role === UserRole.FINANCE_SCHOOL && orgType === 'school') allowedOrg = true;
+        if (role === UserRole.FINANCE_COMPANY && orgType === 'company') allowedOrg = true;
+
+        if (!allowedOrg) {
+          return financeOrgForbiddenResponse();
+        }
+
+        const note = typeof options.note === 'string' ? options.note.trim() : undefined;
+        await payPurchase(id, context.user.id, note);
+        await notifySafely('purchase_paid', id);
+        return respondWithDetail(id);
       }
       case 'submit_reimbursement': {
         if (isReimbursementV2Enabled()) {

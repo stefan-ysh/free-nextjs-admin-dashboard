@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import DataState from '@/components/common/DataState';
 import PurchaseDetailModal from '@/components/purchases/PurchaseDetailModal';
+import PurchaseInboundDrawer from '@/components/purchases/PurchaseInboundDrawer';
 import ReimbursementPayConfirmDialog from '@/components/reimbursements/ReimbursementPayConfirmDialog';
 import ApprovalCommentDialog from '@/components/purchases/ApprovalCommentDialog';
 import RejectionReasonDialog from '@/components/purchases/RejectionReasonDialog';
@@ -110,6 +111,10 @@ export default function WorkflowWorkbenchClient({
   const [lastFailedAction, setLastFailedAction] = useState<FailedActionSnapshot | null>(null);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
   const [activeReimbursementPayId, setActiveReimbursementPayId] = useState<string | null>(null);
+  const [inboundDrawer, setInboundDrawer] = useState<{ open: boolean; purchase: PurchaseRecord | null }>({
+    open: false,
+    purchase: null,
+  });
   const [rejectDialog, setRejectDialog] = useState<{ open: boolean; purchase: PurchaseRecord | PurchaseDetail | null }>({
     open: false,
     purchase: null,
@@ -515,7 +520,7 @@ export default function WorkflowWorkbenchClient({
           statusClass: statusBadgeClass(item.status),
           actionLabel: '去入库',
           onAction: () => {
-            window.location.href = `/inventory/inbound?purchaseId=${encodeURIComponent(item.id)}`;
+			setInboundDrawer({ open: true, purchase: item });
           },
         }))
       );
@@ -689,10 +694,7 @@ export default function WorkflowWorkbenchClient({
     <section className="space-y-4">
       <div className="surface-toolbar p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-base font-semibold sm:text-lg">流程工作台</h1>
-            <p className="text-xs text-muted-foreground">统一查看当前待办和已办事项。</p>
-          </div>
+          <h1 className="text-base font-semibold sm:text-lg">流程工作台</h1>
           <Button size="sm" variant="outline" onClick={() => void loadAll()} disabled={loading}>
             刷新
           </Button>
@@ -842,6 +844,15 @@ export default function WorkflowWorkbenchClient({
         }}
         onRejected={() => {
           void loadAll();
+        }}
+      />
+      <PurchaseInboundDrawer
+        open={inboundDrawer.open}
+        purchase={inboundDrawer.purchase}
+        onOpenChange={(open) => setInboundDrawer((prev) => ({ ...prev, open }))}
+        onSuccess={() => {
+          void loadAll();
+          toast.success('入库已完成');
         }}
       />
     </section>

@@ -6,6 +6,7 @@ import type { PurchaseDetail, PurchaseRecord, ReimbursementLog, ReimbursementAct
 import { getPurchaseStatusText } from '@/types/purchase';
 import { cn } from '@/lib/utils';
 import { isReimbursementV2Enabled } from '@/lib/features/gates';
+import { Check, Clock, FileText } from 'lucide-react';
 
 const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
 	year: 'numeric',
@@ -263,27 +264,7 @@ export default function PurchaseApprovalFlow({
 	const reimbursementV2Enabled = isReimbursementV2Enabled();
 	const timeline = buildTimeline(purchase, reimbursementV2Enabled);
 
-	const actions: Array<{
-		key: keyof typeof ACTION_STYLES;
-		label: string;
-		visible: boolean;
-		handler?: (purchase: PurchaseRecord) => void;
-	}> = [
-		{ key: 'submit', label: '提交审批', visible: Boolean(permissions?.canSubmit), handler: onSubmit },
-		{ key: 'withdraw', label: '撤回申请', visible: Boolean(permissions?.canWithdraw), handler: onWithdraw },
-		{ key: 'approve', label: '审批通过', visible: Boolean(permissions?.canApprove), handler: onApprove },
-		{ key: 'transfer', label: '转审', visible: Boolean(permissions?.canTransfer), handler: onTransfer },
-		{ key: 'reject', label: '驳回申请', visible: Boolean(permissions?.canReject), handler: onReject },
-		{
-			key: 'submitReimbursement',
-			label: '提交报销',
-			visible: !reimbursementV2Enabled && Boolean(permissions?.canSubmitReimbursement),
-			handler: onSubmitReimbursement,
-		},
-		{ key: 'pay', label: '标记打款', visible: Boolean(permissions?.canPay), handler: onPay },
-	];
 
-	const visibleActions = actions.filter((action) => action.visible);
 	const sortedLogs = [...purchase.logs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 	const stepLogsMap = new Map<string, ReimbursementLog[]>();
 	const otherLogs: ReimbursementLog[] = [];
@@ -299,105 +280,149 @@ export default function PurchaseApprovalFlow({
 	}
 
 	return (
-		<div className="space-y-4">
-			<div className="panel-frame p-4">
-				<div className="flex items-center justify-between gap-4">
+
+		<div className="space-y-6">
+			{/* Header Status Card */}
+			<div className="flex items-center justify-between rounded-xl border bg-card p-4 shadow-sm">
+				<div className="flex items-center gap-3">
+					<div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+						<FileText className="h-5 w-5 text-primary" />
+					</div>
 					<div>
-						<p className="text-xs uppercase tracking-wide text-muted-foreground">当前状态</p>
-						<div className="mt-2">
+						<p className="text-xs font-medium text-muted-foreground">当前状态</p>
+						<div className="mt-1">
 							<PurchaseStatusBadge status={purchase.status} />
 						</div>
 					</div>
-					<div className="text-right text-xs text-muted-foreground">
-						<div>最近更新</div>
-						<div className="font-mono text-sm text-foreground">{formatDateTime(purchase.updatedAt) ?? '—'}</div>
-					</div>
+				</div>
+				<div className="text-right">
+					<p className="text-xs text-muted-foreground">最近更新</p>
+					<p className="font-mono text-sm font-medium text-foreground">
+						{formatDateTime(purchase.updatedAt) ?? '—'}
+					</p>
 				</div>
 			</div>
 
-			<div className="panel-frame p-4">
-				<div className="mb-4 flex items-center justify-between gap-2">
-					<div>
-						<p className="text-xs uppercase tracking-wide text-muted-foreground">审批流与日志</p>
-						<h4 className="text-sm font-semibold text-foreground">流程节点与操作记录</h4>
-					</div>
-					<span className="text-xs text-muted-foreground">按节点聚合展示</span>
-				</div>
-				<ol className="relative space-y-6 border-l border-border pl-6">
-					{timeline.map((step) => (
-						<li key={step.key} className="relative pl-2">
-							<span className={`absolute -left-3 top-6 h-3 w-3 rounded-full border-2 ${STATUS_DOT_CLASS[step.status]}`}></span>
-							<div
-								className={cn(
-									'flex flex-col gap-2 rounded-2xl border border-transparent bg-card/60 p-3 transition',
-									step.status === 'active' && 'border-chart-2/40 bg-chart-2/10 shadow-sm',
-									step.status === 'done' && 'bg-chart-5/10',
-									step.status === 'pending' && 'bg-muted/60'
-								)}
-							>
-								<div className="flex flex-wrap items-center justify-between gap-2">
-									<p className={`text-sm font-semibold ${TONE_TEXT_CLASS[step.tone]}`}>{step.title}</p>
-									<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-										<span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', STEP_STATUS_BADGE[step.status])}>{STEP_STATUS_LABEL[step.status]}</span>
-										{formatDateTime(step.timestamp) && (
-											<time>{formatDateTime(step.timestamp)}</time>
-										)}
-									</div>
+			{/* Timeline Flow */}
+			<div className="relative pl-4">
+				{/* Virtual Line */}
+				<div className="absolute bottom-0 left-[27px] top-4 w-px bg-border" />
+
+				<div className="space-y-8">
+					{timeline.map((step, index) => {
+						const isLast = index === timeline.length - 1;
+						const isActive = step.status === 'active';
+						const isDone = step.status === 'done';
+						const isPending = step.status === 'pending';
+
+						return (
+							<div key={step.key} className="relative flex gap-4">
+								{/* Timeline Node */}
+								<div
+									className={cn(
+										'relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 bg-background ring-4 ring-background transition-colors',
+										isActive
+											? 'border-primary text-primary'
+											: isDone
+												? 'border-primary bg-primary text-primary-foreground'
+												: 'border-muted-foreground/30 text-muted-foreground/30'
+									)}
+								>
+									{isDone ? (
+										<Check className="h-3 w-3" />
+									) : isActive ? (
+										<div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+									) : (
+										<div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
+									)}
 								</div>
-								<p className="text-xs text-muted-foreground">{step.description}</p>
-								{step.note && (
-									<p className="text-xs text-destructive">{step.note}</p>
-								)}
-								{(stepLogsMap.get(step.key)?.length ?? 0) > 0 ? (
-									<div className="mt-2 rounded-xl border border-dashed border-border/80 bg-background/40 p-2">
-										<p className="mb-2 text-[11px] text-muted-foreground">
-											相关记录 {stepLogsMap.get(step.key)?.length}
-										</p>
-										<ol className="space-y-2">
-											{(stepLogsMap.get(step.key) ?? []).map((log) => renderLogEntry(purchase, log))}
-										</ol>
+
+								{/* Content Card */}
+								<div className="flex-1 pt-0.5">
+									<div className="flex items-center justify-between gap-4">
+										<h4
+											className={cn(
+												'text-sm font-semibold',
+												isActive ? 'text-primary' : isDone ? 'text-foreground' : 'text-muted-foreground'
+											)}
+										>
+											{step.title}
+										</h4>
+										<span className="text-xs text-muted-foreground">
+											{formatDateTime(step.timestamp)}
+										</span>
 									</div>
-								) : null}
+									
+									<p className="mt-1 text-sm text-foreground/80">{step.description}</p>
+									
+									{step.note && (
+										<div className="mt-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+											{step.note}
+										</div>
+									)}
+
+									{/* Logs Section */}
+									{(stepLogsMap.get(step.key)?.length ?? 0) > 0 && (
+										<div className="mt-3 space-y-2">
+											{stepLogsMap.get(step.key)?.map((log) => (
+												<div
+													key={log.id}
+													className="relative rounded-lg border bg-muted/30 px-3 py-2 text-xs transition hover:bg-muted/50"
+												>
+													<div className="flex items-center justify-between gap-2">
+														<span className="font-semibold text-foreground">
+															{ACTION_LABELS[log.action] ?? log.action}
+														</span>
+														<time className="font-mono text-muted-foreground">
+															{formatDateTime(log.createdAt)}
+														</time>
+													</div>
+													<div className="mt-1 flex flex-wrap items-center gap-x-2 text-muted-foreground">
+														<span>
+															{resolveOperatorName(purchase, log.operatorId, log.operatorName)}
+														</span>
+														{log.comment && (
+															<>
+																<span>·</span>
+																<span className="text-foreground">{log.comment}</span>
+															</>
+														)}
+													</div>
+												</div>
+											))}
+										</div>
+									)}
+								</div>
 							</div>
-						</li>
-					))}
-				</ol>
-				{otherLogs.length > 0 ? (
-					<div className="mt-4 rounded-xl border border-dashed border-border/80 bg-background/40 p-3">
-						<p className="mb-2 text-xs text-muted-foreground">其他操作记录</p>
-						<ol className="space-y-2">
-							{otherLogs.map((log) => renderLogEntry(purchase, log))}
-						</ol>
-					</div>
-				) : null}
-			</div>
-
-			<div className="panel-frame p-4">
-				<div className="flex items-center justify-between gap-2">
-					<div>
-						<p className="text-xs uppercase tracking-wide text-muted-foreground">可执行动作</p>
-						<h4 className="text-sm font-semibold text-foreground">审批操作区</h4>
-					</div>
-					<span className="text-xs text-muted-foreground">根据权限自动展示</span>
-				</div>
-				<div className="mt-4 flex flex-wrap gap-2">
-					{visibleActions.length === 0 && (
-						<p className="text-xs text-muted-foreground">当前状态暂无可执行操作。</p>
-					)}
-					{visibleActions.map((action) => (
-						<button
-							key={action.key}
-							type="button"
-							onClick={() => action.handler?.(purchase)}
-							disabled={busy}
-							className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${ACTION_STYLES[action.key]} ${busy ? 'opacity-60' : ''}`.trim()}
-						>
-							{action.label}
-						</button>
-					))}
+						);
+					})}
 				</div>
 			</div>
 
+			{/* Other Logs */}
+			{otherLogs.length > 0 && (
+				<div className="mt-8 border-t pt-6">
+					<h4 className="mb-4 text-sm font-medium text-muted-foreground">其他记录</h4>
+					<div className="space-y-2">
+						{otherLogs.map((log) => (
+							<div
+								key={log.id}
+								className="flex items-center justify-between rounded-lg border border-dashed bg-muted/20 px-3 py-2 text-xs"
+							>
+								<div className="flex items-center gap-2">
+									<span className="font-medium">{ACTION_LABELS[log.action] ?? log.action}</span>
+									<span className="text-muted-foreground">
+										{resolveOperatorName(purchase, log.operatorId, log.operatorName)}
+									</span>
+								</div>
+								<time className="font-mono text-muted-foreground">
+									{formatDateTime(log.createdAt)}
+								</time>
+							</div>
+						))}
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }

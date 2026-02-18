@@ -289,24 +289,82 @@ export default function PurchaseDetailModal({
 
 	const hasAnyAttachment = attachmentGroups.some((group) => group.items.length);
 
+	// Action Button Logic
+	const actions = [
+		{
+			key: 'submit',
+			label: '提交审批',
+			visible: Boolean(permissions?.canSubmit),
+			variant: 'default' as const,
+			handler: () => onSubmit?.(purchase),
+		},
+		{
+			key: 'withdraw',
+			label: '撤回申请',
+			visible: Boolean(permissions?.canWithdraw),
+			variant: 'outline' as const,
+			handler: () => onWithdraw?.(purchase),
+		},
+		{
+			key: 'approve',
+			label: '审批通过',
+			visible: Boolean(permissions?.canApprove),
+			variant: 'default' as const,
+			handler: () => onApprove?.(purchase),
+		},
+		{
+			key: 'transfer',
+			label: '转审',
+			visible: Boolean(permissions?.canTransfer),
+			variant: 'outline' as const,
+			handler: () => onTransfer?.(purchase),
+		},
+		{
+			key: 'reject',
+			label: '驳回申请',
+			visible: Boolean(permissions?.canReject),
+			variant: 'destructive' as const,
+			handler: () => onReject?.(purchase),
+		},
+		{
+			key: 'pay',
+			label: '标记打款',
+			visible: Boolean(permissions?.canPay),
+			variant: 'default' as const,
+			handler: () => onPay?.(purchase),
+		},
+		{
+			key: 'submitReimbursement',
+			label: '提交报销',
+			visible: Boolean(permissions?.canSubmitReimbursement),
+			variant: 'secondary' as const,
+			handler: () => onSubmitReimbursement?.(purchase),
+		},
+	].filter((action) => action.visible);
+
 	return (
 		<Dialog open onOpenChange={(open) => !open && onClose()}>
 			<DialogContent className="max-h-[90vh] overflow-hidden p-0 sm:max-w-5xl">
 				<ModalShell
 					title={purchase.itemName}
-					description={`采购编号 ${purchase.purchaseNumber} · 最近更新 ${formatDateTime(statusUpdatedAt)}`}
-					headerActions={
-						<Button variant="outline" size="sm" onClick={onClose}>
-							关闭
-						</Button>
-					}
+
 					className="max-h-[90vh]"
 					bodyClassName="space-y-6"
 					footer={
-						<DialogFooter className="justify-end">
+						<DialogFooter className="gap-2 sm:justify-end">
 							<Button variant="secondary" onClick={onClose}>
 								关闭
 							</Button>
+							{actions.map((action) => (
+								<Button
+									key={action.key}
+									variant={action.variant}
+									onClick={action.handler}
+									disabled={busy}
+								>
+									{action.label}
+								</Button>
+							))}
 						</DialogFooter>
 					}
 				>
@@ -356,15 +414,6 @@ export default function PurchaseDetailModal({
 								<div className="space-y-3 px-5 py-5">
 									<PurchaseApprovalFlow
 										purchase={purchase}
-										permissions={permissions}
-										onSubmit={onSubmit}
-										onWithdraw={onWithdraw}
-										onApprove={onApprove}
-										onTransfer={onTransfer}
-										onReject={onReject}
-										onPay={onPay}
-										onSubmitReimbursement={onSubmitReimbursement}
-										busy={busy}
 									/>
 								</div>
 							</section>

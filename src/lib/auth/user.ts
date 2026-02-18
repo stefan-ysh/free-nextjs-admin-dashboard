@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 
-import { mysqlPool, mysqlQuery } from '@/lib/mysql';
+import { mysqlPool } from '@/lib/mysql';
 import { ensureHrSchema } from '@/lib/hr/schema';
 import { ensureAuthSchema } from './schema';
 import { hashPassword } from './password';
@@ -39,6 +39,7 @@ type RawUserRow = RowDataPacket & {
   is_active: number;
   email_verified: number;
   employment_status: string | null;
+  last_login_at: string | null;
   failed_login_attempts: number | null;
   locked_until: string | null;
   password_updated_at: string | null;
@@ -66,6 +67,7 @@ export type UserRecord = {
   employment_status: string | null;
   is_active: boolean;
   email_verified: boolean;
+  last_login_at: string | null;
   failed_login_attempts: number;
   locked_until: string | null;
   password_updated_at: string | null;
@@ -174,6 +176,7 @@ function mapUser(row: RawUserRow | undefined): UserRecord | null {
     employment_status: row.employment_status ?? null,
     is_active: row.is_active === 1,
     email_verified: row.email_verified === 1,
+    last_login_at: row.last_login_at ?? null,
     failed_login_attempts: Number(row.failed_login_attempts ?? 0),
     locked_until: row.locked_until ?? null,
     password_updated_at: row.password_updated_at,
@@ -265,6 +268,16 @@ export async function clearLoginFailures(userId: string): Promise<void> {
         failed_login_attempts = 0,
         locked_until = NULL,
         updated_at = NOW()
+      WHERE id = ?`,
+    [userId]
+  );
+}
+
+export async function updateLastLogin(userId: string): Promise<void> {
+  await ensureAuthAndHrSchemas();
+  await pool.query(
+    `UPDATE hr_employees
+      SET last_login_at = NOW(3)
       WHERE id = ?`,
     [userId]
   );

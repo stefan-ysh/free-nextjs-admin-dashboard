@@ -161,23 +161,22 @@ export default async function AdminDashboardPage() {
   const hasAnySection = [showFinanceOverview, showPurchaseOverview, showApprovalTodo, showOtherOverview].some(Boolean);
 
   const greetingName = profile.displayName || profile.email;
-  const primaryRole = USER_ROLE_LABELS[activeRole] ?? '员工';
   const lastLogin = formatDateTimeLocal(profile.lastLoginAt) ?? '暂无登录记录';
-  const accessibleModules = (
-    [
-      financePermission.allowed && '财务',
-      purchasePermissionAllowed && '采购与流程',
-      inventoryPermission.allowed && '库存',
-      hrPermission.allowed && '组织架构',
-    ].filter(Boolean) as string[]
-  ).join(' / ');
+
+  const now = new Date();
+  const hour = now.getHours();
+  const greetingText = hour < 5 ? '🌙 凌晨好' : hour < 9 ? '☕️ 早上好' : hour < 12 ? '🌞 上午好' : hour < 18 ? '🌞 下午好' : '🌙 晚上好';
 
   return (
     <div className="space-y-8 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">运营概览</h1>
-          <p className="text-xs text-muted-foreground">你好，{greetingName} · {primaryRole}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <span>{greetingText}，{greetingName}</span>
+            <span className="hidden sm:inline">|</span>
+            <span>上次登录 {lastLogin}</span>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {isFinanceOperator ? (
@@ -219,17 +218,6 @@ export default async function AdminDashboardPage() {
           )}
         </div>
       </div>
-
-      <Card className="border-none shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">账号概览</CardTitle>
-          <CardDescription>上次登录 {lastLogin}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-          <span className="rounded-full border border-border px-3 py-1">可访问模块：{accessibleModules || '基础权限'}</span>
-          <span className="rounded-full border border-border px-3 py-1">角色：{primaryRole}</span>
-        </CardContent>
-      </Card>
 
       {!hasAnySection ? (
         <Card className="border-dashed">

@@ -278,6 +278,8 @@ export interface ListPurchasesParams {
   pageSize?: number;
   sortBy?: 'createdAt' | 'updatedAt' | 'purchaseDate' | 'totalAmount' | 'status' | 'submittedAt';
   sortOrder?: 'asc' | 'desc';
+  statusList?: PurchaseStatus[];
+  paymentStatus?: 'paid' | 'unpaid';
 }
 
 /**

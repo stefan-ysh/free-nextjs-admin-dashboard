@@ -4,7 +4,12 @@ import { SESSION_COOKIE_NAME } from '@/lib/auth/constants';
 import { detectDeviceType, hashUserAgent } from '@/lib/auth/device';
 import { verifyPassword } from '@/lib/auth/password';
 import { createSession, invalidateSessionsForDeviceType, revokeExpiredSessions } from '@/lib/auth/session';
-import { clearLoginFailures, findUserByLoginIdentifier, recordFailedLoginAttempt } from '@/lib/auth/user';
+import {
+  clearLoginFailures,
+  findUserByLoginIdentifier,
+  recordFailedLoginAttempt,
+  updateLastLogin,
+} from '@/lib/auth/user';
 
 export async function POST(request: Request) {
   try {
@@ -62,8 +67,9 @@ export async function POST(request: Request) {
     const userAgent = request.headers.get('user-agent') ?? '';
     const deviceType = detectDeviceType(userAgent);
     const userAgentHash = hashUserAgent(userAgent);
-
+    
     await invalidateSessionsForDeviceType(user.id, deviceType);
+    await updateLastLogin(user.id);
 
     const { token, expiresAt } = await createSession({
       userId: user.id,

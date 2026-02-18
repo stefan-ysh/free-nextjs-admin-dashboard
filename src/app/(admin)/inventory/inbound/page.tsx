@@ -89,10 +89,7 @@ export default function InventoryInboundPage() {
     <div className="space-y-4">
       <div className="surface-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-semibold">到货入库</h1>
-            <p className="text-sm text-muted-foreground">先查看历史，再点击“创建入库”发起新的采购入库。</p>
-          </div>
+          <h1 className="text-lg font-semibold">到货入库</h1>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => void fetchInboundMovements()} disabled={movementsLoading}>
               刷新
