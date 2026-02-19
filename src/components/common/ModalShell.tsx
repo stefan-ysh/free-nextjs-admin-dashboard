@@ -25,6 +25,7 @@ export type ModalShellProps = {
   footer?: ReactNode;
   headerActions?: ReactNode;
   bodyClassName?: string;
+  headerClassName?: string;
   className?: string;
 };
 
@@ -35,29 +36,25 @@ export function ModalShell({
   footer,
   headerActions,
   bodyClassName,
+  headerClassName,
   className,
 }: ModalShellProps) {
   return (
     <div className={cn('flex min-h-0 max-h-[85vh] flex-col', className)}>
       {(title || description || headerActions) && (
-        <div className="border-b border-border/60 bg-background/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-          <div className={cn('flex gap-4', headerActions ? 'items-start justify-between' : '')}>
-            <DialogHeader className="space-y-1.5">
-              {renderTitle(title)}
-              {renderDescription(description)}
-            </DialogHeader>
-            {headerActions ? <div className="flex shrink-0 items-center gap-2">{headerActions}</div> : null}
-          </div>
+        <div className={cn("bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80", headerClassName)}>
+          <DialogHeader className="space-y-1.5 text-left">
+            {renderTitle(title)}
+            {renderDescription(description)}
+          </DialogHeader>
+          {headerActions ? <div className="flex shrink-0 items-center gap-2">{headerActions}</div> : null}
         </div>
       )}
       <div className={cn('flex-1 overflow-y-auto px-6 py-4', bodyClassName)}>{children}</div>
-      {footer ? (
-        <div className="border-t border-border/60 bg-background/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-          {footer}
-        </div>
-      ) : null}
+      {footer && footer}
     </div>
   );
 }
 
 export default ModalShell;
+

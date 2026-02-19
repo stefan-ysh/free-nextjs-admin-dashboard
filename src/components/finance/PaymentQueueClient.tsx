@@ -1,16 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Wallet, Search, RefreshCw } from 'lucide-react';
 
 import ReimbursementPayConfirmDialog from '@/components/reimbursements/ReimbursementPayConfirmDialog';
 import DataState from '@/components/common/DataState';
 import Pagination from '@/components/tables/Pagination';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { ReimbursementRecord, ReimbursementStatus } from '@/types/reimbursement';
+import { cn } from '@/lib/utils';
 
 const currencyFormatter = new Intl.NumberFormat('zh-CN', {
   style: 'currency',
@@ -29,28 +31,26 @@ type ReimbursementListResponse = {
   error?: string;
 };
 
-function reimbursementStatusText(status: ReimbursementStatus): string {
+function getReimbursementStatusConfig(status: ReimbursementStatus) {
   switch (status) {
     case 'pending_approval':
-      return '待打款';
+      return { label: '待打款', className: 'badge-premium badge-premium-warning' };
     case 'approved':
-      return '已审批待打款';
+      return { label: '待打款', className: 'badge-premium badge-premium-info' };
     case 'paid':
-      return '已打款';
+      return { label: '已打款', className: 'badge-premium badge-premium-success' };
     case 'rejected':
-      return '已驳回';
+      return { label: '已驳回', className: 'badge-premium badge-premium-error' };
     case 'draft':
-      return '草稿';
+      return { label: '草稿', className: 'badge-premium badge-premium-secondary' };
     default:
-      return status;
+      return { label: status, className: 'badge-premium badge-premium-secondary' };
   }
 }
 
-function reimbursementStatusVariant(status: ReimbursementStatus): 'secondary' | 'warning' | 'success' | 'destructive' {
-  if (status === 'paid') return 'success';
-  if (status === 'rejected') return 'destructive';
-  if (status === 'approved') return 'warning';
-  return 'secondary';
+function getInitials(name?: string | null) {
+    if (!name) return 'U';
+    return name.slice(0, 2).toUpperCase();
 }
 
 export default function PaymentQueueClient() {
@@ -143,21 +143,29 @@ export default function PaymentQueueClient() {
           <h1 className="text-2xl font-semibold text-foreground">付款处理</h1>
           <p className="mt-1 text-sm text-muted-foreground">统一处理报销打款任务。</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setReloadToken((token) => token + 1)}>
+        <Button variant="outline" size="sm" onClick={() => setReloadToken((token) => token + 1)} className="gap-2">
+          <RefreshCw className="h-3.5 w-3.5" />
           刷新
         </Button>
       </div>
 
-      <div className="surface-panel flex-1 min-h-0 flex flex-col">
-        <div className="flex items-center gap-3 border-b px-5 py-4">
-          <div className="w-full max-w-sm">
+      <div className="surface-panel flex-1 min-h-0 flex flex-col border-0 shadow-sm">
+        <div className="flex items-center gap-3 border-b border-border/50 px-5 py-4 bg-muted/20">
+          <div className="relative w-full max-w-sm">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="搜索报销单号 / 标题"
+              className="pl-8 bg-background"
             />
           </div>
-          <div className="ml-auto text-xs text-muted-foreground">共 {reimbursementTotal} 条待处理</div>
+          <div className="ml-auto flex items-center gap-2">
+              <span className="flex h-6 items-center justify-center rounded-full bg-primary/10 px-2 text-xs font-bold text-primary">
+                {reimbursementTotal}
+              </span>
+              <span className="text-xs text-muted-foreground">待处理</span>
+          </div>
         </div>
 
         {loading ? (
@@ -170,66 +178,121 @@ export default function PaymentQueueClient() {
           </div>
         ) : reimbursementRecords.length === 0 ? (
           <div className="p-6">
-            <DataState variant="empty" title="暂无报销待处理任务" description="没有需要打款的报销单" />
+            <DataState variant="empty" title="暂无待处理任务" description="所有报销单据均已完成打款" />
           </div>
         ) : (
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <div className="hidden md:flex flex-col flex-1 min-h-0">
-              <Table stickyHeader scrollAreaClassName="max-h-full custom-scrollbar">
+              <Table stickyHeader scrollAreaClassName="max-h-full custom-scrollbar" className="text-sm">
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>报销单号</TableHead>
-                    <TableHead>标题</TableHead>
-                    <TableHead>来源</TableHead>
-                    <TableHead>组织</TableHead>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40">
+                    <TableHead className="w-[180px] pl-6">报销单号</TableHead>
+                    <TableHead className="min-w-[200px]">标题</TableHead>
+                    <TableHead>申请人</TableHead>
                     <TableHead>金额</TableHead>
                     <TableHead>状态</TableHead>
-                    <TableHead>发生日期</TableHead>
-                    <TableHead className="text-right">操作</TableHead>
+                    <TableHead>来源 / 组织</TableHead>
+                    <TableHead>提交日期</TableHead>
+                    <TableHead className="text-right pr-6">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {reimbursementRecords.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>{item.reimbursementNumber}</TableCell>
-                      <TableCell className="font-medium text-foreground">{item.title}</TableCell>
-                      <TableCell>{item.sourceType === 'purchase' ? '关联采购' : '直接报销'}</TableCell>
-                      <TableCell>{item.organizationType === 'school' ? '学校' : '单位'}</TableCell>
-                      <TableCell>{currencyFormatter.format(item.amount)}</TableCell>
-                      <TableCell>
-                        <Badge variant={reimbursementStatusVariant(item.status)}>{reimbursementStatusText(item.status)}</Badge>
-                      </TableCell>
-                      <TableCell>{item.occurredAt}</TableCell>
-                      <TableCell className="text-right">
-                        <Button size="sm" onClick={() => setActiveReimbursementId(item.id)}>
-                          去处理
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {reimbursementRecords.map((item) => {
+                      const statusConfig = getReimbursementStatusConfig(item.status);
+                      return (
+                        <TableRow 
+                            key={item.id} 
+                            className="group transition-colors hover:bg-muted/40 cursor-pointer"
+                            onClick={() => setActiveReimbursementId(item.id)}
+                        >
+                          <TableCell className="pl-6 font-mono text-xs text-muted-foreground">
+                              {item.reimbursementNumber}
+                          </TableCell>
+                          <TableCell className="font-medium text-foreground">
+                              {item.title}
+                          </TableCell>
+                          <TableCell>
+                                <div className="flex items-center gap-2">
+                                    <Avatar className="h-6 w-6">
+                                        <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{getInitials(item.applicantName)}</AvatarFallback>
+                                    </Avatar>
+                                    <span className="text-sm text-foreground/80">{item.applicantName || '未知用户'}</span>
+                                </div>
+                          </TableCell>
+                          <TableCell className="font-medium tracking-tight">
+                              {currencyFormatter.format(item.amount)}
+                          </TableCell>
+                          <TableCell>
+                            <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium capitalize", statusConfig.className)}>
+                                {statusConfig.label}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-xs">
+                              <div className="flex flex-col gap-0.5">
+                                  <span>{item.sourceType === 'purchase' ? '关联采购' : '直接报销'}</span>
+                                  <span className="opacity-70">{item.organizationType === 'school' ? '学校' : '单位'}</span>
+                              </div>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-xs">
+                              {item.submittedAt?.split('T')[0] ?? item.occurredAt}
+                          </TableCell>
+                          <TableCell className="text-right pr-6" onClick={(e) => e.stopPropagation()}>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 gap-1.5 text-xs border-primary/20 hover:bg-primary/5 hover:text-primary"
+                                onClick={() => setActiveReimbursementId(item.id)}
+                            >
+                              <Wallet className="h-3.5 w-3.5" />
+                              打款
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                  })}
                 </TableBody>
               </Table>
             </div>
+            {/* Mobile View */}
             <div className="md:hidden space-y-3 px-4 py-4 overflow-y-auto">
-              {reimbursementRecords.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm">
-                  <div className="flex justify-between">
-                    <span className="font-semibold">{item.title}</span>
-                    <Badge variant={reimbursementStatusVariant(item.status)}>{reimbursementStatusText(item.status)}</Badge>
-                  </div>
-                  <div className="mt-2 text-sm text-muted-foreground">
-                    {currencyFormatter.format(item.amount)}
-                  </div>
-                  <Button size="sm" className="mt-3 w-full" onClick={() => setActiveReimbursementId(item.id)}>去处理</Button>
-                </div>
-              ))}
+              {reimbursementRecords.map((item) => {
+                  const statusConfig = getReimbursementStatusConfig(item.status);
+                  return (
+                    <div key={item.id} className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm active:scale-[0.99] transition-transform" onClick={() => setActiveReimbursementId(item.id)}>
+                      <div className="flex justify-between items-start gap-4">
+                        <div>
+                            <div className="font-semibold text-foreground line-clamp-1">{item.title}</div>
+                            <div className="text-xs text-muted-foreground font-mono mt-0.5">{item.reimbursementNumber}</div>
+                        </div>
+                        <span className={cn("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize shrink-0", statusConfig.className)}>
+                            {statusConfig.label}
+                        </span>
+                      </div>
+                      
+                      <div className="mt-4 flex items-center justify-between">
+                         <div className="flex items-center gap-2">
+                            <Avatar className="h-8 w-8">
+                                <AvatarFallback className="text-xs">{getInitials(item.applicantName)}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex flex-col">
+                                <span className="text-xs font-medium">{item.applicantName}</span>
+                                <span className="text-[10px] text-muted-foreground">{item.organizationType === 'school' ? '学校' : '单位'}</span>
+                            </div>
+                         </div>
+                         <div className="text-lg font-bold text-foreground">
+                            {currencyFormatter.format(item.amount)}
+                         </div>
+                      </div>
+                    </div>
+                  );
+              })}
             </div>
           </div>
         )}
       </div>
 
       {totalPages > 1 ? (
-        <div className="surface-card px-4 py-3">
+        <div className="surface-card px-4 py-3 border-0 shadow-sm">
           <Pagination
             currentPage={reimbursementPage}
             totalPages={totalPages}
