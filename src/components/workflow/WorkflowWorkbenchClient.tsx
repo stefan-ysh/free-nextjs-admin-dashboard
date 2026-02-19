@@ -20,7 +20,7 @@ import {
 } from '@/types/purchase';
 import type { ReimbursementRecord } from '@/types/reimbursement';
 import { isWorkflowActionStatusAllowed } from '@/lib/purchases/workflow-rules';
-import { formatMoney, reimbursementText, statusBadgeClass, statusText } from '@/components/mobile-workflow/shared';
+import { formatMoney, reimbursementText, statusBadgeClass, statusText } from '@/lib/workflow/shared';
 
 type WorkbenchTab = 'todo' | 'done';
 
