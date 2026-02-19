@@ -119,6 +119,8 @@ export type EmployeeFormSubmitPayload = {
 	terminationDate?: string | null;
 	location?: string | null;
 	customFields?: Record<string, string> | null;
+	roles?: UserRole[];
+	primaryRole?: UserRole;
 	statusChangeNote?: string | null;
 };
 

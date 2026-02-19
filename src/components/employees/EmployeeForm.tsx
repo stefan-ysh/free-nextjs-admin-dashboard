@@ -31,6 +31,9 @@ import {
 	EMPLOYEE_GENDER_LABELS,
 	EMPLOYMENT_STATUS_LABELS,
 } from './types';
+import { UserRole } from '@/types/user';
+import { USER_ROLE_OPTIONS } from '@/constants/user-roles';
+import { Checkbox } from '@/components/ui/checkbox';
 
 type EmployeeFormProps = {
 	initialData?: Employee | null;
@@ -38,6 +41,7 @@ type EmployeeFormProps = {
 	onCancel?: () => void;
 	formId?: string;
 	hideActions?: boolean;
+	canAssignRoles?: boolean;
 };
 
 const STATUS_OPTIONS = ['active', 'on_leave', 'terminated'] as const;
@@ -76,6 +80,7 @@ const buildDefaultValues = (data?: Employee | null): EmployeeFormValues => ({
 	location: data?.location ?? '',
 	address: data?.address ?? '',
 	statusChangeNote: '',
+	roles: data?.userRoles ?? [],
 });
 
 const employeeSchema = z.object({
@@ -98,11 +103,19 @@ const employeeSchema = z.object({
 	location: z.string().optional(),
 	address: z.string().optional(),
 	statusChangeNote: z.string().optional(),
+	roles: z.array(z.nativeEnum(UserRole)).optional(),
 });
 
 type EmployeeFormValues = z.infer<typeof employeeSchema>;
 
-export default function EmployeeForm({ initialData, onSubmit, onCancel, formId, hideActions = false }: EmployeeFormProps) {
+export default function EmployeeForm({
+	initialData,
+	onSubmit,
+	onCancel,
+	formId,
+	hideActions = false,
+	canAssignRoles = false,
+}: EmployeeFormProps) {
 	const isCreating = !initialData;
 
 	const form = useForm<EmployeeFormValues>({
@@ -145,9 +158,11 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, formId, 
 			location: sanitizeText(values.location),
 			address: sanitizeText(values.address),
 			statusChangeNote: statusChanged ? sanitizeText(values.statusChangeNote) : null,
-			};
-			await onSubmit(payload);
-		});
+			roles: values.roles?.length ? values.roles : undefined,
+			primaryRole: values.roles?.[0], // Simple logic: first selected role is primary
+		};
+		await onSubmit(payload);
+	});
 
 	return (
 		<Form {...form}>
@@ -258,6 +273,70 @@ export default function EmployeeForm({ initialData, onSubmit, onCancel, formId, 
 						)}
 					</div>
 				</div>
+
+				{canAssignRoles && (
+					<>
+						<div className="border-t" />
+						<div className="space-y-4">
+							<h3 className="text-lg font-medium">系统权限</h3>
+							<FormField
+								control={control}
+								name="roles"
+								render={() => (
+									<FormItem>
+										<div className="mb-4">
+											<FormLabel>分配角色</FormLabel>
+											<FormDescription>
+												选择该员工在系统中的操作权限。若不选择，默认即为普通员工。
+											</FormDescription>
+										</div>
+										<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+											{USER_ROLE_OPTIONS.map((option) => (
+												<FormField
+													key={option.value}
+													control={control}
+													name="roles"
+													render={({ field }) => {
+														return (
+															<FormItem
+																key={option.value}
+																className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4"
+															>
+																<FormControl>
+																	<Checkbox
+																		checked={field.value?.includes(option.value)}
+																		onCheckedChange={(checked) => {
+																			return checked
+																				? field.onChange([...(field.value || []), option.value])
+																				: field.onChange(
+																						field.value?.filter(
+																							(value) => value !== option.value
+																						)
+																				  );
+																		}}
+																	/>
+																</FormControl>
+																<div className="space-y-1 leading-none">
+																	<FormLabel className="font-normal">
+																		{option.label}
+																	</FormLabel>
+																	<p className="text-xs text-muted-foreground">
+																		{option.description}
+																	</p>
+																</div>
+															</FormItem>
+														);
+													}}
+												/>
+											))}
+										</div>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+						</div>
+					</>
+				)}
 
 				<div className="border-t" />
 

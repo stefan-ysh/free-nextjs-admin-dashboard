@@ -101,19 +101,19 @@ export const Permissions = {
   } as PermissionConfig,
   
   USER_CREATE: {
-    anyRoles: [UserRole.FINANCE],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE],
   } as PermissionConfig,
   
   USER_UPDATE: {
-    anyRoles: [UserRole.FINANCE],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE],
   } as PermissionConfig,
   
   USER_DELETE: {
-    anyRoles: [UserRole.FINANCE],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE],
   } as PermissionConfig,
   
   USER_ASSIGN_ROLES: {
-    anyRoles: [UserRole.FINANCE],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE],
   } as PermissionConfig,
   
   // ============ 采购管理 ============

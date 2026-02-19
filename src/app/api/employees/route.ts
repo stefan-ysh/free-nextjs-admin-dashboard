@@ -113,6 +113,8 @@ export async function POST(request: Request) {
       terminationDate: body.terminationDate,
       location: body.location,
       customFields: body.customFields,
+      roles: body.roles,
+      primaryRole: body.primaryRole,
     });
 
     let finalRecord = result;

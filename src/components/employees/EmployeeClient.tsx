@@ -1385,8 +1385,13 @@ export default function EmployeeClient({
               <div className="space-y-6">
                 <EmployeeForm
                   initialData={selectedEmployee}
-                  onSubmit={selectedEmployee ? handleUpdate : handleCreate}
-                  onCancel={handleDialogClose}
+                  canAssignRoles={canAssignRoles}
+                  onSubmit={isEditMode ? handleUpdate : handleCreate}
+                  onCancel={() => {
+                    setIsFormOpen(false);
+                    setIsEditMode(false);
+                    setSelectedEmployee(null);
+                  }}
                   formId="employee-details-form"
                   hideActions
                 />
@@ -1399,7 +1404,7 @@ export default function EmployeeClient({
               </div>
             )}
           </DrawerBody>
-          <DrawerFooter>
+          <DrawerFooter className="px-4 py-3 border-t">
             <DrawerClose asChild>
               <Button type="button" variant="outline" onClick={handleDialogClose}>
                 取消
@@ -1407,7 +1412,7 @@ export default function EmployeeClient({
             </DrawerClose>
             {(!selectedEmployee || isEditMode) && (
               <Button type="submit" form="employee-details-form">
-                {selectedEmployee ? '保存修改' : '创建员工'}
+                {selectedEmployee ? '保存修改' : '确认新增'}
               </Button>
             )}
           </DrawerFooter>

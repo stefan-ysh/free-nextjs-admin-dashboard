@@ -94,6 +94,8 @@ export async function PUT(
       location: body.location,
       customFields: body.customFields,
       statusChangeNote: body.statusChangeNote,
+      roles: body.roles,
+      primaryRole: body.primaryRole,
     };
 
 

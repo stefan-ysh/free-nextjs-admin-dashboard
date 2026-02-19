@@ -552,6 +552,8 @@ export type CreateEmployeeInput = {
   terminationDate?: string | null;
   location?: string | null;
   customFields?: Record<string, unknown> | null;
+  roles?: UserRole[];
+  primaryRole?: UserRole;
 };
 
 function requireText(value: string | null | undefined, field: string): string {
@@ -604,6 +606,8 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
     terminationDate: sanitizeDate(input.terminationDate ?? null),
     location: sanitizeNullableText(input.location ?? null),
     customFields: input.customFields && typeof input.customFields === 'object' ? input.customFields : {},
+    roles: input.roles ?? ['employee'],
+    primaryRole: input.primaryRole ?? (input.roles?.[0] || 'employee'),
   };
 
   if (!payload.employeeCode) {
@@ -625,6 +629,8 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
       termination_date,
       location,
       custom_fields,
+      roles,
+      primary_role,
       created_at,
       updated_at
     )
@@ -642,6 +648,8 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
       ${payload.terminationDate},
       ${payload.location},
       ${JSON.stringify(payload.customFields)},
+      ${JSON.stringify(payload.roles)},
+      ${payload.primaryRole},
       NOW(),
       NOW()
     )
@@ -653,6 +661,8 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
 export type UpdateEmployeeInput = Partial<CreateEmployeeInput> & {
   employmentStatus?: EmploymentStatus;
   statusChangeNote?: string | null;
+  roles?: UserRole[];
+  primaryRole?: UserRole;
 };
 
 export async function updateEmployee(id: string, input: UpdateEmployeeInput): Promise<EmployeeRecord | null> {
@@ -747,6 +757,12 @@ export async function updateEmployee(id: string, input: UpdateEmployeeInput): Pr
   if (input.customFields !== undefined) {
     const normalized = input.customFields && typeof input.customFields === 'object' ? input.customFields : {};
     pushField('custom_fields', JSON.stringify(normalized));
+  }
+  if (input.roles !== undefined) {
+    pushField('roles', JSON.stringify(input.roles));
+  }
+  if (input.primaryRole !== undefined) {
+    pushField('primary_role', input.primaryRole);
   }
 
   if (!fields.length) {
