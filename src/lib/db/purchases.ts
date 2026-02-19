@@ -718,8 +718,6 @@ export async function createPurchase(
       'receipt_images',
       'notes',
       'attachments',
-      'notes',
-      'attachments',
       'created_by',
       'created_at',
       'updated_at'
