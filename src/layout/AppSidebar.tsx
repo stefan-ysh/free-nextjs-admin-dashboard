@@ -15,7 +15,6 @@ import {
   LineChart as FinanceIcon,
   ShoppingCart as PurchaseIcon,
   CircleGauge as PerformanceIcon,
-  History as HistoryIcon,
 } from "lucide-react";
 
 import type { PermissionName } from "@/hooks/usePermissions";
@@ -154,11 +153,7 @@ const navItems: NavItem[] = [
     path: "/employees",
     requiredPermission: "USER_VIEW_ALL",
   },
-  {
-    name: "更新日志",
-    icon: <HistoryIcon />,
-    path: "/changelog",
-  },
+
 ];
 
 import type { PurchaseListResponse } from "@/types/purchase";
