@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { RowDataPacket } from 'mysql2';
 import { unstable_cache, revalidateTag } from 'next/cache';
 
-import { mysqlPool } from '@/lib/mysql';
+import { mysqlPool, withTransaction } from '@/lib/mysql';
+import type { PoolConnection } from 'mysql2/promise';
 import { ensureFinanceSchema } from '@/lib/schema/finance';
 import { normalizeDateInput } from '@/lib/dates';
 import {
@@ -309,7 +310,8 @@ function serializeTags(tags?: string[]): string | null {
 }
 
 export async function createRecord(
-  record: Omit<FinanceRecord, 'id' | 'createdAt' | 'updatedAt' | 'totalAmount'>
+  record: Omit<FinanceRecord, 'id' | 'createdAt' | 'updatedAt' | 'totalAmount'>,
+  connection?: PoolConnection
 ): Promise<FinanceRecord> {
   await ensureFinanceSchema();
   const id = randomUUID();
@@ -329,7 +331,8 @@ export async function createRecord(
   const invoiceSource = record.invoice?.type === InvoiceType.NONE ? undefined : record.invoice;
   const { invoice } = await processInvoicePayload(invoiceSource);
 
-  await pool.query(
+  const db = connection || pool;
+  await db.query(
     `INSERT INTO finance_records (
       id, name, type, category, date_value,
       contract_amount, fee, total_amount, payment_type,
@@ -365,16 +368,17 @@ export async function createRecord(
     ]
   );
 
-  const saved = await getRecord(id);
+  const saved = await getRecord(id, connection);
   if (!saved) {
     throw new Error('FAILED_TO_CREATE_FINANCE_RECORD');
   }
   return saved;
 }
 
-export async function getRecord(id: string): Promise<FinanceRecord | null> {
+export async function getRecord(id: string, connection?: PoolConnection): Promise<FinanceRecord | null> {
   await ensureFinanceSchema();
-  const [rows] = await pool.query<FinanceRecordRow[]>(
+  const db = connection || pool;
+  const [rows] = await db.query<FinanceRecordRow[]>(
     'SELECT * FROM finance_records WHERE id = ? LIMIT 1',
     [id]
   );
@@ -384,12 +388,13 @@ export async function getRecord(id: string): Promise<FinanceRecord | null> {
   return mapFinanceRecord(rows[0]);
 }
 
-export async function findRecordByPurchaseId(purchaseId: string): Promise<FinanceRecord | null> {
+export async function findRecordByPurchaseId(purchaseId: string, connection?: PoolConnection): Promise<FinanceRecord | null> {
   await ensureFinanceSchema();
   if (!purchaseId) {
     return null;
   }
-  const [rows] = await pool.query<FinanceRecordRow[]>(
+  const db = connection || pool;
+  const [rows] = await db.query<FinanceRecordRow[]>(
     'SELECT * FROM finance_records WHERE purchase_id = ? LIMIT 1',
     [purchaseId]
   );
@@ -399,12 +404,13 @@ export async function findRecordByPurchaseId(purchaseId: string): Promise<Financ
   return mapFinanceRecord(rows[0]);
 }
 
-export async function findRecordByReimbursementId(reimbursementId: string): Promise<FinanceRecord | null> {
+export async function findRecordByReimbursementId(reimbursementId: string, connection?: PoolConnection): Promise<FinanceRecord | null> {
   await ensureFinanceSchema();
   if (!reimbursementId) {
     return null;
   }
-  const [rows] = await pool.query<FinanceRecordRow[]>(
+  const db = connection || pool;
+  const [rows] = await db.query<FinanceRecordRow[]>(
     'SELECT * FROM finance_records WHERE reimbursement_id = ? LIMIT 1',
     [reimbursementId]
   );
@@ -665,41 +671,43 @@ export async function createBudgetAdjustment(input: {
   const dateValue = formatDateForDb(input.occurredAt);
   const note = input.note?.trim() || null;
 
-  await pool.query(
-    `INSERT INTO finance_budget_adjustments
-      (id, organization_type, adjustment_type, amount, title, note, occurred_at, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, input.organizationType, input.adjustmentType, amount, title, note, dateValue, input.createdBy]
-  );
+  return withTransaction(async (connection) => {
+    await connection.query(
+      `INSERT INTO finance_budget_adjustments
+        (id, organization_type, adjustment_type, amount, title, note, occurred_at, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, input.organizationType, input.adjustmentType, amount, title, note, dateValue, input.createdBy]
+    );
 
-  await createRecord({
-    name: `${title}${input.adjustmentType === 'increase' ? '（预算增加）' : '（预算扣减）'}`,
-    type: input.adjustmentType === 'increase' ? TransactionType.INCOME : TransactionType.EXPENSE,
-    category: '预算调整',
-    date: dateValue,
-    contractAmount: amount,
-    fee: 0,
-    paymentType: PaymentType.OTHER,
-    quantity: 1,
-    sourceType: 'budget_adjustment',
-    description: note ?? undefined,
-    createdBy: input.createdBy,
-    status: 'cleared',
-    metadata: {
-      budgetAdjustmentId: id,
-      organizationType: input.organizationType,
-      adjustmentType: input.adjustmentType,
-    },
+    await createRecord({
+      name: `${title}${input.adjustmentType === 'increase' ? '（预算增加）' : '（预算扣减）'}`,
+      type: input.adjustmentType === 'increase' ? TransactionType.INCOME : TransactionType.EXPENSE,
+      category: '预算调整',
+      date: dateValue,
+      contractAmount: amount,
+      fee: 0,
+      paymentType: PaymentType.OTHER,
+      quantity: 1,
+      sourceType: 'budget_adjustment',
+      description: note ?? undefined,
+      createdBy: input.createdBy,
+      status: 'cleared',
+      metadata: {
+        budgetAdjustmentId: id,
+        organizationType: input.organizationType,
+        adjustmentType: input.adjustmentType,
+      },
+    }, connection);
+
+    const [rows] = await connection.query<RawBudgetAdjustmentRow[]>(
+      'SELECT * FROM finance_budget_adjustments WHERE id = ? LIMIT 1',
+      [id]
+    );
+    if (!rows.length) {
+      throw new Error('FAILED_TO_CREATE_BUDGET_ADJUSTMENT');
+    }
+    return mapBudgetAdjustment(rows[0]);
   });
-
-  const [rows] = await pool.query<RawBudgetAdjustmentRow[]>(
-    'SELECT * FROM finance_budget_adjustments WHERE id = ? LIMIT 1',
-    [id]
-  );
-  if (!rows.length) {
-    throw new Error('FAILED_TO_CREATE_BUDGET_ADJUSTMENT');
-  }
-  return mapBudgetAdjustment(rows[0]);
 }
 
 export async function listBudgetAdjustments(params: {

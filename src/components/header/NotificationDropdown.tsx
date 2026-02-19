@@ -260,7 +260,7 @@ export default function NotificationDropdown() {
           >
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
           </span>
-         <Bell className="w-5 h-5 text-sidebar-foreground/70" />
+         <Bell className="w-5 h-5 text-foreground/70" />
         </button>
       </DropdownMenuTrigger>
 

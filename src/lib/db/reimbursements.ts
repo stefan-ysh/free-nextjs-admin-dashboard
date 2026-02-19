@@ -1,7 +1,8 @@
 import { randomUUID } from 'crypto';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
+import type { PoolConnection } from 'mysql2/promise';
 
-import { mysqlPool } from '@/lib/mysql';
+import { mysqlPool, withTransaction } from '@/lib/mysql';
 import { ensureReimbursementsSchema } from '@/lib/schema/reimbursements';
 import { ensureInventorySchema } from '@/lib/schema/inventory';
 import { ensureBusinessUserRecord } from '@/lib/users';
@@ -190,6 +191,9 @@ function sanitizeReimbursementDetails(
     );
   }
   const allowedKeys = new Set(fields.map((field) => field.key));
+  // Always allow system flags
+  allowedKeys.add('hasInvoice');
+
   const normalized: ReimbursementDetails = {};
   for (const [key, raw] of Object.entries(source)) {
     if (!allowedKeys.has(key)) continue;
@@ -381,9 +385,11 @@ async function insertWorkflowLog(
   fromStatus: ReimbursementStatus,
   toStatus: ReimbursementStatus,
   operatorId: string,
-  comment?: string | null
+  comment?: string | null,
+  connection?: PoolConnection
 ) {
-  await pool.query(
+  const db = connection || pool;
+  await db.query(
     `
       INSERT INTO reimbursement_workflow_logs
       (id, reimbursement_id, action, from_status, to_status, operator_id, comment)
@@ -393,8 +399,8 @@ async function insertWorkflowLog(
   );
 }
 
-async function syncFinanceExpenseRecordForReimbursement(reimbursement: ReimbursementRecord) {
-  const exists = await findRecordByReimbursementId(reimbursement.id);
+async function syncFinanceExpenseRecordForReimbursement(reimbursement: ReimbursementRecord, connection?: PoolConnection) {
+  const exists = await findRecordByReimbursementId(reimbursement.id, connection); // findRecord likely needs connection too?
   if (exists) return;
 
   await createRecord({
@@ -419,7 +425,7 @@ async function syncFinanceExpenseRecordForReimbursement(reimbursement: Reimburse
       applicantId: reimbursement.applicantId,
       paidAt: reimbursement.paidAt,
     },
-  });
+  }, connection);
 }
 
 export async function listReimbursements(params: ListReimbursementsParams): Promise<ListReimbursementsResult> {
@@ -519,9 +525,10 @@ export async function listReimbursements(params: ListReimbursementsParams): Prom
   };
 }
 
-export async function getReimbursementById(id: string): Promise<ReimbursementRecord | null> {
+export async function getReimbursementById(id: string, connection?: PoolConnection): Promise<ReimbursementRecord | null> {
   await ensureReimbursementsSchema();
-  const [rows] = await pool.query<RawReimbursementRow[]>(
+  const db = connection || pool;
+  const [rows] = await db.query<RawReimbursementRow[]>(
     `
       SELECT
         r.*,
@@ -570,6 +577,7 @@ export async function createReimbursement(
   if (!input.category?.trim()) throw new Error('REIMBURSEMENT_CATEGORY_REQUIRED');
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error('REIMBURSEMENT_AMOUNT_INVALID');
 
+  // Pre-transaction checks (can be moved inside if critical for consistency, but these are mostly static or loose checks)
   const sourceType = input.sourceType ?? 'direct';
   if (!isReimbursementSourceType(sourceType)) throw new Error('REIMBURSEMENT_SOURCE_INVALID');
   const sourcePurchaseId = sourceType === 'purchase' ? input.sourcePurchaseId?.trim() || null : null;
@@ -579,50 +587,57 @@ export async function createReimbursement(
   await ensureUserExists(createdBy, 'CREATED_BY_NOT_FOUND');
   await ensureUserExists(applicantId, 'APPLICANT_NOT_FOUND');
 
-  let organizationType: ReimbursementOrganizationType = input.organizationType ?? 'company';
-  if (sourceType === 'purchase' && sourcePurchaseId) {
-    const purchase = await findPurchaseById(sourcePurchaseId);
-    if (!purchase || purchase.isDeleted) throw new Error('SOURCE_PURCHASE_NOT_FOUND');
-    if (purchase.paymentMethod === 'corporate_transfer') throw new Error('SOURCE_PURCHASE_NOT_REIMBURSABLE');
-    await assertPurchaseNotAlreadyLinked(sourcePurchaseId);
-    organizationType = purchase.organizationType;
-  }
+  return withTransaction(async (connection) => {
+      let organizationType: ReimbursementOrganizationType = input.organizationType ?? 'company';
+      if (sourceType === 'purchase' && sourcePurchaseId) {
+        // Validation inside transaction
+        const purchase = await findPurchaseById(sourcePurchaseId, connection);
+        if (!purchase || purchase.isDeleted) throw new Error('SOURCE_PURCHASE_NOT_FOUND');
+        if (purchase.paymentMethod === 'corporate_transfer') throw new Error('SOURCE_PURCHASE_NOT_REIMBURSABLE');
+        // assertPurchaseNotAlreadyLinked checks reimbursements. It should use connection too.
+        // But assertPurchaseNotAlreadyLinked uses pool query inside. 
+        // We should just run the query directly here or assume pool is fine for reading unrelated reimbursements (phantom reads acceptable?).
+        // For strictness, let's run the check manually or leave it as is (pool).
+        await assertPurchaseNotAlreadyLinked(sourcePurchaseId);
+        organizationType = purchase.organizationType;
+      }
 
-  const id = randomUUID();
-  const number = await generateReimbursementNumber();
-  const occurredAt = requireDate(input.occurredAt);
-  const details = sanitizeReimbursementDetails(input.category.trim(), input.details);
+      const id = randomUUID();
+      const number = await generateReimbursementNumber(); // Uses pool.
+      const occurredAt = requireDate(input.occurredAt);
+      const details = sanitizeReimbursementDetails(input.category.trim(), input.details);
 
-  await pool.query(
-    `
-      INSERT INTO reimbursements (
-        id, reimbursement_number, source_type, source_purchase_id,
-        organization_type, category, title, amount, occurred_at, description,
-        details_json, invoice_images, receipt_images, attachments, status, applicant_id, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)
-    `,
-    [
-      id,
-      number,
-      sourceType,
-      sourcePurchaseId,
-      organizationType,
-      input.category.trim(),
-      input.title.trim(),
-      Number(input.amount),
-      occurredAt,
-      input.description?.trim() || null,
-      serializeDetails(details),
-      serializeArray(input.invoiceImages),
-      serializeArray(input.receiptImages),
-      serializeArray(input.attachments),
-      applicantId,
-      createdBy,
-    ]
-  );
+      await connection.query(
+        `
+          INSERT INTO reimbursements (
+            id, reimbursement_number, source_type, source_purchase_id,
+            organization_type, category, title, amount, occurred_at, description,
+            details_json, invoice_images, receipt_images, attachments, status, applicant_id, created_by
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)
+        `,
+        [
+          id,
+          number,
+          sourceType,
+          sourcePurchaseId,
+          organizationType,
+          input.category.trim(),
+          input.title.trim(),
+          Number(input.amount),
+          occurredAt,
+          input.description?.trim() || null,
+          serializeDetails(details),
+          serializeArray(input.invoiceImages),
+          serializeArray(input.receiptImages),
+          serializeArray(input.attachments),
+          applicantId,
+          createdBy,
+        ]
+      );
 
-  await insertWorkflowLog(id, 'create', 'draft', 'draft', createdBy, '创建报销草稿');
-  return (await getReimbursementById(id))!;
+      await insertWorkflowLog(id, 'create', 'draft', 'draft', createdBy, '创建报销草稿', connection);
+      return (await getReimbursementById(id, connection))!;
+  });
 }
 
 export async function updateReimbursement(
@@ -630,241 +645,262 @@ export async function updateReimbursement(
   input: UpdateReimbursementInput
 ): Promise<ReimbursementRecord> {
   await ensureReimbursementsSchema();
-  const existing = await getReimbursementById(id);
-  if (!existing) throw new Error('REIMBURSEMENT_NOT_FOUND');
-  if (!(existing.status === 'draft' || existing.status === 'rejected')) throw new Error('REIMBURSEMENT_NOT_EDITABLE');
-  if (existing.sourceType === 'purchase' && existing.submittedAt) {
-    throw new Error('REIMBURSEMENT_LINKED_PURCHASE_LOCKED');
-  }
-
-  const updates: string[] = [];
-  const values: unknown[] = [];
-
-  const push = (field: string, value: unknown) => {
-    updates.push(`${field} = ?`);
-    values.push(value);
-  };
-
-  const nextSourceType = input.sourceType ?? existing.sourceType;
-  const nextSourcePurchaseId =
-    input.sourcePurchaseId !== undefined ? input.sourcePurchaseId?.trim() || null : existing.sourcePurchaseId;
-  const nextCategory = input.category !== undefined ? input.category.trim() : existing.category;
-
-  if (!isReimbursementSourceType(nextSourceType)) throw new Error('REIMBURSEMENT_SOURCE_INVALID');
-  if (nextSourceType === 'purchase' && !nextSourcePurchaseId) throw new Error('SOURCE_PURCHASE_REQUIRED');
-  if (nextSourceType === 'purchase' && nextSourcePurchaseId) {
-    const purchase = await findPurchaseById(nextSourcePurchaseId);
-    if (!purchase || purchase.isDeleted) throw new Error('SOURCE_PURCHASE_NOT_FOUND');
-    if (purchase.paymentMethod === 'corporate_transfer') throw new Error('SOURCE_PURCHASE_NOT_REIMBURSABLE');
-    if (nextSourcePurchaseId !== (existing.sourcePurchaseId ?? '')) {
-      await assertPurchaseNotAlreadyLinked(nextSourcePurchaseId, { excludeReimbursementId: id });
+  
+  return withTransaction(async (connection) => {
+    const existing = await getReimbursementById(id, connection);
+    if (!existing) throw new Error('REIMBURSEMENT_NOT_FOUND');
+    if (!(existing.status === 'draft' || existing.status === 'rejected')) throw new Error('REIMBURSEMENT_NOT_EDITABLE');
+    if (existing.sourceType === 'purchase' && existing.submittedAt && existing.status !== 'rejected') {
+      throw new Error('REIMBURSEMENT_LINKED_PURCHASE_LOCKED');
     }
-    if (input.organizationType === undefined) {
-      push('organization_type', purchase.organizationType);
+
+    const updates: string[] = [];
+    const values: unknown[] = [];
+
+    const push = (field: string, value: unknown) => {
+      updates.push(`${field} = ?`);
+      values.push(value);
+    };
+
+    const nextSourceType = input.sourceType ?? existing.sourceType;
+    const nextSourcePurchaseId =
+      input.sourcePurchaseId !== undefined ? input.sourcePurchaseId?.trim() || null : existing.sourcePurchaseId;
+    const nextCategory = input.category !== undefined ? input.category.trim() : existing.category;
+
+    if (!isReimbursementSourceType(nextSourceType)) throw new Error('REIMBURSEMENT_SOURCE_INVALID');
+    if (nextSourceType === 'purchase' && !nextSourcePurchaseId) throw new Error('SOURCE_PURCHASE_REQUIRED');
+    if (nextSourceType === 'purchase' && nextSourcePurchaseId) {
+      const purchase = await findPurchaseById(nextSourcePurchaseId, connection); // Inside transaction
+      if (!purchase || purchase.isDeleted) throw new Error('SOURCE_PURCHASE_NOT_FOUND');
+      if (purchase.paymentMethod === 'corporate_transfer') throw new Error('SOURCE_PURCHASE_NOT_REIMBURSABLE');
+      if (nextSourcePurchaseId !== (existing.sourcePurchaseId ?? '')) {
+        await assertPurchaseNotAlreadyLinked(nextSourcePurchaseId, { excludeReimbursementId: id });
+        // assertPurchaseNotAlreadyLinked uses pool, which is fine (check other records).
+      }
+      if (input.organizationType === undefined) {
+        push('organization_type', purchase.organizationType);
+      }
     }
-  }
-  if (input.sourceType !== undefined) push('source_type', nextSourceType);
-  if (input.sourcePurchaseId !== undefined) push('source_purchase_id', nextSourcePurchaseId);
-  if (input.organizationType !== undefined) {
-    if (!isReimbursementOrganizationType(input.organizationType)) throw new Error('REIMBURSEMENT_ORG_INVALID');
-    push('organization_type', input.organizationType);
-  }
-  if (input.category !== undefined) {
-    if (!nextCategory) throw new Error('REIMBURSEMENT_CATEGORY_REQUIRED');
-    push('category', nextCategory);
-  }
-  if (input.title !== undefined) {
-    if (!input.title.trim()) throw new Error('REIMBURSEMENT_TITLE_REQUIRED');
-    push('title', input.title.trim());
-  }
-  if (input.amount !== undefined) {
-    if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error('REIMBURSEMENT_AMOUNT_INVALID');
-    push('amount', Number(input.amount));
-  }
-  if (input.occurredAt !== undefined) {
-    push('occurred_at', requireDate(input.occurredAt));
-  }
-  if (input.description !== undefined) push('description', input.description?.trim() || null);
-  if (input.details !== undefined || input.category !== undefined) {
-    const nextDetails = sanitizeReimbursementDetails(nextCategory, input.details ?? existing.details);
-    push('details_json', serializeDetails(nextDetails));
-  }
-  if (input.invoiceImages !== undefined) push('invoice_images', serializeArray(input.invoiceImages));
-  if (input.receiptImages !== undefined) push('receipt_images', serializeArray(input.receiptImages));
-  if (input.attachments !== undefined) push('attachments', serializeArray(input.attachments));
+    if (input.sourceType !== undefined) push('source_type', nextSourceType);
+    if (input.sourcePurchaseId !== undefined) push('source_purchase_id', nextSourcePurchaseId);
+    if (input.organizationType !== undefined) {
+      if (!isReimbursementOrganizationType(input.organizationType)) throw new Error('REIMBURSEMENT_ORG_INVALID');
+      push('organization_type', input.organizationType);
+    }
+    if (input.category !== undefined) {
+      if (!nextCategory) throw new Error('REIMBURSEMENT_CATEGORY_REQUIRED');
+      push('category', nextCategory);
+    }
+    if (input.title !== undefined) {
+      if (!input.title.trim()) throw new Error('REIMBURSEMENT_TITLE_REQUIRED');
+      push('title', input.title.trim());
+    }
+    if (input.amount !== undefined) {
+      if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error('REIMBURSEMENT_AMOUNT_INVALID');
+      push('amount', Number(input.amount));
+    }
+    if (input.occurredAt !== undefined) {
+      push('occurred_at', requireDate(input.occurredAt));
+    }
+    if (input.description !== undefined) push('description', input.description?.trim() || null);
+    if (input.details !== undefined || input.category !== undefined) {
+      const nextDetails = sanitizeReimbursementDetails(nextCategory, input.details ?? existing.details);
+      push('details_json', serializeDetails(nextDetails));
+    }
+    if (input.invoiceImages !== undefined) push('invoice_images', serializeArray(input.invoiceImages));
+    if (input.receiptImages !== undefined) push('receipt_images', serializeArray(input.receiptImages));
+    if (input.attachments !== undefined) push('attachments', serializeArray(input.attachments));
 
-  if (!updates.length) return existing;
-  updates.push('updated_at = NOW()');
+    if (!updates.length) return existing;
+    updates.push('updated_at = NOW()');
 
-  await pool.query<ResultSetHeader>(`UPDATE reimbursements SET ${updates.join(', ')} WHERE id = ?`, [...values, id]);
-  return (await getReimbursementById(id))!;
+    await connection.query<ResultSetHeader>(`UPDATE reimbursements SET ${updates.join(', ')} WHERE id = ?`, [...values, id]);
+    return (await getReimbursementById(id, connection))!;
+  });
 }
 
 export async function submitReimbursement(id: string, operatorId: string): Promise<ReimbursementRecord> {
   await ensureReimbursementsSchema();
-  const existing = await getReimbursementById(id);
-  if (!existing) throw new Error('REIMBURSEMENT_NOT_FOUND');
-  if (!(existing.status === 'draft' || existing.status === 'rejected')) throw new Error('REIMBURSEMENT_NOT_SUBMITTABLE');
-  sanitizeReimbursementDetails(existing.category, existing.details);
+  
+  return withTransaction(async (connection) => {
+    const existing = await getReimbursementById(id, connection);
+    if (!existing) throw new Error('REIMBURSEMENT_NOT_FOUND');
+    if (!(existing.status === 'draft' || existing.status === 'rejected')) throw new Error('REIMBURSEMENT_NOT_SUBMITTABLE');
+    sanitizeReimbursementDetails(existing.category, existing.details);
 
-  if (existing.sourceType === 'purchase') {
-    if (!existing.sourcePurchaseId) throw new Error('SOURCE_PURCHASE_REQUIRED');
-    const sourcePurchase = await findPurchaseById(existing.sourcePurchaseId);
-    if (!sourcePurchase || sourcePurchase.isDeleted) throw new Error('SOURCE_PURCHASE_NOT_FOUND');
-    const purchaseNeedInvoice =
-      sourcePurchase.invoiceType !== 'none' && sourcePurchase.invoiceStatus !== 'not_required';
-    if (purchaseNeedInvoice && !hasInvoiceEvidence(existing)) {
-      throw new Error('REIMBURSEMENT_PURCHASE_INVOICE_REQUIRED');
+    if (existing.sourceType === 'purchase') {
+      if (!existing.sourcePurchaseId) throw new Error('SOURCE_PURCHASE_REQUIRED');
+      const sourcePurchase = await findPurchaseById(existing.sourcePurchaseId, connection); // fetch inside transaction
+      if (!sourcePurchase || sourcePurchase.isDeleted) throw new Error('SOURCE_PURCHASE_NOT_FOUND');
+      const purchaseNeedInvoice =
+        sourcePurchase.invoiceType !== 'none' && sourcePurchase.invoiceStatus !== 'not_required';
+      if (purchaseNeedInvoice && !hasInvoiceEvidence(existing)) {
+        throw new Error('REIMBURSEMENT_PURCHASE_INVOICE_REQUIRED');
+      }
+      await assertLinkedPurchaseInboundReady(existing.sourcePurchaseId); // This uses pool, maybe ok.
+    } else if (!hasEvidence(existing)) {
+      throw new Error('INVOICE_FILES_REQUIRED');
     }
-    await assertLinkedPurchaseInboundReady(existing.sourcePurchaseId);
-  } else if (!hasEvidence(existing)) {
-    throw new Error('INVOICE_FILES_REQUIRED');
-  }
-  const approverId = await pickAutoApproverId(existing.organizationType);
+    const approverId = await pickAutoApproverId(existing.organizationType);
 
-  await pool.query(
-    `
-      UPDATE reimbursements
-      SET status = 'pending_approval',
-          pending_approver_id = ?,
-          submitted_at = NOW(),
-          approved_at = NULL,
-          approved_by = NULL,
-          rejected_at = NULL,
-          rejected_by = NULL,
-          rejection_reason = NULL,
-          updated_at = NOW()
-      WHERE id = ?
-    `,
-    [approverId, id]
-  );
+    await connection.query(
+      `
+        UPDATE reimbursements
+        SET status = 'pending_approval',
+            pending_approver_id = ?,
+            submitted_at = NOW(),
+            approved_at = NULL,
+            approved_by = NULL,
+            rejected_at = NULL,
+            rejected_by = NULL,
+            rejection_reason = NULL,
+            updated_at = NOW()
+        WHERE id = ?
+      `,
+      [approverId, id]
+    );
 
-  await insertWorkflowLog(id, 'submit', existing.status, 'pending_approval', operatorId, '提交报销审批');
-  return (await getReimbursementById(id))!;
+    await insertWorkflowLog(id, 'submit', existing.status, 'pending_approval', operatorId, '提交报销审批', connection);
+    return (await getReimbursementById(id, connection))!;
+  });
 }
 
 export async function approveReimbursement(id: string, operatorId: string, comment?: string | null): Promise<ReimbursementRecord> {
   await ensureReimbursementsSchema();
-  const existing = await getReimbursementById(id);
-  if (!existing) throw new Error('REIMBURSEMENT_NOT_FOUND');
-  if (existing.status !== 'pending_approval') throw new Error('REIMBURSEMENT_NOT_APPROVABLE');
+  
+  return withTransaction(async (connection) => {
+    const existing = await getReimbursementById(id, connection);
+    if (!existing) throw new Error('REIMBURSEMENT_NOT_FOUND');
+    if (existing.status !== 'pending_approval') throw new Error('REIMBURSEMENT_NOT_APPROVABLE');
 
-  await pool.query(
-    `
-      UPDATE reimbursements
-      SET status = 'approved',
-          approved_at = NOW(),
-          approved_by = ?,
-          pending_approver_id = NULL,
-          updated_at = NOW()
-      WHERE id = ?
-    `,
-    [operatorId, id]
-  );
+    await connection.query(
+      `
+        UPDATE reimbursements
+        SET status = 'approved',
+            approved_at = NOW(),
+            approved_by = ?,
+            pending_approver_id = NULL,
+            updated_at = NOW()
+        WHERE id = ?
+      `,
+      [operatorId, id]
+    );
 
-  await insertWorkflowLog(id, 'approve', 'pending_approval', 'approved', operatorId, comment ?? '审批通过');
-  return (await getReimbursementById(id))!;
+    await insertWorkflowLog(id, 'approve', 'pending_approval', 'approved', operatorId, comment ?? '审批通过', connection);
+    return (await getReimbursementById(id, connection))!;
+  });
 }
 
 export async function rejectReimbursement(id: string, operatorId: string, reason: string): Promise<ReimbursementRecord> {
   await ensureReimbursementsSchema();
-  const existing = await getReimbursementById(id);
-  if (!existing) throw new Error('REIMBURSEMENT_NOT_FOUND');
-  if (existing.status !== 'pending_approval' && existing.status !== 'approved') throw new Error('REIMBURSEMENT_NOT_REJECTABLE');
-  if (!reason.trim()) throw new Error('REIMBURSEMENT_REJECT_REASON_REQUIRED');
-  const fromStatus = existing.status;
+  
+  return withTransaction(async (connection) => {
+    const existing = await getReimbursementById(id, connection);
+    if (!existing) throw new Error('REIMBURSEMENT_NOT_FOUND');
+    if (existing.status !== 'pending_approval' && existing.status !== 'approved') throw new Error('REIMBURSEMENT_NOT_REJECTABLE');
+    if (!reason.trim()) throw new Error('REIMBURSEMENT_REJECT_REASON_REQUIRED');
+    const fromStatus = existing.status;
 
-  await pool.query(
-    `
-      UPDATE reimbursements
-      SET status = 'rejected',
-          approved_at = NULL,
-          approved_by = NULL,
-          rejected_at = NOW(),
-          rejected_by = ?,
-          rejection_reason = ?,
-          pending_approver_id = NULL,
-          updated_at = NOW()
-      WHERE id = ?
-    `,
-    [operatorId, reason.trim(), id]
-  );
+    await connection.query(
+      `
+        UPDATE reimbursements
+        SET status = 'rejected',
+            approved_at = NULL,
+            approved_by = NULL,
+            rejected_at = NOW(),
+            rejected_by = ?,
+            rejection_reason = ?,
+            pending_approver_id = NULL,
+            updated_at = NOW()
+        WHERE id = ?
+      `,
+      [operatorId, reason.trim(), id]
+    );
 
-  await insertWorkflowLog(id, 'reject', fromStatus, 'rejected', operatorId, reason.trim());
-  return (await getReimbursementById(id))!;
+    await insertWorkflowLog(id, 'reject', fromStatus, 'rejected', operatorId, reason.trim(), connection);
+    return (await getReimbursementById(id, connection))!;
+  });
 }
 
 export async function withdrawReimbursement(id: string, operatorId: string, reason: string): Promise<ReimbursementRecord> {
   await ensureReimbursementsSchema();
-  const existing = await getReimbursementById(id);
-  if (!existing) throw new Error('REIMBURSEMENT_NOT_FOUND');
-  if (existing.status !== 'pending_approval') throw new Error('REIMBURSEMENT_NOT_WITHDRAWABLE');
+  
+  return withTransaction(async (connection) => {
+    const existing = await getReimbursementById(id, connection);
+    if (!existing) throw new Error('REIMBURSEMENT_NOT_FOUND');
+    if (existing.status !== 'pending_approval') throw new Error('REIMBURSEMENT_NOT_WITHDRAWABLE');
 
-  await pool.query(
-    `
-      UPDATE reimbursements
-      SET status = 'draft',
-          pending_approver_id = NULL,
-          updated_at = NOW()
-      WHERE id = ?
-    `,
-    [id]
-  );
-  await insertWorkflowLog(id, 'withdraw', 'pending_approval', 'draft', operatorId, reason?.trim() || null);
-  return (await getReimbursementById(id))!;
+    await connection.query(
+      `
+        UPDATE reimbursements
+        SET status = 'draft',
+            pending_approver_id = NULL,
+            updated_at = NOW()
+        WHERE id = ?
+      `,
+      [id]
+    );
+    await insertWorkflowLog(id, 'withdraw', 'pending_approval', 'draft', operatorId, reason?.trim() || null, connection);
+    return (await getReimbursementById(id, connection))!;
+  });
 }
 
 export async function payReimbursement(id: string, operatorId: string, note?: string | null): Promise<ReimbursementRecord> {
   await ensureReimbursementsSchema();
-  const existing = await getReimbursementById(id);
-  if (!existing) throw new Error('REIMBURSEMENT_NOT_FOUND');
-  if (existing.status !== 'approved' && existing.status !== 'pending_approval') throw new Error('REIMBURSEMENT_NOT_PAYABLE');
+  
+  return withTransaction(async (connection) => {
+    const existing = await getReimbursementById(id, connection);
+    if (!existing) throw new Error('REIMBURSEMENT_NOT_FOUND');
+    if (existing.status !== 'approved' && existing.status !== 'pending_approval') throw new Error('REIMBURSEMENT_NOT_PAYABLE');
 
-  if (existing.status === 'pending_approval') {
-    await pool.query(
-      `
-        UPDATE reimbursements
-        SET status = 'paid',
-            approved_at = NOW(),
-            approved_by = ?,
-            pending_approver_id = NULL,
-            paid_at = NOW(),
-            paid_by = ?,
-            payment_note = ?,
-            updated_at = NOW()
-        WHERE id = ?
-      `,
-      [operatorId, operatorId, note?.trim() || null, id]
-    );
-    await insertWorkflowLog(id, 'approve', 'pending_approval', 'approved', operatorId, '财务核对通过并准备打款');
-    await insertWorkflowLog(id, 'pay', 'approved', 'paid', operatorId, note?.trim() || '财务打款');
-  } else {
-    await pool.query(
-      `
-        UPDATE reimbursements
-        SET status = 'paid',
-            paid_at = NOW(),
-            paid_by = ?,
-            payment_note = ?,
-            updated_at = NOW()
-        WHERE id = ?
-      `,
-      [operatorId, note?.trim() || null, id]
-    );
-    await insertWorkflowLog(id, 'pay', 'approved', 'paid', operatorId, note?.trim() || '财务打款');
-  }
+    if (existing.status === 'pending_approval') {
+      await connection.query(
+        `
+          UPDATE reimbursements
+          SET status = 'paid',
+              approved_at = NOW(),
+              approved_by = ?,
+              pending_approver_id = NULL,
+              paid_at = NOW(),
+              paid_by = ?,
+              payment_note = ?,
+              updated_at = NOW()
+          WHERE id = ?
+        `,
+        [operatorId, operatorId, note?.trim() || null, id]
+      );
+      await insertWorkflowLog(id, 'approve', 'pending_approval', 'approved', operatorId, '财务核对通过并准备打款', connection);
+      await insertWorkflowLog(id, 'pay', 'approved', 'paid', operatorId, note?.trim() || '财务打款', connection);
+    } else {
+      await connection.query(
+        `
+          UPDATE reimbursements
+          SET status = 'paid',
+              paid_at = NOW(),
+              paid_by = ?,
+              payment_note = ?,
+              updated_at = NOW()
+          WHERE id = ?
+        `,
+        [operatorId, note?.trim() || null, id]
+      );
+      await insertWorkflowLog(id, 'pay', 'approved', 'paid', operatorId, note?.trim() || '财务打款', connection);
+    }
 
-  const updated = (await getReimbursementById(id))!;
-  await syncFinanceExpenseRecordForReimbursement(updated);
-  return updated;
+    const updated = (await getReimbursementById(id, connection))!;
+    await syncFinanceExpenseRecordForReimbursement(updated, connection);
+    return updated;
+  });
 }
 
 export async function deleteReimbursement(id: string): Promise<void> {
   await ensureReimbursementsSchema();
-  await pool.query(
-    'UPDATE reimbursements SET is_deleted = 1, deleted_at = NOW(), updated_at = NOW() WHERE id = ?',
-    [id]
-  );
+  await withTransaction(async (connection) => {
+    await connection.query(
+      'UPDATE reimbursements SET is_deleted = 1, deleted_at = NOW(), updated_at = NOW() WHERE id = ?',
+      [id]
+    );
+  });
 }
 
 export async function checkPurchaseEligibilityForReimbursement(

@@ -5,10 +5,12 @@ import { toast } from 'sonner';
 import DataState from '@/components/common/DataState';
 import PurchaseDetailModal from '@/components/purchases/PurchaseDetailModal';
 import PurchaseInboundDrawer from '@/components/purchases/PurchaseInboundDrawer';
-import ReimbursementPayConfirmDialog from '@/components/reimbursements/ReimbursementPayConfirmDialog';
+
 import ApprovalCommentDialog from '@/components/purchases/ApprovalCommentDialog';
 import RejectionReasonDialog from '@/components/purchases/RejectionReasonDialog';
 import TransferApprovalDialog from '@/components/purchases/TransferApprovalDialog';
+import PaymentConfirmDialog from '@/components/reimbursements/PaymentConfirmDialog';
+import ReimbursementDetailDrawer from '@/components/reimbursements/ReimbursementDetailDrawer';
 import { Button } from '@/components/ui/button';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { PurchaseRowPermissions } from '@/components/purchases/PurchaseTable';
@@ -110,11 +112,12 @@ export default function WorkflowWorkbenchClient({
   const [actionError, setActionError] = useState<string | null>(null);
   const [lastFailedAction, setLastFailedAction] = useState<FailedActionSnapshot | null>(null);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
-  const [activeReimbursementPayId, setActiveReimbursementPayId] = useState<string | null>(null);
+
   const [inboundDrawer, setInboundDrawer] = useState<{ open: boolean; purchase: PurchaseRecord | null }>({
     open: false,
     purchase: null,
   });
+  const [reimbursementDrawer, setReimbursementDrawer] = useState<{ open: boolean; record: ReimbursementRecord | null }>({ open: false, record: null });
   const [rejectDialog, setRejectDialog] = useState<{ open: boolean; purchase: PurchaseRecord | PurchaseDetail | null }>({
     open: false,
     purchase: null,
@@ -127,6 +130,7 @@ export default function WorkflowWorkbenchClient({
     open: false,
     purchase: null,
   });
+  const [payTarget, setPayTarget] = useState<ReimbursementRecord | null>(null);
 
   const { hasPermission } = usePermissions();
   const canApprove = hasPermission('PURCHASE_APPROVE');
@@ -468,6 +472,32 @@ export default function WorkflowWorkbenchClient({
     if (success) setTransferDialog({ open: false, purchase: null });
   }, [performAction, transferDialog.purchase]);
 
+  const handlePayConfirm = useCallback(
+    async (note: string) => {
+      if (!payTarget) return;
+      setMutatingId(payTarget.id);
+      try {
+        const response = await fetch(`/api/reimbursements/${payTarget.id}/actions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'pay', note }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || '打款失败');
+        }
+        toast.success('已标记打款');
+        setPayTarget(null);
+        void loadAll();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : '打款失败');
+      } finally {
+        setMutatingId(null);
+      }
+    },
+    [payTarget, loadAll]
+  );
+
   const unifiedPayItems = useMemo(
     () =>
       todoReimbursementPays.map((item) => ({
@@ -547,20 +577,29 @@ export default function WorkflowWorkbenchClient({
 
     if (canReimbursementPay) {
       items.push(
-        ...unifiedPayItems.map((item) => ({
-          id: `reimbursement-pay-${item.id}`,
-          kind: 'reimbursement' as const,
-          taskLabel: '报销打款',
-          title: item.title,
-          number: item.number,
-          description: `申请人 ${item.applicant || '未知用户'} · 组织 ${item.organizationType === 'school' ? '学校' : '单位'}`,
-          amount: item.amount,
-          updatedAt: new Date().toISOString(),
-          statusLabel: '待打款',
-          statusClass: 'border-primary/30 bg-primary/10 text-primary',
-          actionLabel: '去处理',
-          onAction: () => setActiveReimbursementPayId(item.reimbursementId),
-        }))
+        ...unifiedPayItems.map((item) => {
+          const originalRecord = todoReimbursementPays.find(r => r.id === item.reimbursementId);
+          return {
+            id: `reimbursement-pay-${item.id}`,
+            kind: 'reimbursement' as const,
+            taskLabel: '报销打款',
+            title: item.title,
+            number: item.number,
+            description: `申请人 ${item.applicant || '未知用户'} · 组织 ${item.organizationType === 'school' ? '学校' : '单位'}`,
+            amount: item.amount,
+            updatedAt: new Date().toISOString(),
+            statusLabel: '待打款',
+            statusClass: 'border-primary/30 bg-primary/10 text-primary',
+            actionLabel: '去处理',
+            onAction: () => {
+               if (originalRecord) {
+                 setReimbursementDrawer({ open: true, record: originalRecord });
+               } else {
+                 toast.error('找不到报销记录');
+               }
+            },
+          };
+        })
       );
     }
 
@@ -572,14 +611,14 @@ export default function WorkflowWorkbenchClient({
           taskLabel: '报销审批',
           title: item.title,
           number: item.reimbursementNumber,
-          description: `申请人 ${item.applicantName || '未知用户'} · 组织 ${item.organizationType === 'school' ? '学校' : '单位'}`,
+          description: `由 ${item.applicantName || '未知用户'} 提交`,
           amount: item.amount,
           updatedAt: item.updatedAt,
-          statusLabel: REIMBURSEMENT_STATUS_TEXT[item.status] ?? '待处理',
-          statusClass: item.status === 'pending_approval' ? 'border-chart-3/30 bg-chart-3/15 text-chart-3' : 'border-border bg-muted/40 text-muted-foreground',
-          actionLabel: '去审批',
+          statusLabel: '审批中',
+          statusClass: 'border-chart-3/40 bg-chart-3/10 text-chart-3',
+          actionLabel: '去处理',
           onAction: () => {
-            window.location.href = `/reimbursements?scope=approval&focus=${encodeURIComponent(item.id)}`;
+            setReimbursementDrawer({ open: true, record: item });
           },
         }))
       );
@@ -598,7 +637,7 @@ export default function WorkflowWorkbenchClient({
           updatedAt: item.updatedAt,
           statusLabel: REIMBURSEMENT_STATUS_TEXT[item.status] ?? '已驳回',
           statusClass: 'border-destructive/40 bg-destructive/10 text-destructive',
-          actionLabel: '去处理',
+          actionLabel: '编辑详情',
           onAction: () => {
             window.location.href = `/reimbursements?scope=mine&focus=${encodeURIComponent(item.id)}`;
           },
@@ -618,9 +657,12 @@ export default function WorkflowWorkbenchClient({
     todoInbound,
     todoRejected,
     unifiedPayItems,
+    todoReimbursementPays,
     todoReimbursementApprovals,
     todoReimbursementRejected,
     openPurchaseDetail,
+    // setInboundDrawer, // state setter is stable
+    // setPayTarget, // state setter is stable
   ]);
 
   const doneUnifiedItems = useMemo<UnifiedWorkflowItem[]>(() => {
@@ -795,6 +837,12 @@ export default function WorkflowWorkbenchClient({
           )}
         </div>
       ) : null}
+      <ReimbursementDetailDrawer
+        open={reimbursementDrawer.open}
+        onClose={() => setReimbursementDrawer({ open: false, record: null })}
+        record={reimbursementDrawer.record}
+        onSuccess={() => void loadAll()}
+      />
       <PurchaseDetailModal
         purchase={selectedPurchase}
         onClose={() => {
@@ -833,19 +881,7 @@ export default function WorkflowWorkbenchClient({
         onSubmit={handleTransferSubmit}
         submitting={Boolean(mutatingId && transferDialog.purchase)}
       />
-      <ReimbursementPayConfirmDialog
-        open={Boolean(activeReimbursementPayId)}
-        reimbursementId={activeReimbursementPayId}
-        onOpenChange={(open) => {
-          if (!open) setActiveReimbursementPayId(null);
-        }}
-        onPaid={() => {
-          void loadAll();
-        }}
-        onRejected={() => {
-          void loadAll();
-        }}
-      />
+
       <PurchaseInboundDrawer
         open={inboundDrawer.open}
         purchase={inboundDrawer.purchase}
@@ -854,6 +890,12 @@ export default function WorkflowWorkbenchClient({
           void loadAll();
           toast.success('入库已完成');
         }}
+      />
+      <PaymentConfirmDialog
+        open={!!payTarget}
+        onClose={() => !mutatingId && setPayTarget(null)}
+        onSubmit={handlePayConfirm}
+        submitting={!!mutatingId}
       />
     </section>
   );

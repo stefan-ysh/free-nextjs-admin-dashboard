@@ -176,7 +176,6 @@ export default function PurchaseInboundDrawer({
       <DrawerContent side="right" className={FORM_DRAWER_WIDTH_COMPACT}>
         <DrawerHeader>
           <DrawerTitle>采购到货入库</DrawerTitle>
-          <DrawerDescription>系统将按采购单自动带出商品与仓库，仅需确认数量并填写备注。</DrawerDescription>
         </DrawerHeader>
         <DrawerBody>
           {loading ? (
@@ -220,7 +219,6 @@ export default function PurchaseInboundDrawer({
                   </Select>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">商品和仓库已按采购单自动带出并锁定，可修改数量与备注。</p>
               <div className="space-y-2">
                 <div className="space-y-2">
                   <Label>数量</Label>

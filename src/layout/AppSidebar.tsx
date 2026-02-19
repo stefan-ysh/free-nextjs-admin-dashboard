@@ -15,6 +15,7 @@ import {
   LineChart as FinanceIcon,
   ShoppingCart as PurchaseIcon,
   CircleGauge as PerformanceIcon,
+  History as HistoryIcon,
 } from "lucide-react";
 
 import type { PermissionName } from "@/hooks/usePermissions";
@@ -153,12 +154,19 @@ const navItems: NavItem[] = [
     path: "/employees",
     requiredPermission: "USER_VIEW_ALL",
   },
+  {
+    name: "更新日志",
+    icon: <HistoryIcon />,
+    path: "/changelog",
+  },
 ];
+
+import type { PurchaseListResponse } from "@/types/purchase";
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
-  const { hasPermission, loading: permissionLoading } = usePermissions();
+  const { hasPermission, loading: permissionLoading, user } = usePermissions();
   const [todoCount, setTodoCount] = useState(0);
 
   const filterNavItems = useCallback(
@@ -291,7 +299,9 @@ const AppSidebar: React.FC = () => {
     const canReimbursementPay = hasPermission("REIMBURSEMENT_PAY");
     const canPurchaseApprove = hasPermission("PURCHASE_APPROVE");
     const showReimbursementApprovals = canReimbursementApprove && !canReimbursementPay;
-    const [approvalRes, inboundRes, rejectedRes, reimbursementApprovalRes, reimbursementPayRes] = await Promise.allSettled([
+    const canCreateReimbursement = hasPermission("REIMBURSEMENT_CREATE");
+
+    const [approvalRes, inboundRes, rejectedRes, reimbursementApprovalRes, reimbursementPayRes, reimbursementRejectedRes] = await Promise.allSettled([
       canPurchaseApprove
         ? fetch("/api/purchases/approvals?page=1&pageSize=1", { headers: { Accept: "application/json" } })
         : Promise.resolve(null),
@@ -306,6 +316,9 @@ const AppSidebar: React.FC = () => {
         : Promise.resolve(null),
       canReimbursementPay
         ? fetch("/api/reimbursements?scope=pay&page=1&pageSize=1", { headers: { Accept: "application/json" } })
+        : Promise.resolve(null),
+      canCreateReimbursement
+        ? fetch("/api/reimbursements?scope=mine&status=rejected&page=1&pageSize=1", { headers: { Accept: "application/json" } })
         : Promise.resolve(null),
     ]);
 
@@ -331,11 +344,12 @@ const AppSidebar: React.FC = () => {
 
     let rejected = 0;
     if (canPurchaseCreate && rejectedRes.status === "fulfilled" && rejectedRes.value) {
-      const payload = (await rejectedRes.value.json().catch(() => null)) as
-        | { success?: boolean; data?: { total?: number } }
-        | null;
-      if (rejectedRes.value.ok && payload?.success) {
-        rejected = Number(payload.data?.total ?? 0);
+      const payload = (await rejectedRes.value.json().catch(() => null)) as PurchaseListResponse;
+      if (rejectedRes.value.ok && payload?.success && payload.data) {
+        // Only count my rejected items
+        rejected = payload.data.items.filter(
+          (item) => item.createdBy === user?.id || item.purchaserId === user?.id
+        ).length;
       }
     }
 
@@ -358,8 +372,18 @@ const AppSidebar: React.FC = () => {
         reimbursementPays = Number(payload.data?.total ?? 0);
       }
     }
+    
+    let reimbursementRejected = 0;
+    if (canCreateReimbursement && reimbursementRejectedRes.status === "fulfilled" && reimbursementRejectedRes.value) {
+        const payload = (await reimbursementRejectedRes.value.json().catch(() => null)) as
+          | { success?: boolean; data?: { total?: number } }
+          | null;
+        if (reimbursementRejectedRes.value.ok && payload?.success) {
+            reimbursementRejected = Number(payload.data?.total ?? 0);
+        }
+    }
 
-    setTodoCount(Math.max(0, approvals + inbound + rejected + reimbursementApprovals + reimbursementPays));
+    setTodoCount(Math.max(0, approvals + inbound + rejected + reimbursementApprovals + reimbursementPays + reimbursementRejected));
   }, [hasPermission, permissionLoading]);
 
   useEffect(() => {
@@ -420,7 +444,7 @@ const AppSidebar: React.FC = () => {
                   {nav.icon}
                 </span>
                 {showLabels && <span className="text-sm font-medium">{nav.name}</span>}
-                {showLabels && nav.name === "工作台" && todoCount > 0 && (
+                {showLabels && nav.name === "我的待办" && todoCount > 0 && (
                   <span className="ml-auto rounded-full bg-destructive/15 px-2 py-0.5 text-xs font-semibold text-destructive">
                     {todoCount}
                   </span>

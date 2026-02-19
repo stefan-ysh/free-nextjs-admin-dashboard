@@ -1,12 +1,10 @@
-'use client';
-
-import { MoreHorizontal, User } from 'lucide-react';
+import { MoreHorizontal } from 'lucide-react';
 
 import PurchaseStatusBadge from './PurchaseStatusBadge';
 import type { PurchaseRecord, PaymentMethod, PurchaseOrganization } from '@/types/purchase';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -89,7 +87,6 @@ function getInitials(name?: string | null) {
 export default function PurchaseTable({
 	purchases,
 	loading,
-	mutatingId,
 	scrollAreaClassName,
 	getRowPermissions,
 	onView,
@@ -142,11 +139,9 @@ export default function PurchaseTable({
 				<div className="space-y-3 p-4">
 					{purchases.map((purchase) => {
 						const permissions = getRowPermissions(purchase);
-						const rowBusy = mutatingId === purchase.id;
 						const rowClassName = getRowClassName?.(purchase);
 						const inboundQuantity = Number(purchase.inboundQuantity ?? 0);
 						const totalQuantity = Number(purchase.quantity ?? 0);
-						const remainingInboundQuantity = Math.max(0, totalQuantity - inboundQuantity);
 						return (
 							<div key={purchase.id} className={cn("rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm", rowClassName)}>
 								<div className="flex items-start justify-between gap-3">
@@ -281,10 +276,10 @@ export default function PurchaseTable({
 				<Table
 					stickyHeader
 					scrollAreaClassName={scrollContainerClassName}
-					className="min-w-[1000px] text-sm"
+					className="min-w-[1000px] text-sm text-foreground bg-background [&_tbody_tr]:border-b [&_tbody_tr]:border-gray-100 dark:[&_tbody_tr]:border-gray-800 [&_tbody_tr]:last:border-0 hover:[&_tbody_tr]:bg-gray-50/50 dark:hover:[&_tbody_tr]:bg-gray-900/50"
 				>
-					<TableHeader>
-						<TableRow className="bg-muted/40 hover:bg-muted/40">
+					<TableHeader className="bg-gray-50/50 dark:bg-gray-900/50 sticky top-0 z-10 backdrop-blur-sm">
+						<TableRow className="hover:bg-transparent border-b border-gray-200 dark:border-gray-800">
 							<TableHead className="w-[280px] px-4 py-3 pl-6">物品 / 单号</TableHead>
                             <TableHead className="w-[180px] px-4 py-3">申请人</TableHead>
 							<TableHead className="w-[120px] px-4 py-3">金额</TableHead>
@@ -297,7 +292,6 @@ export default function PurchaseTable({
 					<TableBody>
 						{purchases.map((purchase) => {
 							const permissions = getRowPermissions(purchase);
-							const rowBusy = mutatingId === purchase.id;
 							const rowClassName = getRowClassName?.(purchase);
 							const inboundQuantity = Number(purchase.inboundQuantity ?? 0);
 							const totalQuantity = Number(purchase.quantity ?? 0);

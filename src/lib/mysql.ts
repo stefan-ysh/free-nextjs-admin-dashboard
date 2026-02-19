@@ -1,4 +1,4 @@
-import mysql, { Pool, PoolOptions, RowDataPacket } from 'mysql2/promise';
+import mysql, { Pool, PoolOptions, RowDataPacket, PoolConnection } from 'mysql2/promise';
 
 // Use globalThis to prevent multiple pools in development
 const globalForMysql = globalThis as unknown as { mysqlPool: Pool | null };
@@ -86,3 +86,21 @@ export async function mysqlQuery<T extends RowDataPacket = RowDataPacket>(
 }
 
 export { getPool as mysqlPool };
+
+export async function withTransaction<T>(
+  handler: (connection: PoolConnection) => Promise<T>
+): Promise<T> {
+  const pool = getPool();
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const result = await handler(connection);
+    await connection.commit();
+    return result;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}

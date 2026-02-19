@@ -292,6 +292,12 @@ export interface ListPurchasesResult {
   pageSize: number;
 }
 
+export interface PurchaseListResponse {
+  success: boolean;
+  data?: ListPurchasesResult;
+  error?: string;
+}
+
 /**
  * 报销流程操作类型
  */

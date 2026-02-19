@@ -175,10 +175,10 @@ export default function FinanceTable({
 				<Table
 					stickyHeader
 					scrollAreaClassName="max-h-[calc(100vh-350px)] custom-scrollbar"
-					className="w-full text-sm text-muted-foreground [&_tbody_tr]:hover:bg-muted/40"
+					className="w-full text-sm text-foreground bg-background [&_tbody_tr]:border-b [&_tbody_tr]:border-gray-100 dark:[&_tbody_tr]:border-gray-800 [&_tbody_tr]:last:border-0 hover:[&_tbody_tr]:bg-gray-50/50 dark:hover:[&_tbody_tr]:bg-gray-900/50"
 				>
-					<TableHeader className="[&_tr]:border-b border-border/40">
-						<TableRow className="bg-muted/40">
+					<TableHeader className="bg-gray-50/50 dark:bg-gray-900/50 sticky top-0 z-10 backdrop-blur-sm">
+						<TableRow className="hover:bg-transparent border-b border-gray-200 dark:border-gray-800">
 							<TableHead className="px-4 py-3 text-left">日期</TableHead>
 							<TableHead className="px-4 py-3 text-left">名称</TableHead>
 							<TableHead className="px-4 py-3 text-left">类型</TableHead>
@@ -189,7 +189,7 @@ export default function FinanceTable({
 							<TableHead className="px-4 py-3 text-right">操作</TableHead>
 						</TableRow>
 					</TableHeader>
-					<TableBody className="[&_tr]:border-0">
+					<TableBody>
 						{records.map((record) => {
 							const totalAmount = record.contractAmount + record.fee;
 							const canEditCurrent = canEdit && record.sourceType === 'budget_adjustment';

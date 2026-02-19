@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 
-import { mysqlPool, mysqlQuery } from '@/lib/mysql';
+import { mysqlPool, mysqlQuery, withTransaction } from '@/lib/mysql';
 import { ensureInventorySchema } from '@/lib/schema/inventory';
 import { ensurePurchasesSchema } from '@/lib/schema/purchases';
 import { specFieldsToDefaultRecord } from '@/lib/inventory/spec';
@@ -243,26 +243,13 @@ function mapMovement(row: MovementRow): InventoryMovement {
   };
 }
 
-async function withTransaction<T>(handler: (connection: PoolConnection) => Promise<T>): Promise<T> {
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
-    const result = await handler(connection);
-    await connection.commit();
-    return result;
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
-}
 
-async function fetchItem(queryable: Queryable, id: string): Promise<InventoryItemRow | null> {
-  const [rows] = await queryable.query<InventoryItemRow[]>(
-    'SELECT * FROM inventory_items WHERE id = ? AND is_deleted = 0 LIMIT 1',
-    [id]
-  );
+
+async function fetchItem(queryable: Queryable, id: string, lock = false): Promise<InventoryItemRow | null> {
+  const sql = lock
+    ? 'SELECT * FROM inventory_items WHERE id = ? AND is_deleted = 0 LIMIT 1 FOR UPDATE'
+    : 'SELECT * FROM inventory_items WHERE id = ? AND is_deleted = 0 LIMIT 1';
+  const [rows] = await queryable.query<InventoryItemRow[]>(sql, [id]);
   return rows[0] ?? null;
 }
 
@@ -505,29 +492,35 @@ export async function updateInventoryItem(
 
 export async function deleteInventoryItem(id: string): Promise<boolean> {
   await ensureInventorySchema();
-  const [[usageRow]] = await pool.query<RowDataPacket[]>(
-    `SELECT
-       COALESCE(SUM(quantity), 0) AS quantity,
-       COALESCE(SUM(reserved), 0) AS reserved
-     FROM inventory_stock_snapshots
-     WHERE item_id = ?`,
-    [id]
-  );
-  if (Number(usageRow?.quantity ?? 0) > 0 || Number(usageRow?.reserved ?? 0) > 0) {
-    throw new Error(INVENTORY_ERRORS.ITEM_IN_USE);
-  }
-  const [[movementRow]] = await pool.query<RowDataPacket[]>(
-    'SELECT COUNT(*) AS total FROM inventory_movements WHERE item_id = ?',
-    [id]
-  );
-  if (Number(movementRow?.total ?? 0) > 0) {
-    throw new Error(INVENTORY_ERRORS.ITEM_IN_USE);
-  }
-  const [result] = await pool.query<ResultSetHeader>(
-    'UPDATE inventory_items SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND is_deleted = 0',
-    [id]
-  );
-  return result.affectedRows > 0;
+  return withTransaction(async (connection) => {
+    // Lock the item first
+    const item = await fetchItem(connection, id, true);
+    if (!item) return false;
+
+    const [[usageRow]] = await connection.query<RowDataPacket[]>(
+      `SELECT
+         COALESCE(SUM(quantity), 0) AS quantity,
+         COALESCE(SUM(reserved), 0) AS reserved
+       FROM inventory_stock_snapshots
+       WHERE item_id = ?`,
+      [id]
+    );
+    if (Number(usageRow?.quantity ?? 0) > 0 || Number(usageRow?.reserved ?? 0) > 0) {
+      throw new Error(INVENTORY_ERRORS.ITEM_IN_USE);
+    }
+    const [[movementRow]] = await connection.query<RowDataPacket[]>(
+      'SELECT COUNT(*) AS total FROM inventory_movements WHERE item_id = ?',
+      [id]
+    );
+    if (Number(movementRow?.total ?? 0) > 0) {
+      throw new Error(INVENTORY_ERRORS.ITEM_IN_USE);
+    }
+    const [result] = await connection.query<ResultSetHeader>(
+      'UPDATE inventory_items SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND is_deleted = 0',
+      [id]
+    );
+    return result.affectedRows > 0;
+  });
 }
 
 export async function createWarehouse(payload: WarehousePayload): Promise<Warehouse> {
@@ -759,7 +752,7 @@ export async function createInboundRecord(
   await ensurePurchasesSchema();
 
   return withTransaction(async (connection) => {
-    const itemRow = await fetchItem(connection, payload.itemId);
+    const itemRow = await fetchItem(connection, payload.itemId, true);
     if (!itemRow) {
       throw new Error(INVENTORY_ERRORS.ITEM_NOT_FOUND);
     }
@@ -884,7 +877,7 @@ export async function createOutboundRecord(
   await ensureInventorySchema();
 
   return withTransaction(async (connection) => {
-    const itemRow = await fetchItem(connection, payload.itemId);
+    const itemRow = await fetchItem(connection, payload.itemId, true);
     if (!itemRow) {
       throw new Error(INVENTORY_ERRORS.ITEM_NOT_FOUND);
     }

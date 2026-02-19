@@ -13,8 +13,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Drawer, DrawerBody, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import WorkflowStepList from '@/components/common/WorkflowStepList';
+import RejectionReasonDialog from '@/components/purchases/RejectionReasonDialog';
+import PaymentConfirmDialog from './PaymentConfirmDialog';
+import ReimbursementDetailDrawer from './ReimbursementDetailDrawer';
 import { usePermissions } from '@/hooks/usePermissions';
-import { formatDateOnly, formatDateTimeLocal } from '@/lib/dates';
+import { formatDateOnly } from '@/lib/dates';
 import type {
   CreateReimbursementInput,
   ListReimbursementsResult,
@@ -49,7 +65,7 @@ type DetailResponse = {
   error?: string;
 };
 
-type ReimbursementFormState = CreateReimbursementInput;
+type ReimbursementFormState = CreateReimbursementInput & { hasInvoice: boolean };
 
 const STATUS_LABELS: Record<ReimbursementRecord['status'], string> = {
   draft: '草稿',
@@ -76,14 +92,7 @@ const STATUS_STYLES: Record<ReimbursementRecord['status'], string> = {
   rejected: 'border-destructive/40 text-destructive bg-destructive/10',
   paid: 'border-chart-5/40 text-chart-5 bg-chart-5/10',
 };
-const ACTION_LABELS: Record<ReimbursementLog['action'], string> = {
-  create: '创建草稿',
-  submit: '提交审批',
-  approve: '审批通过',
-  reject: '驳回',
-  withdraw: '撤回',
-  pay: '打款',
-};
+
 
 
 const MONEY = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' });
@@ -138,6 +147,7 @@ function buildDefaultForm(): ReimbursementFormState {
     invoiceImages: [],
     receiptImages: [],
     attachments: [],
+    hasInvoice: true,
   };
 }
 
@@ -149,7 +159,13 @@ export default function ReimbursementsClient() {
   const { user, hasPermission } = usePermissions();
   const searchParams = useSearchParams();
   const [records, setRecords] = useState<ReimbursementRecord[]>([]);
+
+  // Dialog states
+  const [deleteTarget, setDeleteTarget] = useState<ReimbursementRecord | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<ReimbursementRecord | null>(null);
+  const [payTarget, setPayTarget] = useState<ReimbursementRecord | null>(null);
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [scope, setScope] = useState<'mine' | 'approval' | 'pay' | 'all'>('mine');
   const [search, setSearch] = useState('');
 
@@ -166,7 +182,11 @@ export default function ReimbursementsClient() {
   const [eligibilityChecking, setEligibilityChecking] = useState(false);
   const [eligibility, setEligibility] = useState<{ eligible: boolean; reason?: string } | null>(null);
   const handledFocusRef = useRef<string | null>(null);
+  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
+  const [detailRecord, setDetailRecord] = useState<ReimbursementRecord | null>(null);
   const [currentLogs, setCurrentLogs] = useState<ReimbursementLog[]>([]);
+
+
 
   const canCreate = hasPermission('REIMBURSEMENT_CREATE');
   const canApprove = hasPermission('REIMBURSEMENT_APPROVE');
@@ -230,8 +250,7 @@ export default function ReimbursementsClient() {
   const editable = useCallback(
     (row: ReimbursementRecord) =>
       isOwner(row) &&
-      (row.status === 'draft' || row.status === 'rejected') &&
-      !(row.sourceType === 'purchase' && Boolean(row.submittedAt)),
+      (row.status === 'draft' || row.status === 'rejected'),
     [isOwner]
   );
 
@@ -488,12 +507,28 @@ export default function ReimbursementsClient() {
   );
 
   const resetForm = useCallback(() => {
+    setForm({
+      sourceType: 'direct',
+      category: '交通',
+      title: '',
+      amount: 0,
+      occurredAt: formatDateOnly(new Date()) ?? '',
+      organizationType: 'company',
+      sourcePurchaseId: '',
+      description: '',
+      details: {},
+      invoiceImages: [],
+      receiptImages: [],
+      attachments: [],
+      hasInvoice: true,
+    });
     setEditingId(null);
     setDetailMode(false);
     setEligibility(null);
+    setEligibilityChecking(false);
     setCurrentLogs([]);
     const defaultOrg: ReimbursementOrganizationType = user?.primaryRole === UserRole.FINANCE_SCHOOL ? 'school' : 'company';
-    setForm({ ...buildDefaultForm(), organizationType: defaultOrg });
+    setForm((prev) => ({ ...prev, organizationType: defaultOrg }));
   }, [user]);
 
   const applyRecordToForm = useCallback((row: ReimbursementRecord) => {
@@ -510,6 +545,7 @@ export default function ReimbursementsClient() {
       invoiceImages: row.invoiceImages,
       receiptImages: row.receiptImages,
       attachments: row.attachments,
+      hasInvoice: row.details?.hasInvoice === 'true',
     });
   }, []);
 
@@ -540,13 +576,9 @@ export default function ReimbursementsClient() {
   }, [applyRecordToForm, loadDetailLogs]);
 
   const openDetailDrawer = useCallback((row: ReimbursementRecord) => {
-    setEditingId(row.id);
-    setDetailMode(true);
-    setEligibility(null);
-    applyRecordToForm(row);
-    void loadDetailLogs(row.id);
-    setDrawerOpen(true);
-  }, [applyRecordToForm, loadDetailLogs]);
+    setDetailRecord(row);
+    setDetailDrawerOpen(true);
+  }, []);
 
   const resolvePurchaseInvoiceRequired = useCallback(
     async (purchaseId: string): Promise<boolean | null> => {
@@ -591,7 +623,10 @@ export default function ReimbursementsClient() {
         occurredAt: form.occurredAt,
         sourcePurchaseId: form.sourceType === 'purchase' ? form.sourcePurchaseId?.trim() || '' : undefined,
         description: form.description?.trim() || undefined,
-        details: normalizeDetailsByCategory(form.category, form.details),
+        details: {
+          ...normalizeDetailsByCategory(form.category, form.details),
+          hasInvoice: String(form.hasInvoice),
+        },
         invoiceImages: form.invoiceImages ?? [],
         receiptImages: form.receiptImages ?? [],
         attachments: form.attachments ?? [],
@@ -640,7 +675,6 @@ export default function ReimbursementsClient() {
       }
 
       if (intent === 'submit') {
-        const hasAnyEvidence = (payloadBase.invoiceImages?.length ?? 0) > 0 || (payloadBase.receiptImages?.length ?? 0) > 0;
         if (payloadBase.sourceType === 'purchase' && payloadBase.sourcePurchaseId) {
           const invoiceRequired = await resolvePurchaseInvoiceRequired(payloadBase.sourcePurchaseId);
           if (invoiceRequired == null) {
@@ -649,8 +683,14 @@ export default function ReimbursementsClient() {
           if (invoiceRequired === true && (payloadBase.invoiceImages?.length ?? 0) === 0) {
             throw new Error('该采购单要求补充发票，提交报销前请先上传发票附件');
           }
-        } else if (!hasAnyEvidence) {
-          throw new Error('请先上传发票或收款凭证后再提交');
+        } else {
+             // 直接报销验证
+             if (form.hasInvoice && (payloadBase.invoiceImages?.length ?? 0) === 0) {
+                 throw new Error('您标记了需要发票，请上传发票附件');
+             }
+             if (!form.hasInvoice && (payloadBase.receiptImages?.length ?? 0) === 0) {
+                 throw new Error('您标记为无需发票，请上传收款凭证');
+             }
         }
         await runAction(savedRecord.id, 'submit');
         toast.success('报销申请已提交审批');
@@ -670,47 +710,63 @@ export default function ReimbursementsClient() {
   }, [editingId, fetchList, form, resetForm, resolvePurchaseInvoiceRequired, runAction]);
 
   const handleDelete = useCallback(
-    async (row: ReimbursementRecord) => {
+    (row: ReimbursementRecord) => {
       if (!editable(row)) return;
-      const confirmed = window.confirm('确认删除这条报销草稿？删除后不可恢复。');
-      if (!confirmed) return;
-      try {
-        const response = await fetch(`/api/reimbursements/${row.id}`, { method: 'DELETE' });
-        const body = (await response.json()) as { success: boolean; error?: string };
-        if (!response.ok || !body.success) {
-          throw new Error(body.error ?? '删除失败');
-        }
-        toast.success('报销草稿已删除');
-        await fetchList();
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : '删除失败');
-      }
+      setDeleteTarget(row);
     },
-    [editable, fetchList]
+    [editable]
   );
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    setActionLoading(true);
+    try {
+      const response = await fetch(`/api/reimbursements/${deleteTarget.id}`, { method: 'DELETE' });
+      const body = (await response.json()) as { success: boolean; error?: string };
+      if (!response.ok || !body.success) {
+        throw new Error(body.error ?? '删除失败');
+      }
+      toast.success('报销草稿已删除');
+      setDeleteTarget(null);
+      await fetchList();
+      await fetchList();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '删除失败');
+    } finally {
+      setActionLoading(false);
+    }
+  }, [deleteTarget, fetchList]);
 
   const handleSubmit = useCallback(
     async (row: ReimbursementRecord) => {
       if (row.sourceType === 'purchase' && row.sourcePurchaseId) {
+        setActionLoading(true);
         const invoiceRequired = await resolvePurchaseInvoiceRequired(row.sourcePurchaseId);
         if (invoiceRequired == null) {
           toast.error('无法校验采购单发票规则，请稍后重试');
+          setActionLoading(false);
           return;
         }
         if (invoiceRequired === true && (row.invoiceImages?.length ?? 0) === 0) {
           toast.error('该采购单要求补充发票，提交报销前请先上传发票附件');
+          setActionLoading(false);
           return;
         }
+        setActionLoading(false);
       } else if (!hasReimbursementEvidence(row)) {
         toast.error('请先上传发票或收款凭证后再提交');
         return;
       }
+
+      setActionLoading(true);
       try {
         await runAction(row.id, 'submit');
         toast.success('已提交审批');
         await fetchList();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : '提交失败');
+      } finally {
+        setActionLoading(false);
       }
     },
     [fetchList, resolvePurchaseInvoiceRequired, runAction]
@@ -718,45 +774,46 @@ export default function ReimbursementsClient() {
 
   const handleApprove = useCallback(
     async (row: ReimbursementRecord) => {
+      setActionLoading(true);
       try {
         await runAction(row.id, 'approve');
         toast.success('审批通过');
         await fetchList();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : '审批失败');
+      } finally {
+        setActionLoading(false);
       }
     },
     [fetchList, runAction]
   );
 
   const handleReject = useCallback(
-    async (row: ReimbursementRecord) => {
-      const reason = window.prompt('请输入驳回原因');
-      if (!reason) return;
+    (row: ReimbursementRecord) => {
+      setRejectTarget(row);
+    },
+    []
+  );
+
+  const confirmReject = useCallback(
+    async (reason: string) => {
+      if (!rejectTarget) return;
+      setActionLoading(true);
       try {
-        await runAction(row.id, 'reject', { reason });
+        await runAction(rejectTarget.id, 'reject', { reason });
         toast.success('已驳回');
+        setRejectTarget(null);
         await fetchList();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : '驳回失败');
+      } finally {
+        setActionLoading(false);
       }
     },
-    [fetchList, runAction]
+    [rejectTarget, fetchList, runAction]
   );
 
-  const handlePay = useCallback(
-    async (row: ReimbursementRecord) => {
-      const note = window.prompt('打款备注（可选）') ?? '';
-      try {
-        await runAction(row.id, 'pay', { note });
-        toast.success('已标记打款');
-        await fetchList();
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : '打款失败');
-      }
-    },
-    [fetchList, runAction]
-  );
+
 
   const resolvePurchaseEntity = useCallback(async (id: string): Promise<PurchaseRecord | null> => {
     const found = purchaseMap.get(id);
@@ -772,17 +829,40 @@ export default function ReimbursementsClient() {
     selectedPurchase && selectedPurchase.invoiceType !== 'none' && selectedPurchase.invoiceStatus !== 'not_required'
   );
   const shouldShowEvidenceUpload =
-    form.sourceType !== 'purchase' || selectedPurchaseInvoiceRequired;
+    form.sourceType === 'purchase' ? selectedPurchaseInvoiceRequired : true;
+  
+  const showInvoiceUpload = form.sourceType === 'purchase' ? selectedPurchaseInvoiceRequired : form.hasInvoice;
   const isReadOnlyView = detailMode;
-  const currentDrawerRecord = useMemo(
-    () => (editingId ? records.find((item) => item.id === editingId) ?? null : null),
-    [editingId, records]
+
+  const handlePay = useCallback(
+    (row: ReimbursementRecord) => {
+      setPayTarget(row);
+    },
+    []
   );
-  const canApproveInDrawer = Boolean(
-    currentDrawerRecord && canApprove && currentDrawerRecord.status === 'pending_approval' && !canPay
+
+  const confirmPay = useCallback(
+    async (note: string) => {
+      if (!payTarget) return;
+      setActionLoading(true);
+      try {
+        await runAction(payTarget.id, 'pay', { note });
+        toast.success('已标记打款');
+        setPayTarget(null);
+        await fetchList();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : '打款失败');
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [payTarget, fetchList, runAction]
   );
-  const canRejectInDrawer = Boolean(currentDrawerRecord && canApprove && currentDrawerRecord.status === 'pending_approval');
-  const canPayInDrawer = Boolean(currentDrawerRecord && canOperatePay(currentDrawerRecord));
+  
+
+
+
+
 
   return (
     <section className="space-y-4">
@@ -894,7 +974,7 @@ export default function ReimbursementsClient() {
                         </>
                       )}
                       {canOperatePay(row) && (
-                        <Button size="sm" variant="outline" onClick={() => void handlePay(row)}>
+                        <Button size="sm" variant="outline" onClick={() => handlePay(row)}>
                           标记打款
                         </Button>
                       )}
@@ -917,7 +997,7 @@ export default function ReimbursementsClient() {
       >
           <DrawerContent side="right" className="w-full max-w-3xl">
           <DrawerHeader>
-            <DrawerTitle>{isReadOnlyView ? '报销详情' : editingId ? '编辑报销草稿' : '发起报销'}</DrawerTitle>
+            <DrawerTitle>{editingId ? '编辑报销草稿' : '发起报销'}</DrawerTitle>
           </DrawerHeader>
           <DrawerBody className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
@@ -932,6 +1012,7 @@ export default function ReimbursementsClient() {
                       category: value === 'purchase' ? '采购报销' : prev.category,
                       details: normalizeDetailsByCategory(value === 'purchase' ? '采购报销' : prev.category, prev.details),
                       sourcePurchaseId: value === 'purchase' ? prev.sourcePurchaseId ?? '' : '',
+                      hasInvoice: value === 'direct' ? true : prev.hasInvoice,
                     }))
                   }
                 disabled={isReadOnlyView}
@@ -944,6 +1025,29 @@ export default function ReimbursementsClient() {
                     <SelectItem value="purchase">关联采购</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+
+
+              <div className="space-y-2">
+                <div className="text-sm font-medium">是否需要发票</div>
+                <div className="flex h-10 items-center gap-2">
+                  <Switch
+                    id="has-invoice-switch"
+                    checked={form.sourceType === 'purchase' ? (selectedPurchaseInvoiceRequired ?? false) : form.hasInvoice}
+                    onCheckedChange={(checked) => {
+                      if (form.sourceType === 'direct') {
+                        setForm((prev) => ({ ...prev, hasInvoice: checked }));
+                      }
+                    }}
+                    disabled={isReadOnlyView || form.sourceType === 'purchase'}
+                  />
+                  <Label htmlFor="has-invoice-switch" className="text-xs text-muted-foreground font-normal cursor-pointer">
+                    {form.sourceType === 'purchase'
+                      ? (selectedPurchaseInvoiceRequired ? '关联采购单要求发票' : '关联采购单无需发票')
+                      : (form.hasInvoice ? '需上传发票附件' : '无需发票，建议上传收款凭证')}
+                  </Label>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -963,9 +1067,6 @@ export default function ReimbursementsClient() {
                     <SelectItem value="company">单位</SelectItem>
                   </SelectContent>
                 </Select>
-                {form.sourceType === 'purchase' ? (
-                  <p className="text-xs text-muted-foreground">关联采购时，组织自动跟随采购单。</p>
-                ) : null}
               </div>
             </div>
 
@@ -981,14 +1082,15 @@ export default function ReimbursementsClient() {
                         ...prev,
                         sourcePurchaseId: value,
                         organizationType: (picked?.organizationType ?? prev.organizationType) as ReimbursementOrganizationType,
-                        title: prev.title.trim() ? prev.title : `${picked?.itemName ?? '采购'}报销`,
-                        amount: Number(prev.amount) > 0 ? prev.amount : Number(picked?.totalAmount ?? 0),
+                        // Sync basic info
+                        title: picked ? `${picked?.itemName ?? '采购'}报销` : prev.title,
+                        amount: picked ? Number(picked.totalAmount) + Number(picked.feeAmount ?? 0) : prev.amount,
+                        occurredAt: picked ? toDateInputValue(picked.purchaseDate) : prev.occurredAt,
+                        description: picked?.notes?.trim() ? `采购备注：${picked.notes}` : prev.description,
                         details: {
                           ...(prev.details ?? {}),
-                          purchaseUsage:
-                            (prev.details?.purchaseUsage?.trim() || (picked?.purpose?.trim() ?? '')),
-                          inboundNote:
-                            (prev.details?.inboundNote?.trim() || (picked?.notes?.trim() ?? '')),
+                          purchaseUsage: picked?.purpose?.trim() || prev.details?.purchaseUsage || '',
+                          inboundNote: picked?.notes?.trim() || prev.details?.inboundNote || '',
                         },
                       }));
                     }}
@@ -1007,15 +1109,6 @@ export default function ReimbursementsClient() {
                     disabled={purchaseLoading || isReadOnlyView}
                   />
                 </div>
-                {selectedPurchase ? (
-                  <div className="rounded-lg border border-dashed border-border/70 bg-muted/20 p-2 text-xs text-muted-foreground">
-                    <p>采购单号：{selectedPurchase.purchaseNumber}</p>
-                    <p>物品：{selectedPurchase.itemName}</p>
-                    <p>金额：{MONEY.format(Number(selectedPurchase.totalAmount) + Number(selectedPurchase.feeAmount ?? 0))}</p>
-                    <p>组织：{selectedPurchase.organizationType === 'school' ? '学校' : '单位'}</p>
-                  </div>
-                ) : null}
-
                 {eligibilityChecking ? (
                   <p className="text-xs text-muted-foreground">正在校验关联采购单是否已入库...</p>
                 ) : eligibility ? (
@@ -1061,7 +1154,7 @@ export default function ReimbursementsClient() {
                   onChange={(value) => setForm((prev) => ({ ...prev, occurredAt: value }))}
                   clearable={false}
                   placeholder="选择发生日期"
-                  disabled={isReadOnlyView}
+                  disabled={isReadOnlyView || form.sourceType === 'purchase'}
                 />
               </div>
             </div>
@@ -1206,9 +1299,12 @@ export default function ReimbursementsClient() {
                   <div>
                     <div className="text-sm font-medium">收款凭证</div>
                     <p className="text-xs text-muted-foreground">
+
                       {form.sourceType === 'purchase'
                         ? '该采购单标记为有发票，请在下方“发票附件”上传发票；此处可补充收款凭证。'
-                        : '直接报销需至少上传发票或收款凭证其中一项。'}
+                        : form.hasInvoice 
+                          ? '直接报销需至少上传发票或收款凭证其中一项。'
+                          : '您标记为无需发票，请上传收款凭证。'}
                     </p>
                   </div>
                   <FileUpload
@@ -1224,20 +1320,24 @@ export default function ReimbursementsClient() {
                   />
                 </div>
 
-                <div className="space-y-3 rounded-xl border border-border/60 p-3">
-                  <div className="text-sm font-medium">发票附件</div>
-                  <FileUpload
-                    files={form.invoiceImages ?? []}
-                    onChange={(files) => setForm((prev) => ({ ...prev, invoiceImages: files }))}
-                    maxFiles={8}
-                    folder="reimbursements/invoices"
-                    prefix="invoice"
-                    buttonLabel="上传发票"
-                    helperText="支持 JPG/PNG/PDF，每个文件 ≤5MB"
-                    disabled={submitting}
-                    readOnly={isReadOnlyView}
-                  />
-                </div>
+
+
+                {showInvoiceUpload && (
+                  <div className="space-y-3 rounded-xl border border-border/60 p-3">
+                    <div className="text-sm font-medium">发票附件</div>
+                    <FileUpload
+                      files={form.invoiceImages ?? []}
+                      onChange={(files) => setForm((prev) => ({ ...prev, invoiceImages: files }))}
+                      maxFiles={8}
+                      folder="reimbursements/invoices"
+                      prefix="invoice"
+                      buttonLabel="上传发票"
+                      helperText="支持 JPG/PNG/PDF，每个文件 ≤5MB"
+                      disabled={submitting}
+                      readOnly={isReadOnlyView}
+                    />
+                  </div>
+                )}
               </>
             ) : null}
 
@@ -1259,87 +1359,78 @@ export default function ReimbursementsClient() {
             {editingId ? (
               <div className="space-y-3 rounded-xl border border-border/60 p-3">
                 <div className="text-sm font-medium">流程节点</div>
-                {currentLogs.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">暂无流程记录</p>
-                ) : (
-                  <div className="space-y-2">
-                    {currentLogs.map((log) => (
-                      <div key={log.id} className="rounded-lg border border-border/60 bg-muted/20 p-2 text-xs">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium">{ACTION_LABELS[log.action] ?? log.action}</span>
-                          <span className="text-muted-foreground">{formatDateTimeLocal(log.createdAt) ?? '-'}</span>
-                        </div>
-                        <p className="mt-1 text-muted-foreground">
-                          状态：{STATUS_LABELS[log.fromStatus] ?? log.fromStatus} → {STATUS_LABELS[log.toStatus] ?? log.toStatus}
-                        </p>
-                        {log.comment ? <p className="mt-1 text-foreground">备注：{log.comment}</p> : null}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <WorkflowStepList logs={currentLogs} />
               </div>
             ) : null}
+
+
           </DrawerBody>
           <DrawerFooter>
             <Button variant="outline" onClick={() => setDrawerOpen(false)} disabled={submitting}>
               取消
             </Button>
-            {!isReadOnlyView ? (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={() => void submitForm('draft')}
-                  disabled={
-                    submitting ||
-                    (form.sourceType === 'purchase' && eligibility != null && !eligibility.eligible)
-                  }
-                >
-                  {submitting && submitIntent === 'draft' ? '保存中...' : editingId ? '保存修改' : '保存草稿'}
-                </Button>
-                <Button
-                  onClick={() => void submitForm('submit')}
-                  disabled={
-                    submitting ||
-                    (form.sourceType === 'purchase' && eligibility != null && !eligibility.eligible)
-                  }
-                >
-                  {submitting && submitIntent === 'submit' ? '提交中...' : '提交报销'}
-                </Button>
-              </>
-            ) : (
-              <>
-                {canRejectInDrawer ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => void handleReject(currentDrawerRecord!)}
-                    disabled={submitting}
-                  >
-                    驳回
-                  </Button>
-                ) : null}
-                {canApproveInDrawer ? (
-                  <>
-                    <Button
-                      onClick={() => void handleApprove(currentDrawerRecord!)}
-                      disabled={submitting}
-                    >
-                      审批通过
-                    </Button>
-                  </>
-                ) : null}
-                {canPayInDrawer ? (
-                  <Button
-                    onClick={() => void handlePay(currentDrawerRecord!)}
-                    disabled={submitting}
-                  >
-                    标记打款
-                  </Button>
-                ) : null}
-              </>
-            )}
+            <Button
+              variant="outline"
+              onClick={() => void submitForm('draft')}
+              disabled={
+                submitting ||
+                (form.sourceType === 'purchase' && eligibility != null && !eligibility.eligible)
+              }
+            >
+              {submitting && submitIntent === 'draft' ? '保存中...' : editingId ? '保存修改' : '保存草稿'}
+            </Button>
+            <Button
+              onClick={() => void submitForm('submit')}
+              disabled={
+                submitting ||
+                (form.sourceType === 'purchase' && eligibility != null && !eligibility.eligible)
+              }
+            >
+              {submitting && submitIntent === 'submit' ? '提交中...' : '提交报销'}
+            </Button>
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
+
+      <ReimbursementDetailDrawer
+        open={detailDrawerOpen}
+        onClose={() => setDetailDrawerOpen(false)}
+        record={detailRecord}
+        onSuccess={() => void fetchList()}
+      />
+
+      <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除？</AlertDialogTitle>
+            <AlertDialogDescription>
+              即将删除报销草稿 &quot;{deleteTarget?.title}&quot;。此操作不可恢复。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionLoading}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} disabled={actionLoading} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              确认删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <RejectionReasonDialog
+        open={!!rejectTarget}
+        onClose={() => !actionLoading && setRejectTarget(null)}
+        onSubmit={confirmReject}
+        submitting={actionLoading}
+        title="驳回报销申请"
+        description="请填写驳回原因，提交后申请人将收到通知。"
+      />
+
+      <PaymentConfirmDialog
+        open={!!payTarget}
+        onClose={() => !actionLoading && setPayTarget(null)}
+        onSubmit={confirmPay}
+        submitting={actionLoading}
+      />
     </section>
   );
 }

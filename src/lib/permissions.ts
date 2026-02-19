@@ -204,15 +204,15 @@ export const Permissions = {
   } as PermissionConfig,
 
   INVENTORY_MANAGE_ITEMS: {
-    anyRoles: [UserRole.FINANCE],
+    anyRoles: [UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
 
   INVENTORY_MANAGE_WAREHOUSE: {
-    anyRoles: [UserRole.FINANCE],
+    anyRoles: [UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
 
   INVENTORY_OPERATE_INBOUND: {
-    anyRoles: [UserRole.FINANCE],
+    anyRoles: [UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
 
   INVENTORY_INBOUND_CREATE_OWN_PURCHASE_ONLY: {
@@ -220,7 +220,7 @@ export const Permissions = {
   } as PermissionConfig,
 
   INVENTORY_OPERATE_OUTBOUND: {
-    anyRoles: [UserRole.FINANCE],
+    anyRoles: [UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
 
   INVENTORY_VIEW_ALL: {

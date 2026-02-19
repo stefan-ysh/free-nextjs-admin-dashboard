@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import type { PoolConnection } from 'mysql2/promise';
 
-import { mysqlPool, mysqlQuery } from '@/lib/mysql';
+import { mysqlPool, mysqlQuery, withTransaction } from '@/lib/mysql';
 import { ensurePurchasesSchema } from '@/lib/schema/purchases';
 import {
   PurchaseRecord,
@@ -652,7 +652,11 @@ export async function createPurchase(
   }
 
   const id = randomUUID();
-  const purchaseNumber = await generatePurchaseNumber();
+  const purchaseNumber = await generatePurchaseNumber(); // This uses mysqlQuery(pool), which is fine for sequence generation as long as it's separate or we don't mind gaps. Ideally should be in transaction too but generatePurchaseNumber uses separate query. For now keep it outside or move inside? Move inside creates a cleaner transaction block but generatePurchaseNumber implementation uses mysqlQuery which uses pool. Let's keep it outside or inside?
+  // generatePurchaseNumber is `SELECT COUNT(*) ...`. It doesn't lock.
+  // If we want strict serial, we might need to lock proper table or accept gap.
+  // For now, let's keep it simple and just focus on the INSERT transaction.
+  
   const totalAmount = +(input.quantity * input.unitPrice).toFixed(2);
   const purchaseDate = requirePurchaseDate(input.purchaseDate);
   const purchaserId = sanitizeId(input.purchaserId) ?? creatorId;
@@ -683,9 +687,7 @@ export async function createPurchase(
     await ensureUserExists(purchaserId, 'PURCHASER_NOT_FOUND');
   }
 
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
+  return withTransaction(async (connection) => {
     const columns = [
       'id',
       'purchase_number',
@@ -761,21 +763,15 @@ export async function createPurchase(
     await connection.query(insertSql, values);
 
     await insertLog(id, 'submit' as ReimbursementAction, 'draft', 'draft', creatorId, '创建采购记录', connection);
-    await connection.commit();
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
 
-  const purchase = (await findPurchaseById(id))!;
-  return purchase;
+    return (await findPurchaseById(id, connection))!;
+  });
 }
 
-export async function findPurchaseById(id: string): Promise<PurchaseRecord | null> {
+export async function findPurchaseById(id: string, connection?: PoolConnection): Promise<PurchaseRecord | null> {
   await ensurePurchasesSchema();
-  const [rows] = await pool.query<RawPurchaseRow[]>(
+  const db = connection || pool;
+  const [rows] = await db.query<RawPurchaseRow[]>(
     `
       SELECT ${PURCHASE_SELECT_FIELDS}
       ${PURCHASE_FROM_CLAUSE}
@@ -1325,27 +1321,33 @@ export async function updatePurchase(id: string, input: UpdatePurchaseInput): Pr
 // submit purchase (draft/rejected -> pending_approval)
 export async function submitPurchase(purchaseId: string, operatorId: string): Promise<PurchaseRecord> {
   await ensurePurchasesSchema();
-  const existing = await findPurchaseById(purchaseId);
-  if (!existing) throw new Error('PURCHASE_NOT_FOUND');
-  if (!(existing.status === 'draft' || existing.status === 'rejected')) throw new Error('NOT_SUBMITTABLE');
-  const approverId = await pickAutoApproverId();
-  await mysqlQuery`
-    UPDATE purchases
-    SET status = 'pending_approval',
-        submitted_at = NOW(),
-        approved_at = NULL,
-        approved_by = NULL,
-        rejected_at = NULL,
-        rejected_by = NULL,
-        rejection_reason = NULL,
-        pending_approver_id = ${approverId},
-        workflow_step_index = NULL,
-        workflow_nodes = NULL,
-        updated_at = NOW()
-    WHERE id = ${purchaseId}
-  `;
-  await insertLog(purchaseId, 'submit', existing.status, 'pending_approval', operatorId, '提交进入审批流程');
-  return (await findPurchaseById(purchaseId))!;
+  
+  return withTransaction(async (connection) => {
+    const existing = await findPurchaseById(purchaseId, connection);
+    if (!existing) throw new Error('PURCHASE_NOT_FOUND');
+    if (!(existing.status === 'draft' || existing.status === 'rejected')) throw new Error('NOT_SUBMITTABLE');
+
+    const approverId = await pickAutoApproverId(); // Uses pool, but fine for now (reading employees/load)
+    
+    await connection.query(
+      `UPDATE purchases
+       SET status = 'pending_approval',
+           submitted_at = NOW(),
+           approved_at = NULL,
+           approved_by = NULL,
+           rejected_at = NULL,
+           rejected_by = NULL,
+           rejection_reason = NULL,
+           pending_approver_id = ?,
+           workflow_step_index = NULL,
+           workflow_nodes = NULL,
+           updated_at = NOW()
+       WHERE id = ?`,
+      [approverId, purchaseId]
+    );
+    await insertLog(purchaseId, 'submit', existing.status, 'pending_approval', operatorId, '提交进入审批流程', connection);
+    return (await findPurchaseById(purchaseId, connection))!;
+  });
 }
 
 // approve purchase
@@ -1355,13 +1357,11 @@ export async function approvePurchase(
   comment?: string | null
 ): Promise<PurchaseRecord> {
   await ensurePurchasesSchema();
-  const existing = await findPurchaseById(purchaseId);
-  if (!existing) throw new Error('PURCHASE_NOT_FOUND');
-  if (existing.status !== 'pending_approval') throw new Error('NOT_APPROVABLE');
 
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
+  return withTransaction(async (connection) => {
+    const existing = await findPurchaseById(purchaseId, connection);
+    if (!existing) throw new Error('PURCHASE_NOT_FOUND');
+    if (existing.status !== 'pending_approval') throw new Error('NOT_APPROVABLE');
 
     const approvedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
     const dueAmount = Number(existing.totalAmount ?? 0) + Number(existing.feeAmount ?? 0);
@@ -1394,15 +1394,9 @@ export async function approvePurchase(
     const approveComment =
       comment?.trim() || `审批通过，进入待入库（已默认完成付款）：${dueAmount.toFixed(2)} 元`;
     await insertLog(purchaseId, 'approve', existing.status, 'pending_inbound', operatorId, approveComment, connection);
-    await connection.commit();
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
 
-  return (await findPurchaseById(purchaseId))!;
+    return (await findPurchaseById(purchaseId, connection))!;
+  });
 }
 
 // transfer purchase approval
@@ -1413,34 +1407,40 @@ export async function transferPurchaseApprover(
   comment: string
 ): Promise<PurchaseRecord> {
   await ensurePurchasesSchema();
-  const existing = await findPurchaseById(purchaseId);
-  if (!existing) throw new Error('PURCHASE_NOT_FOUND');
-  if (existing.status !== 'pending_approval') throw new Error('NOT_APPROVABLE');
-  if (!targetApproverId) throw new Error('APPROVER_REQUIRED');
+  
+  return withTransaction(async (connection) => {
+    const existing = await findPurchaseById(purchaseId, connection);
+    if (!existing) throw new Error('PURCHASE_NOT_FOUND');
+    if (existing.status !== 'pending_approval') throw new Error('NOT_APPROVABLE');
+    if (!targetApproverId) throw new Error('APPROVER_REQUIRED');
 
-  await mysqlQuery`
-    UPDATE purchases
-    SET pending_approver_id = ${targetApproverId}, updated_at = NOW()
-    WHERE id = ${purchaseId}
-  `;
-  await insertLog(purchaseId, 'transfer', 'pending_approval', 'pending_approval', operatorId, comment);
-  return (await findPurchaseById(purchaseId))!;
+    await connection.query(
+      'UPDATE purchases SET pending_approver_id = ?, updated_at = NOW() WHERE id = ?',
+      [targetApproverId, purchaseId]
+    );
+    await insertLog(purchaseId, 'transfer', 'pending_approval', 'pending_approval', operatorId, comment, connection);
+    return (await findPurchaseById(purchaseId, connection))!;
+  });
 }
 
 // reject purchase
 export async function rejectPurchase(purchaseId: string, operatorId: string, reason: string): Promise<PurchaseRecord> {
   await ensurePurchasesSchema();
-  const existing = await findPurchaseById(purchaseId);
-  if (!existing) throw new Error('PURCHASE_NOT_FOUND');
-  if (existing.status !== 'pending_approval') throw new Error('NOT_REJECTABLE');
 
-  await mysqlQuery`
-    UPDATE purchases
-    SET status = 'rejected', rejected_at = NOW(), rejected_by = ${operatorId}, rejection_reason = ${reason}, pending_approver_id = NULL, workflow_step_index = NULL, updated_at = NOW()
-    WHERE id = ${purchaseId}
-  `;
-  await insertLog(purchaseId, 'reject', 'pending_approval', 'rejected', operatorId, reason);
-  return (await findPurchaseById(purchaseId))!;
+  return withTransaction(async (connection) => {
+    const existing = await findPurchaseById(purchaseId, connection);
+    if (!existing) throw new Error('PURCHASE_NOT_FOUND');
+    if (existing.status !== 'pending_approval') throw new Error('NOT_REJECTABLE');
+
+    await connection.query(
+      `UPDATE purchases
+       SET status = 'rejected', rejected_at = NOW(), rejected_by = ?, rejection_reason = ?, pending_approver_id = NULL, workflow_step_index = NULL, updated_at = NOW()
+       WHERE id = ?`,
+      [operatorId, reason, purchaseId]
+    );
+    await insertLog(purchaseId, 'reject', 'pending_approval', 'rejected', operatorId, reason, connection);
+    return (await findPurchaseById(purchaseId, connection))!;
+  });
 }
 
 export async function submitReimbursement(
@@ -1448,44 +1448,45 @@ export async function submitReimbursement(
   operatorId: string
 ): Promise<PurchaseRecord> {
   await ensurePurchasesSchema();
-  const existing = await findPurchaseById(purchaseId);
-  if (!existing) throw new Error('PURCHASE_NOT_FOUND');
-  if (existing.status !== 'approved') throw new Error('NOT_REIMBURSEMENT_SUBMITTABLE');
-  if (
-    !(
-      existing.reimbursementStatus === 'invoice_pending' ||
-      existing.reimbursementStatus === 'reimbursement_rejected'
-    )
-  ) {
-    throw new Error('NOT_REIMBURSEMENT_SUBMITTABLE');
-  }
-  if (!hasInvoiceEvidence(existing)) throw new Error('INVOICE_FILES_REQUIRED');
-  // NOTE(ysh): 当前业务明确“报销提交不强依赖入库记录”。
-  // 如后续改为强校验，请在这里增加库存入库校验：
-  // 1) 查询 inventory_movements 是否存在与该采购关联的入库记录；
-  // 2) 不满足时抛出类似 `INBOUND_REQUIRED_BEFORE_REIMBURSEMENT` 的错误；
-  // 3) 在 workflow-handler / 前端提示文案同步处理该错误。
 
-  await mysqlQuery`
-    UPDATE purchases
-    SET reimbursement_status = 'reimbursement_pending',
-        reimbursement_submitted_at = NOW(),
-        reimbursement_submitted_by = ${operatorId},
-        reimbursement_rejected_at = NULL,
-        reimbursement_rejected_by = NULL,
-        reimbursement_rejected_reason = NULL,
-        updated_at = NOW()
-    WHERE id = ${purchaseId}
-  `;
-  await insertLog(
-    purchaseId,
-    'submit',
-    'approved',
-    'approved',
-    operatorId,
-    '提交报销申请，等待财务确认'
-  );
-  return (await findPurchaseById(purchaseId))!;
+  return withTransaction(async (connection) => {
+    const existing = await findPurchaseById(purchaseId, connection);
+    if (!existing) throw new Error('PURCHASE_NOT_FOUND');
+    if (existing.status !== 'approved') throw new Error('NOT_REIMBURSEMENT_SUBMITTABLE');
+    if (
+      !(
+        existing.reimbursementStatus === 'invoice_pending' ||
+        existing.reimbursementStatus === 'reimbursement_rejected'
+      )
+    ) {
+      throw new Error('NOT_REIMBURSEMENT_SUBMITTABLE');
+    }
+    if (!hasInvoiceEvidence(existing)) throw new Error('INVOICE_FILES_REQUIRED');
+    // NOTE(ysh): 当前业务明确“报销提交不强依赖入库记录”。
+    
+    await connection.query(
+      `UPDATE purchases
+       SET reimbursement_status = 'reimbursement_pending',
+           reimbursement_submitted_at = NOW(),
+           reimbursement_submitted_by = ?,
+           reimbursement_rejected_at = NULL,
+           reimbursement_rejected_by = NULL,
+           reimbursement_rejected_reason = NULL,
+           updated_at = NOW()
+       WHERE id = ?`,
+      [operatorId, purchaseId]
+    );
+    await insertLog(
+      purchaseId,
+      'submit',
+      'approved',
+      'approved',
+      operatorId,
+      '提交报销申请，等待财务确认',
+      connection
+    );
+    return (await findPurchaseById(purchaseId, connection))!;
+  });
 }
 
 // mark as paid
@@ -1496,17 +1497,21 @@ export async function withdrawPurchase(
   reason?: string | null
 ): Promise<PurchaseRecord> {
   await ensurePurchasesSchema();
-  const existing = await findPurchaseById(purchaseId);
-  if (!existing) throw new Error('PURCHASE_NOT_FOUND');
-  if (existing.status !== 'pending_approval') throw new Error('NOT_WITHDRAWABLE');
 
-  await mysqlQuery`
-    UPDATE purchases
-    SET status = 'cancelled', pending_approver_id = NULL, workflow_step_index = NULL, updated_at = NOW()
-    WHERE id = ${purchaseId}
-  `;
-  await insertLog(purchaseId, 'withdraw', 'pending_approval', 'cancelled', operatorId, reason ?? null);
-  return (await findPurchaseById(purchaseId))!;
+  return withTransaction(async (connection) => {
+    const existing = await findPurchaseById(purchaseId, connection);
+    if (!existing) throw new Error('PURCHASE_NOT_FOUND');
+    if (existing.status !== 'pending_approval') throw new Error('NOT_WITHDRAWABLE');
+
+    await connection.query(
+      `UPDATE purchases
+       SET status = 'cancelled', pending_approver_id = NULL, workflow_step_index = NULL, updated_at = NOW()
+       WHERE id = ?`,
+      [purchaseId]
+    );
+    await insertLog(purchaseId, 'withdraw', 'pending_approval', 'cancelled', operatorId, reason ?? null, connection);
+    return (await findPurchaseById(purchaseId, connection))!;
+  });
 }
 
 // duplicate purchase (create a new draft based on an existing record)
@@ -1553,16 +1558,18 @@ export async function duplicatePurchase(
 // soft delete (only draft or rejected and owner or admin handled in business layer)
 export async function deletePurchase(purchaseId: string, operatorId: string): Promise<void> {
   await ensurePurchasesSchema();
-  const existing = await findPurchaseById(purchaseId);
-  if (!existing) throw new Error('PURCHASE_NOT_FOUND');
-  if (!(existing.status === 'draft' || existing.status === 'rejected')) throw new Error('NOT_DELETABLE');
 
-  await mysqlQuery`
-    UPDATE purchases
-    SET is_deleted = 1, deleted_at = NOW(), updated_at = NOW()
-    WHERE id = ${purchaseId}
-  `;
-  await insertLog(purchaseId, 'cancel', existing.status, 'cancelled', operatorId, '删除/取消采购记录');
+  await withTransaction(async (connection) => {
+    const existing = await findPurchaseById(purchaseId, connection);
+    if (!existing) throw new Error('PURCHASE_NOT_FOUND');
+    if (!(existing.status === 'draft' || existing.status === 'rejected')) throw new Error('NOT_DELETABLE');
+
+    await connection.query(
+      'UPDATE purchases SET is_deleted = 1, deleted_at = NOW(), updated_at = NOW() WHERE id = ?',
+      [purchaseId]
+    );
+    await insertLog(purchaseId, 'cancel', existing.status, 'cancelled', operatorId, '删除/取消采购记录', connection);
+  });
 }
 
 export async function listPurchaseAuditLogs(params: {

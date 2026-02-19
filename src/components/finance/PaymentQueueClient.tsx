@@ -2,14 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Wallet, Search, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 
-import ReimbursementPayConfirmDialog from '@/components/reimbursements/ReimbursementPayConfirmDialog';
+import PaymentConfirmDialog from '@/components/reimbursements/PaymentConfirmDialog';
+
+
 import DataState from '@/components/common/DataState';
 import Pagination from '@/components/tables/Pagination';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { ReimbursementRecord, ReimbursementStatus } from '@/types/reimbursement';
 import { cn } from '@/lib/utils';
@@ -59,12 +62,14 @@ export default function PaymentQueueClient() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [payTarget, setPayTarget] = useState<ReimbursementRecord | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   // Reimbursement State
   const [reimbursementRecords, setReimbursementRecords] = useState<ReimbursementRecord[]>([]);
   const [reimbursementPage, setReimbursementPage] = useState(1);
   const [reimbursementTotal, setReimbursementTotal] = useState(0);
-  const [activeReimbursementId, setActiveReimbursementId] = useState<string | null>(null);
+
 
   const [pageSize] = useState(20);
   const [reloadToken, setReloadToken] = useState(0);
@@ -114,6 +119,32 @@ export default function PaymentQueueClient() {
     if (permissionLoading || !canPay) return;
     void fetchReimbursements();
   }, [permissionLoading, canPay, fetchReimbursements, reloadToken]);
+
+  const handlePayConfirm = useCallback(
+    async (note: string) => {
+      if (!payTarget) return;
+      setSubmitting(true);
+      try {
+        const response = await fetch(`/api/reimbursements/${payTarget.id}/actions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'pay', note }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || '打款失败');
+        }
+        toast.success('已标记打款');
+        setPayTarget(null);
+        setReloadToken((t) => t + 1);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : '打款失败');
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [payTarget]
+  );
 
   const totalPages = useMemo(() => {
     return Math.max(1, Math.ceil(reimbursementTotal / pageSize));
@@ -203,7 +234,7 @@ export default function PaymentQueueClient() {
                         <TableRow 
                             key={item.id} 
                             className="group transition-colors hover:bg-muted/40 cursor-pointer"
-                            onClick={() => setActiveReimbursementId(item.id)}
+                            onClick={() => setPayTarget(item)}
                         >
                           <TableCell className="pl-6 font-mono text-xs text-muted-foreground">
                               {item.reimbursementNumber}
@@ -238,10 +269,11 @@ export default function PaymentQueueClient() {
                           </TableCell>
                           <TableCell className="text-right pr-6" onClick={(e) => e.stopPropagation()}>
                             <Button 
-                                variant="outline" 
-                                size="sm" 
                                 className="h-8 gap-1.5 text-xs border-primary/20 hover:bg-primary/5 hover:text-primary"
-                                onClick={() => setActiveReimbursementId(item.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPayTarget(item);
+                                }}
                             >
                               <Wallet className="h-3.5 w-3.5" />
                               打款
@@ -258,7 +290,7 @@ export default function PaymentQueueClient() {
               {reimbursementRecords.map((item) => {
                   const statusConfig = getReimbursementStatusConfig(item.status);
                   return (
-                    <div key={item.id} className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm active:scale-[0.99] transition-transform" onClick={() => setActiveReimbursementId(item.id)}>
+                    <div key={item.id} className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm active:scale-[0.99] transition-transform" onClick={() => setPayTarget(item)}>
                       <div className="flex justify-between items-start gap-4">
                         <div>
                             <div className="font-semibold text-foreground line-clamp-1">{item.title}</div>
@@ -301,22 +333,13 @@ export default function PaymentQueueClient() {
         </div>
       ) : null}
 
-      <ReimbursementPayConfirmDialog
-        open={Boolean(activeReimbursementId)}
-        reimbursementId={activeReimbursementId}
-        onOpenChange={(open) => {
-          if (!open) {
-            setActiveReimbursementId(null);
-          }
-        }}
-        onPaid={() => {
-          setReloadToken((token) => token + 1);
-          setActiveReimbursementId(null);
-        }}
-        onRejected={() => {
-          setReloadToken((token) => token + 1);
-          setActiveReimbursementId(null);
-        }}
+
+
+      <PaymentConfirmDialog
+        open={!!payTarget}
+        onClose={() => !submitting && setPayTarget(null)}
+        onSubmit={handlePayConfirm}
+        submitting={submitting}
       />
     </section>
   );
