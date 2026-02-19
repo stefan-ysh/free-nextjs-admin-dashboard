@@ -1,17 +1,6 @@
 import * as XLSX from 'xlsx';
 
-export interface QuoteItem {
-    name: string;
-    spec: string;
-    unit: string;
-    price: number;
-    quantity: number;
-}
 
-export interface QuoteData {
-    customerName?: string;
-    items: QuoteItem[];
-}
 
 export interface DeliveryItem {
     name: string;
@@ -42,54 +31,7 @@ function saveWorkbook(workbook: XLSX.WorkBook, filename: string) {
     XLSX.writeFile(workbook, filename);
 }
 
-/**
- * 导出报价单
- */
-export async function exportQuote(data: QuoteData) {
-    try {
-        const buffer = await fetchTemplate('quote_template.xls');
-        const workbook = XLSX.read(buffer, { type: 'array' });
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
 
-        // 1. 填充基础数据 (如果有特定位置需要填充客户名，可以在这里处理)
-        // 目前模板似乎没有明确的客户名占位符，主要在表头
-
-        // 2. 填充商品明细
-        // 模板数据从第4行(索引3)开始: 序号, 名称, 规格, 单位, 单价, 数量, 金额
-        const startRow = 3;
-
-        // 转换数据为数组格式
-        const rows = data.items.map((item, index) => [
-            index + 1,      // 序号
-            item.name,      // 名称
-            item.spec,      // 规格
-            item.unit,      // 单位
-            item.price,     // 单价
-            item.quantity,  // 数量
-            item.price * item.quantity, // 金额
-        ]);
-
-        // 使用 sheet_add_aoa 写入数据，origin 指定起始位置
-        XLSX.utils.sheet_add_aoa(worksheet, rows, { origin: { r: startRow, c: 0 } });
-
-        // 3. 计算总金额并写入小计行 (紧接在数据之后)
-        const totalAmount = data.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-        const totalRowIndex = startRow + rows.length;
-
-        // 写入小计行
-        XLSX.utils.sheet_add_aoa(worksheet, [
-            ['', '小计（含税 13% 增票）', '', '', '', '', totalAmount]
-        ], { origin: { r: totalRowIndex, c: 0 } });
-
-        // 导出
-        const filename = `报价单_${data.customerName || '未命名'}_${new Date().toISOString().slice(0, 10)}.xls`;
-        saveWorkbook(workbook, filename);
-
-    } catch (error) {
-        console.error('Export quote failed:', error);
-        throw error;
-    }
-}
 
 /**
  * 导出发货单
