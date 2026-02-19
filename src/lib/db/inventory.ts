@@ -403,8 +403,9 @@ export async function createInventoryItem(payload: InventoryItemPayload): Promis
   await pool.query(
     `INSERT INTO inventory_items (
       id, sku, name, unit, unit_price, category, safety_stock, barcode, image_url,
-      spec_fields_json, default_attributes_json, attributes_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      spec_fields_json, default_attributes_json, attributes_json,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       payload.sku,
@@ -418,6 +419,8 @@ export async function createInventoryItem(payload: InventoryItemPayload): Promis
       payload.specFields ? JSON.stringify(payload.specFields) : null,
       defaultRecord ? JSON.stringify(defaultRecord) : null,
       null,
+      new Date(),
+      new Date(),
     ]
   );
 
@@ -529,8 +532,8 @@ export async function createWarehouse(payload: WarehousePayload): Promise<Wareho
 
   await pool.query(
     `INSERT INTO inventory_warehouses (
-      id, name, code, type, address, capacity, manager
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      id, name, code, type, address, capacity, manager, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       payload.name,
@@ -539,6 +542,8 @@ export async function createWarehouse(payload: WarehousePayload): Promise<Wareho
       payload.address ?? null,
       payload.capacity ?? null,
       payload.manager ?? null,
+      new Date(),
+      new Date(),
     ]
   );
 
@@ -803,8 +808,8 @@ export async function createInboundRecord(
       `INSERT INTO inventory_movements (
         id, direction, type, item_id, warehouse_id, related_order_id, related_purchase_id,
         quantity, unit_cost, amount, operator_id, occurred_at,
-        attributes_json, notes
-      ) VALUES (?, 'inbound', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        attributes_json, notes, created_at
+      ) VALUES (?, 'inbound', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
       [
         movementId,
         payload.type,
@@ -823,9 +828,9 @@ export async function createInboundRecord(
     );
 
     await connection.query(
-      `INSERT INTO inventory_stock_snapshots (item_id, warehouse_id, quantity, reserved)
-       VALUES (?, ?, ?, 0)
-       ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity), updated_at = CURRENT_TIMESTAMP`,
+      `INSERT INTO inventory_stock_snapshots (item_id, warehouse_id, quantity, reserved, updated_at)
+       VALUES (?, ?, ?, 0, NOW())
+       ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity), updated_at = NOW()`,
       [payload.itemId, payload.warehouseId, payload.quantity]
     );
 
@@ -917,8 +922,8 @@ export async function createOutboundRecord(
       `INSERT INTO inventory_movements (
         id, direction, type, item_id, warehouse_id, related_order_id,
         quantity, unit_cost, amount, operator_id, occurred_at, attributes_json,
-        notes
-      ) VALUES (?, 'outbound', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        notes, created_at
+      ) VALUES (?, 'outbound', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
       [
         movementId,
         payload.type,
@@ -941,8 +946,8 @@ export async function createOutboundRecord(
         `INSERT INTO inventory_movements (
           id, direction, type, item_id, warehouse_id, related_order_id,
           quantity, unit_cost, amount, operator_id, occurred_at, attributes_json,
-          notes
-        ) VALUES (?, 'inbound', 'transfer', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          notes, created_at
+        ) VALUES (?, 'inbound', 'transfer', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
         [
           inboundId,
           payload.itemId,
@@ -958,9 +963,9 @@ export async function createOutboundRecord(
         ]
       );
       await connection.query(
-        `INSERT INTO inventory_stock_snapshots (item_id, warehouse_id, quantity, reserved)
-         VALUES (?, ?, ?, 0)
-         ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity), updated_at = CURRENT_TIMESTAMP`,
+        `INSERT INTO inventory_stock_snapshots (item_id, warehouse_id, quantity, reserved, updated_at)
+         VALUES (?, ?, ?, 0, NOW())
+         ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity), updated_at = NOW()`,
         [payload.itemId, payload.targetWarehouseId, payload.quantity]
       );
     }

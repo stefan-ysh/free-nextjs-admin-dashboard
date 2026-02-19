@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { mysqlPool } from '@/lib/mysql';
 import { randomUUID } from 'crypto';
 import { normalizeInventoryCategory } from '@/lib/inventory/catalog';
+import { ensureInventorySchema } from '@/lib/schema/inventory';
 
 
 export const dynamic = 'force-dynamic';
@@ -131,28 +132,8 @@ export async function GET() {
     const pool = mysqlPool();
     const results = [];
     
-    // Ensure table exists
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS inventory_items (
-        id VARCHAR(36) PRIMARY KEY,
-        sku VARCHAR(255) NOT NULL,
-        name VARCHAR(255) NOT NULL,
-        unit VARCHAR(50),
-        unit_price DECIMAL(10, 2) DEFAULT 0,
-        category VARCHAR(100),
-        safety_stock INT DEFAULT 0,
-        description TEXT,
-        image_url VARCHAR(500),
-        spec_fields JSON,
-        status VARCHAR(20) DEFAULT 'active',
-        is_deleted TINYINT(1) DEFAULT 0,
-        deleted_at DATETIME,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY idx_sku (sku),
-        KEY idx_name (name)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
+    // Ensure table exists using the centralized schema definition
+    await ensureInventorySchema();
 
     // Force clear table as requested
     await pool.query('SET FOREIGN_KEY_CHECKS = 0');

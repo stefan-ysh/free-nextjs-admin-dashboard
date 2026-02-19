@@ -17,8 +17,9 @@ export async function logAuthAudit(params: {
   await ensureAuthSchema();
   const id = randomUUID();
   const metadata = params.metadata ?? {};
+  const now = new Date().toISOString().replace('T', ' ').replace('Z', '');
   await mysqlQuery`
-    INSERT INTO auth_audit_logs (id, actor_id, target_id, action, metadata_json)
-    VALUES (${id}, ${params.actorId}, ${params.targetId ?? null}, ${params.action}, ${JSON.stringify(metadata)})
+    INSERT INTO auth_audit_logs (id, actor_id, target_id, action, metadata_json, created_at)
+    VALUES (${id}, ${params.actorId}, ${params.targetId ?? null}, ${params.action}, ${JSON.stringify(metadata)}, ${now})
   `;
 }

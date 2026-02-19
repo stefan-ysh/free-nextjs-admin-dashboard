@@ -392,8 +392,8 @@ async function insertWorkflowLog(
   await db.query(
     `
       INSERT INTO reimbursement_workflow_logs
-      (id, reimbursement_id, action, from_status, to_status, operator_id, comment)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      (id, reimbursement_id, action, from_status, to_status, operator_id, comment, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
     `,
     [randomUUID(), reimbursementId, action, fromStatus, toStatus, operatorId, comment ?? null]
   );
@@ -612,8 +612,9 @@ export async function createReimbursement(
           INSERT INTO reimbursements (
             id, reimbursement_number, source_type, source_purchase_id,
             organization_type, category, title, amount, occurred_at, description,
-            details_json, invoice_images, receipt_images, attachments, status, applicant_id, created_by
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)
+            details_json, invoice_images, receipt_images, attachments, status, applicant_id, created_by,
+            created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, NOW(), NOW())
         `,
         [
           id,

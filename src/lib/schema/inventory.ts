@@ -71,26 +71,26 @@ async function seedDefaultItems(pool: Pool) {
   }
 }
 
-async function seedDefaultWarehouses(pool: Pool) {
-  await Promise.all(
-    defaultWarehouses.map((warehouse) =>
-      pool.query(
-        `INSERT IGNORE INTO inventory_warehouses (
-          id, name, code, type, address, capacity, manager
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [
-          warehouse.id,
-          warehouse.name,
-          warehouse.code,
-          warehouse.type,
-          warehouse.address,
-          warehouse.capacity,
-          warehouse.manager,
-        ]
-      )
-    )
-  );
-}
+// async function seedDefaultWarehouses(pool: Pool) {
+//   await Promise.all(
+//     defaultWarehouses.map((warehouse) =>
+//       pool.query(
+//         `INSERT IGNORE INTO inventory_warehouses (
+//           id, name, code, type, address, capacity, manager
+//         ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+//         [
+//           warehouse.id,
+//           warehouse.name,
+//           warehouse.code,
+//           warehouse.type,
+//           warehouse.address,
+//           warehouse.capacity,
+//           warehouse.manager,
+//         ]
+//       )
+//     )
+//   );
+// }
 
 async function seedInitialSnapshotsAndMovements(pool: Pool) {
   const [[snapshotCountRow]] = await pool.query<RowDataPacket[]>(
@@ -149,8 +149,8 @@ async function seedInitialSnapshotsAndMovements(pool: Pool) {
     await pool.query(
       `INSERT INTO inventory_movements (
         id, direction, type, item_id, warehouse_id, related_order_id,
-        quantity, unit_cost, amount, operator_id, occurred_at, attributes_json, notes
-      ) VALUES (?, 'inbound', 'purchase', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        quantity, unit_cost, amount, operator_id, occurred_at, attributes_json, notes, created_at
+      ) VALUES (?, 'inbound', 'purchase', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
       [
         randomUUID(),
         itemId,
@@ -172,8 +172,8 @@ async function seedInitialSnapshotsAndMovements(pool: Pool) {
       await pool.query(
         `INSERT INTO inventory_movements (
           id, direction, type, item_id, warehouse_id, related_order_id,
-          quantity, unit_cost, amount, operator_id, occurred_at, attributes_json, notes
-        ) VALUES (?, 'outbound', 'transfer', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          quantity, unit_cost, amount, operator_id, occurred_at, attributes_json, notes, created_at
+        ) VALUES (?, 'outbound', 'transfer', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
         [
           randomUUID(),
           itemId,
@@ -193,8 +193,8 @@ async function seedInitialSnapshotsAndMovements(pool: Pool) {
       await pool.query(
         `INSERT INTO inventory_movements (
           id, direction, type, item_id, warehouse_id, related_order_id,
-          quantity, unit_cost, amount, operator_id, occurred_at, attributes_json, notes
-        ) VALUES (?, 'inbound', 'transfer', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          quantity, unit_cost, amount, operator_id, occurred_at, attributes_json, notes, created_at
+        ) VALUES (?, 'inbound', 'transfer', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
         [
           randomUUID(),
           itemId,
@@ -215,8 +215,8 @@ async function seedInitialSnapshotsAndMovements(pool: Pool) {
       await pool.query(
         `INSERT INTO inventory_movements (
           id, direction, type, item_id, warehouse_id, related_order_id,
-          quantity, unit_cost, amount, operator_id, occurred_at, attributes_json, notes
-        ) VALUES (?, 'outbound', 'use', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          quantity, unit_cost, amount, operator_id, occurred_at, attributes_json, notes, created_at
+        ) VALUES (?, 'outbound', 'use', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
         [
           randomUUID(),
           itemId,
@@ -235,17 +235,17 @@ async function seedInitialSnapshotsAndMovements(pool: Pool) {
 
     const mainQuantity = Math.max(baseQuantity - plannedTransfer - plannedOutbound, 0);
     await pool.query(
-      `INSERT INTO inventory_stock_snapshots (item_id, warehouse_id, quantity, reserved)
-       VALUES (?, ?, ?, 0)
-       ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), reserved = VALUES(reserved)`,
+      `INSERT INTO inventory_stock_snapshots (item_id, warehouse_id, quantity, reserved, updated_at)
+       VALUES (?, ?, ?, 0, NOW())
+       ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), reserved = VALUES(reserved), updated_at = NOW()`,
       [itemId, mainWarehouseId, mainQuantity]
     );
 
     if (secondaryWarehouseId && plannedTransfer > 0) {
       await pool.query(
-        `INSERT INTO inventory_stock_snapshots (item_id, warehouse_id, quantity, reserved)
-         VALUES (?, ?, ?, 0)
-         ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), reserved = VALUES(reserved)`,
+        `INSERT INTO inventory_stock_snapshots (item_id, warehouse_id, quantity, reserved, updated_at)
+         VALUES (?, ?, ?, 0, NOW())
+         ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), reserved = VALUES(reserved), updated_at = NOW()`,
         [itemId, secondaryWarehouseId, plannedTransfer]
       );
     }
@@ -270,11 +270,11 @@ export async function ensureInventorySchema() {
       barcode VARCHAR(120) NULL,
       is_deleted TINYINT(1) NOT NULL DEFAULT 0,
       deleted_at DATETIME NULL,
-      spec_fields_json JSON NULL,
-      default_attributes_json JSON NULL,
-      attributes_json JSON NULL,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      spec_fields_json TEXT NULL,
+      default_attributes_json TEXT NULL,
+      attributes_json TEXT NULL,
+      created_at DATETIME NOT NULL,
+      updated_at DATETIME NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
@@ -289,8 +289,8 @@ export async function ensureInventorySchema() {
       manager VARCHAR(120) NULL,
       is_deleted TINYINT(1) NOT NULL DEFAULT 0,
       deleted_at DATETIME NULL,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      created_at DATETIME NOT NULL,
+      updated_at DATETIME NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
@@ -300,7 +300,7 @@ export async function ensureInventorySchema() {
       warehouse_id VARCHAR(64) NOT NULL,
       quantity DECIMAL(16,3) NOT NULL DEFAULT 0,
       reserved DECIMAL(16,3) NOT NULL DEFAULT 0,
-      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL,
       PRIMARY KEY (item_id, warehouse_id),
       CONSTRAINT fk_snapshot_item FOREIGN KEY (item_id) REFERENCES inventory_items(id) ON DELETE CASCADE,
       CONSTRAINT fk_snapshot_warehouse FOREIGN KEY (warehouse_id) REFERENCES inventory_warehouses(id) ON DELETE CASCADE
@@ -320,8 +320,8 @@ export async function ensureInventorySchema() {
       amount DECIMAL(16,2) NULL,
       operator_id VARCHAR(64) NULL,
       occurred_at DATETIME NOT NULL,
-      attachments_json JSON NULL,
-      attributes_json JSON NULL,
+      attachments_json TEXT NULL,
+      attributes_json TEXT NULL,
       notes TEXT NULL,
       client_id VARCHAR(64) NULL,
       client_type ENUM('personal','company') NULL,
@@ -329,7 +329,7 @@ export async function ensureInventorySchema() {
       client_contact VARCHAR(120) NULL,
       client_phone VARCHAR(64) NULL,
       client_address VARCHAR(255) NULL,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      created_at DATETIME NOT NULL,
       CONSTRAINT fk_movement_item FOREIGN KEY (item_id) REFERENCES inventory_items(id) ON DELETE CASCADE,
       CONSTRAINT fk_movement_warehouse FOREIGN KEY (warehouse_id) REFERENCES inventory_warehouses(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -352,8 +352,8 @@ export async function ensureInventorySchema() {
       approved_at DATETIME NULL,
       rejected_at DATETIME NULL,
       rejection_reason TEXT NULL,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      created_at DATETIME NOT NULL,
+      updated_at DATETIME NOT NULL,
       CONSTRAINT fk_application_warehouse FOREIGN KEY (warehouse_id) REFERENCES inventory_warehouses(id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
@@ -380,7 +380,7 @@ export async function ensureInventorySchema() {
       level ENUM('warning','critical') NOT NULL,
       message VARCHAR(255) NOT NULL,
       resolved TINYINT(1) NOT NULL DEFAULT 0,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      created_at DATETIME NOT NULL,
       resolved_at DATETIME NULL,
       CONSTRAINT fk_alert_item FOREIGN KEY (item_id) REFERENCES inventory_items(id) ON DELETE CASCADE,
       CONSTRAINT fk_alert_warehouse FOREIGN KEY (warehouse_id) REFERENCES inventory_warehouses(id) ON DELETE SET NULL

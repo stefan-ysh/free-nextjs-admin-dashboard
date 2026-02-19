@@ -81,7 +81,7 @@ async function seedDefaultCategories(pool: Pool) {
     defaultCategories[type].forEach((name) => {
       tasks.push(
         pool.query(
-          'INSERT IGNORE INTO finance_categories (type, name, is_default) VALUES (?, ?, 1)',
+          'INSERT IGNORE INTO finance_categories (type, name, is_default, created_at) VALUES (?, ?, 1, NOW())',
           [type, name]
         )
       );
@@ -115,18 +115,18 @@ export async function ensureFinanceSchema() {
           payment_channel VARCHAR(120),
           payer VARCHAR(120),
           transaction_no VARCHAR(160),
-          invoice_json JSON NULL,
+          invoice_json TEXT NULL,
           description TEXT,
-          tags_json JSON NULL,
+          tags_json TEXT NULL,
           created_by VARCHAR(64),
           source_type ENUM('manual','reimbursement','budget_adjustment','inventory') NOT NULL DEFAULT 'manual',
           status ENUM('draft','cleared') NOT NULL DEFAULT 'draft',
           purchase_id CHAR(36) NULL,
           reimbursement_id CHAR(36) NULL,
           inventory_movement_id VARCHAR(64) NULL,
-          metadata_json JSON NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          metadata_json TEXT NULL,
+          created_at DATETIME NOT NULL,
+          updated_at DATETIME NOT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
 
@@ -146,7 +146,7 @@ export async function ensureFinanceSchema() {
       await ensureColumn('finance_records', 'payer', 'VARCHAR(120) NULL');
       await ensureColumn('finance_records', 'transaction_no', 'VARCHAR(160) NULL');
       await ensureColumn('finance_records', 'status', "ENUM('draft','cleared') NOT NULL DEFAULT 'draft'");
-      await ensureColumn('finance_records', 'metadata_json', 'JSON NULL');
+      await ensureColumn('finance_records', 'metadata_json', 'TEXT NULL');
       await dropForeignKeyIfExists(pool, 'finance_records', 'fk_finance_supplier');
       await dropIndexIfExists(pool, 'finance_records', 'idx_finance_supplier');
       await dropColumnIfExists(pool, 'finance_records', 'supplier_id');
@@ -165,7 +165,7 @@ export async function ensureFinanceSchema() {
           type ENUM('income','expense') NOT NULL,
           name VARCHAR(120) NOT NULL,
           is_default TINYINT(1) NOT NULL DEFAULT 0,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          created_at DATETIME NOT NULL,
           UNIQUE KEY uniq_finance_category (type, name)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
@@ -180,7 +180,7 @@ export async function ensureFinanceSchema() {
           note TEXT NULL,
           occurred_at DATE NOT NULL,
           created_by CHAR(36) NOT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          created_at DATETIME NOT NULL,
           CONSTRAINT chk_finance_budget_adjustment_amount CHECK (amount > 0),
           CONSTRAINT fk_finance_budget_adjustments_creator FOREIGN KEY (created_by) REFERENCES hr_employees(id) ON DELETE RESTRICT
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

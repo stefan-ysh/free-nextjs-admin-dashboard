@@ -48,9 +48,12 @@ export async function createSession(options: {
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
   const expiresAtSql = expiresAt.toISOString().replace('T', ' ').replace('Z', '');
 
+  const now = new Date();
+  const nowSql = now.toISOString().replace('T', ' ').replace('Z', '');
+
   await mysqlQuery`
-    INSERT INTO auth_sessions (id, user_id, session_token, device_type, user_agent_hash, user_agent, remember_me, expires_at)
-    VALUES (${id}, ${options.userId}, ${token}, ${options.deviceType}, ${options.userAgentHash}, ${options.userAgent}, ${options.rememberMe ? 1 : 0}, ${expiresAtSql})
+    INSERT INTO auth_sessions (id, user_id, session_token, device_type, user_agent_hash, user_agent, remember_me, expires_at, created_at, last_active)
+    VALUES (${id}, ${options.userId}, ${token}, ${options.deviceType}, ${options.userAgentHash}, ${options.userAgent}, ${options.rememberMe ? 1 : 0}, ${expiresAtSql}, ${nowSql}, ${nowSql})
   `;
 
   return { token, expiresAt };

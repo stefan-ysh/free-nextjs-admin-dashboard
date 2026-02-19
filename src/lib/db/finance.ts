@@ -339,8 +339,9 @@ export async function createRecord(
       quantity, payment_channel, payer, transaction_no,
       invoice_json, description, tags_json, created_by,
       source_type, status, purchase_id, reimbursement_id,
-      inventory_movement_id, metadata_json
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      inventory_movement_id, metadata_json,
+      created_at, updated_at
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id,
       record.name,
@@ -365,6 +366,8 @@ export async function createRecord(
       reimbursementId,
       inventoryMovementId,
       metadataJson,
+      new Date(),
+      new Date(),
     ]
   );
 
@@ -674,8 +677,8 @@ export async function createBudgetAdjustment(input: {
   return withTransaction(async (connection) => {
     await connection.query(
       `INSERT INTO finance_budget_adjustments
-        (id, organization_type, adjustment_type, amount, title, note, occurred_at, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, organization_type, adjustment_type, amount, title, note, occurred_at, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
       [id, input.organizationType, input.adjustmentType, amount, title, note, dateValue, input.createdBy]
     );
 

@@ -53,11 +53,11 @@ export async function ensureHrSchema() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS hr_employees (
       id CHAR(36) NOT NULL PRIMARY KEY,
-      email VARCHAR(255),
+      email VARCHAR(191),
       password_hash VARCHAR(255),
-      roles JSON NOT NULL DEFAULT (JSON_ARRAY('employee')),
+      roles TEXT NOT NULL,
       primary_role VARCHAR(64) NOT NULL DEFAULT 'employee',
-      display_name VARCHAR(255) NOT NULL,
+      display_name VARCHAR(191) NOT NULL,
       phone VARCHAR(60),
       employee_code VARCHAR(120),
       gender VARCHAR(16),
@@ -72,45 +72,43 @@ export async function ensureHrSchema() {
       country VARCHAR(120),
       postal_code VARCHAR(40),
       tax_id VARCHAR(120),
-      social_links JSON NOT NULL DEFAULT (JSON_OBJECT()),
-      custom_fields JSON NOT NULL DEFAULT (JSON_OBJECT()),
+      social_links TEXT NOT NULL,
+      custom_fields TEXT NOT NULL,
       is_active TINYINT(1) NOT NULL DEFAULT 1,
       email_verified TINYINT(1) NOT NULL DEFAULT 0,
       created_by CHAR(36),
-      last_login_at DATETIME(3),
-      password_updated_at DATETIME(3),
-      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-      updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-      CONSTRAINT chk_hr_roles_json CHECK (JSON_TYPE(roles) = 'ARRAY'),
-      CONSTRAINT chk_hr_primary_role CHECK (JSON_CONTAINS(roles, JSON_QUOTE(primary_role), '$')),
+      last_login_at DATETIME,
+      password_updated_at DATETIME,
+      created_at DATETIME NOT NULL,
+      updated_at DATETIME NOT NULL,
       CONSTRAINT fk_hr_manager FOREIGN KEY (manager_id) REFERENCES hr_employees(id) ON DELETE SET NULL,
-      CONSTRAINT fk_hr_created_by FOREIGN KEY (created_by) REFERENCES hr_employees(id) ON DELETE SET NULL
+      CONSTRAINT fk_hr_creator FOREIGN KEY (created_by) REFERENCES hr_employees(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
   // Ensure columns exist (new + legacy compatibility)
-  await ensureColumn('hr_employees', 'email', 'VARCHAR(255) NULL');
+  await ensureColumn('hr_employees', 'email', 'VARCHAR(191) NULL');
   await ensureColumn('hr_employees', 'password_hash', 'VARCHAR(255) NULL');
-  await ensureColumn('hr_employees', 'roles', "JSON NOT NULL DEFAULT (JSON_ARRAY('employee'))");
+  await ensureColumn('hr_employees', 'roles', "TEXT NOT NULL");
   await ensureColumn('hr_employees', 'primary_role', "VARCHAR(64) NOT NULL DEFAULT 'employee'");
-  await ensureColumn('hr_employees', 'display_name', "VARCHAR(255) NULL");
+  await ensureColumn('hr_employees', 'display_name', "VARCHAR(191) NULL");
   await ensureColumn('hr_employees', 'bio', 'TEXT NULL');
   await ensureColumn('hr_employees', 'city', 'VARCHAR(120) NULL');
   await ensureColumn('hr_employees', 'country', 'VARCHAR(120) NULL');
   await ensureColumn('hr_employees', 'postal_code', 'VARCHAR(40) NULL');
   await ensureColumn('hr_employees', 'tax_id', 'VARCHAR(120) NULL');
-  await ensureColumn('hr_employees', 'social_links', 'JSON NOT NULL DEFAULT (JSON_OBJECT())');
+  await ensureColumn('hr_employees', 'social_links', 'TEXT NOT NULL');
   await ensureColumn('hr_employees', 'is_active', 'TINYINT(1) NOT NULL DEFAULT 1');
   await ensureColumn('hr_employees', 'email_verified', 'TINYINT(1) NOT NULL DEFAULT 0');
   await ensureColumn('hr_employees', 'created_by', 'CHAR(36) NULL');
-  await ensureColumn('hr_employees', 'last_login_at', 'DATETIME(3) NULL');
-  await ensureColumn('hr_employees', 'password_updated_at', 'DATETIME(3) NULL');
+  await ensureColumn('hr_employees', 'last_login_at', 'DATETIME NULL');
+  await ensureColumn('hr_employees', 'password_updated_at', 'DATETIME NULL');
   await ensureColumn('hr_employees', 'failed_login_attempts', 'INT NOT NULL DEFAULT 0');
-  await ensureColumn('hr_employees', 'locked_until', 'DATETIME(3) NULL');
+  await ensureColumn('hr_employees', 'locked_until', 'DATETIME NULL');
   await ensureColumn('hr_employees', 'gender', 'VARCHAR(16) NULL');
   await ensureColumn('hr_employees', 'address', 'TEXT NULL');
   await ensureColumn('hr_employees', 'employee_code', 'VARCHAR(120) NULL');
-  await ensureColumn('hr_employees', 'custom_fields', 'JSON NOT NULL DEFAULT (JSON_OBJECT())');
+  await ensureColumn('hr_employees', 'custom_fields', 'TEXT NOT NULL');
 
   await safeCreateIndex('CREATE UNIQUE INDEX hr_employees_employee_code_idx ON hr_employees(employee_code)');
   await safeCreateIndex('CREATE UNIQUE INDEX hr_employees_email_idx ON hr_employees(email)');
@@ -196,7 +194,7 @@ export async function ensureHrSchema() {
     WHERE display_name IS NULL OR TRIM(display_name) = ''
   `);
 
-  await pool.query(`ALTER TABLE hr_employees MODIFY COLUMN display_name VARCHAR(255) NOT NULL`);
+  await pool.query(`ALTER TABLE hr_employees MODIFY COLUMN display_name VARCHAR(191) NOT NULL`);
 
   if (hasFirstName) {
     try {
@@ -243,7 +241,7 @@ export async function ensureHrSchema() {
       next_status ENUM('active','on_leave','terminated') NOT NULL,
       note TEXT,
       actor_id CHAR(36),
-      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      created_at DATETIME NOT NULL,
       CONSTRAINT fk_hr_status_employee FOREIGN KEY (employee_id) REFERENCES hr_employees(id) ON DELETE CASCADE,
       CONSTRAINT fk_hr_status_actor FOREIGN KEY (actor_id) REFERENCES hr_employees(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

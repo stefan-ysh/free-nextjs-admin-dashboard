@@ -101,6 +101,8 @@ npm install
 - [LOCAL_STORAGE_SETUP.md](./docs/LOCAL_STORAGE_SETUP.md): 本地文件目录与权限
 - [DEPLOYMENT.md](./docs/DEPLOYMENT.md): 本地 / 自托管部署示例
 - [FINANCE_UI_UPDATE.md](./docs/FINANCE_UI_UPDATE.md): UI & 交互调整记录
+- [快速开始](QUICKSTART.md)
+- [腾讯云部署指南](docs/DEPLOY_TENCENT.md)
 - [TEST_CHECKLIST.md](./docs/TEST_CHECKLIST.md): 端到端测试清单
 - [PROCUREMENT_SYSTEM_MASTER_LIST.md](./docs/PROCUREMENT_SYSTEM_MASTER_LIST.md): 需求追踪与交付状态
 - [DEVELOPMENT_BASELINE.md](./docs/DEVELOPMENT_BASELINE.md): 当前业务与开发强约束基线（必读）

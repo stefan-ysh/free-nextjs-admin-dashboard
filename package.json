@@ -10,6 +10,7 @@
     "import:finance": "tsx scripts/import-finance-excel.ts",
     "import:employees": "tsx scripts/import-employees.ts",
     "seed:admin": "tsx scripts/create-admin.ts",
+    "seed:init-admin": "tsx scripts/init-admin.ts",
     "check:purchases": "tsx scripts/check-purchase-health.ts",
     "check:workflow": "tsx scripts/check-workflow-integrity.ts",
     "seed:departments": "node scripts/seed-departments.mjs",

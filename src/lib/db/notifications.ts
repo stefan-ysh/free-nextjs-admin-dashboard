@@ -48,8 +48,8 @@ async function ensureNotificationsSchema() {
       related_type VARCHAR(64),
       related_id CHAR(36),
       is_read TINYINT(1) NOT NULL DEFAULT 0,
-      read_at DATETIME(3) NULL,
-      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      read_at DATETIME NULL,
+      created_at DATETIME NOT NULL,
       CONSTRAINT fk_app_notifications_recipient
         FOREIGN KEY (recipient_id) REFERENCES hr_employees(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -1,7 +1,7 @@
 import type { RowDataPacket } from 'mysql2/promise';
 
 import { schemaPool, safeCreateIndex } from '@/lib/schema/mysql-utils';
-import { AUTH_ROLE_VALUES } from './roles';
+
 
 let initialized = false;
 
@@ -22,9 +22,9 @@ export async function ensureAuthSchema() {
       user_agent_hash CHAR(64) NOT NULL,
       user_agent TEXT,
       remember_me TINYINT(1) NOT NULL DEFAULT 0,
-      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-      expires_at DATETIME(3) NOT NULL,
-      last_active DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      created_at DATETIME NOT NULL,
+      expires_at DATETIME NOT NULL,
+      last_active DATETIME NOT NULL,
       CONSTRAINT fk_auth_sessions_user FOREIGN KEY (user_id) REFERENCES hr_employees(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
@@ -55,8 +55,8 @@ export async function ensureAuthSchema() {
       actor_id CHAR(36) NOT NULL,
       target_id CHAR(36),
       action VARCHAR(64) NOT NULL,
-      metadata_json JSON NOT NULL DEFAULT (JSON_OBJECT()),
-      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      metadata_json TEXT NOT NULL,
+      created_at DATETIME NOT NULL,
       CONSTRAINT fk_auth_audit_actor FOREIGN KEY (actor_id) REFERENCES hr_employees(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);

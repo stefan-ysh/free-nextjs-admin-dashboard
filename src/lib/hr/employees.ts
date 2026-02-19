@@ -350,7 +350,8 @@ async function insertStatusLog(params: {
       previous_status,
       next_status,
       note,
-      actor_id
+      actor_id,
+      created_at
     )
     VALUES (
       ${randomUUID()},
@@ -358,7 +359,8 @@ async function insertStatusLog(params: {
       ${previousStatus},
       ${nextStatus},
       ${sanitizedNote},
-      ${sanitizeNullableText(actorId ?? null)}
+      ${sanitizeNullableText(actorId ?? null)},
+      NOW()
     )
   `;
 }
@@ -622,7 +624,9 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
       hire_date,
       termination_date,
       location,
-      custom_fields
+      custom_fields,
+      created_at,
+      updated_at
     )
     VALUES (
       ${id},
@@ -637,7 +641,9 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
       ${payload.hireDate},
       ${payload.terminationDate},
       ${payload.location},
-      ${JSON.stringify(payload.customFields)}
+      ${JSON.stringify(payload.customFields)},
+      NOW(),
+      NOW()
     )
   `;
 

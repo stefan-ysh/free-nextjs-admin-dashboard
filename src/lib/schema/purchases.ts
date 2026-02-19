@@ -1,7 +1,11 @@
 import { schemaPool, safeCreateIndex, ensureColumn } from '@/lib/schema/mysql-utils';
 import { ensureUsersSchema } from '@/lib/schema/users';
 
+import { ensureInventorySchema } from '@/lib/schema/inventory';
+
 let initialized = false;
+
+// ... (helper functions omitted, they are unchanged)
 
 async function dropForeignKeyIfExists(table: string, constraint: string) {
   const pool = schemaPool();
@@ -59,6 +63,7 @@ export async function ensurePurchasesSchema() {
   if (initialized) return;
 
   await ensureUsersSchema();
+  await ensureInventorySchema();
 
   const pool = schemaPool();
 
@@ -88,38 +93,38 @@ export async function ensurePurchasesSchema() {
       invoice_status ENUM('pending','issued','not_required') NOT NULL DEFAULT 'not_required',
       invoice_number VARCHAR(120),
       invoice_issue_date DATE,
-      invoice_images JSON NOT NULL DEFAULT (JSON_ARRAY()),
-      receipt_images JSON NOT NULL DEFAULT (JSON_ARRAY()),
+      invoice_images TEXT NOT NULL,
+      receipt_images TEXT NOT NULL,
       status ENUM('draft','pending_approval','pending_inbound','approved','rejected','paid','cancelled') NOT NULL DEFAULT 'draft',
       reimbursement_status ENUM('none','invoice_pending','reimbursement_pending','reimbursement_rejected','reimbursed') NOT NULL DEFAULT 'none',
-      reimbursement_submitted_at DATETIME(3),
+      reimbursement_submitted_at DATETIME,
       reimbursement_submitted_by CHAR(36),
-      reimbursement_rejected_at DATETIME(3),
+      reimbursement_rejected_at DATETIME,
       reimbursement_rejected_by CHAR(36),
       reimbursement_rejected_reason TEXT,
-      submitted_at DATETIME(3),
+      submitted_at DATETIME,
       pending_approver_id CHAR(36),
       inbound_quantity DECIMAL(10,2) NOT NULL DEFAULT 0,
       workflow_step_index INT,
-      workflow_nodes JSON,
-      approved_at DATETIME(3),
+      workflow_nodes TEXT,
+      approved_at DATETIME,
       approved_by CHAR(36),
-      rejected_at DATETIME(3),
+      rejected_at DATETIME,
       rejected_by CHAR(36),
       rejection_reason TEXT,
       payment_issue_open TINYINT(1) NOT NULL DEFAULT 0,
       payment_issue_reason TEXT,
-      payment_issue_at DATETIME(3),
+      payment_issue_at DATETIME,
       payment_issue_by CHAR(36),
-      paid_at DATETIME(3),
+      paid_at DATETIME,
       paid_by CHAR(36),
       notes TEXT,
-      attachments JSON NOT NULL DEFAULT (JSON_ARRAY()),
-      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-      updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+      attachments TEXT NOT NULL,
+      created_at DATETIME NOT NULL,
+      updated_at DATETIME NOT NULL,
       created_by CHAR(36) NOT NULL,
       is_deleted TINYINT(1) NOT NULL DEFAULT 0,
-      deleted_at DATETIME(3),
+      deleted_at DATETIME,
       CONSTRAINT chk_purchases_quantity CHECK (quantity > 0),
       CONSTRAINT chk_purchases_unit_price CHECK (unit_price >= 0),
       CONSTRAINT chk_purchases_total CHECK (total_amount >= 0),
@@ -169,9 +174,9 @@ export async function ensurePurchasesSchema() {
     'reimbursement_status',
     "ENUM('none','invoice_pending','reimbursement_pending','reimbursement_rejected','reimbursed') NOT NULL DEFAULT 'none'"
   );
-  await ensureColumn('purchases', 'reimbursement_submitted_at', 'DATETIME(3) NULL');
+  await ensureColumn('purchases', 'reimbursement_submitted_at', 'DATETIME NULL');
   await ensureColumn('purchases', 'reimbursement_submitted_by', 'CHAR(36) NULL');
-  await ensureColumn('purchases', 'reimbursement_rejected_at', 'DATETIME(3) NULL');
+  await ensureColumn('purchases', 'reimbursement_rejected_at', 'DATETIME NULL');
   await ensureColumn('purchases', 'reimbursement_rejected_by', 'CHAR(36) NULL');
   await ensureColumn('purchases', 'reimbursement_rejected_reason', 'TEXT NULL');
   await pool.query(`
@@ -185,11 +190,11 @@ export async function ensurePurchasesSchema() {
       AND status IN ('pending_inbound', 'approved', 'paid')
   `);
   await ensureColumn('purchases', 'workflow_step_index', 'INT NULL');
-  await ensureColumn('purchases', 'workflow_nodes', 'JSON NULL');
+  await ensureColumn('purchases', 'workflow_nodes', 'TEXT NULL');
   await ensureColumn('purchases', 'payment_issue_open', 'TINYINT(1) NOT NULL DEFAULT 0');
   await ensureColumn('purchases', 'payment_issue_reason', 'TEXT NULL');
-  await ensureColumn('purchases', 'payment_issue_at', 'DATETIME(3) NULL');
-  await ensureColumn('purchases', 'payment_issue_at', 'DATETIME(3) NULL');
+  await ensureColumn('purchases', 'payment_issue_at', 'DATETIME NULL');
+  await ensureColumn('purchases', 'payment_issue_at', 'DATETIME NULL');
   await ensureColumn('purchases', 'payment_issue_by', 'CHAR(36) NULL');
   await ensureColumn('purchases', 'inventory_item_id', 'CHAR(36) NULL');
   await dropForeignKeyIfExists('purchases', 'fk_purchases_supplier');
@@ -212,7 +217,7 @@ export async function ensurePurchasesSchema() {
       to_status ENUM('draft','pending_approval','pending_inbound','approved','rejected','paid','cancelled') NOT NULL,
       operator_id CHAR(36) NOT NULL,
       comment TEXT,
-      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      created_at DATETIME NOT NULL,
       CONSTRAINT fk_reimbursement_purchase FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE CASCADE,
       CONSTRAINT fk_reimbursement_operator FOREIGN KEY (operator_id) REFERENCES hr_employees(id) ON DELETE RESTRICT
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

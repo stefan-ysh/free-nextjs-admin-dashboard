@@ -21,27 +21,27 @@ export async function ensureReimbursementsSchema() {
       amount DECIMAL(15,2) NOT NULL,
       occurred_at DATE NOT NULL,
       description TEXT NULL,
-      details_json JSON NOT NULL DEFAULT (JSON_OBJECT()),
-      invoice_images JSON NOT NULL DEFAULT (JSON_ARRAY()),
-      receipt_images JSON NOT NULL DEFAULT (JSON_ARRAY()),
-      attachments JSON NOT NULL DEFAULT (JSON_ARRAY()),
+      details_json TEXT NOT NULL,
+      invoice_images TEXT NOT NULL,
+      receipt_images TEXT NOT NULL,
+      attachments TEXT NOT NULL,
       status ENUM('draft','pending_approval','approved','rejected','paid') NOT NULL DEFAULT 'draft',
       pending_approver_id CHAR(36) NULL,
-      submitted_at DATETIME(3) NULL,
-      approved_at DATETIME(3) NULL,
+      submitted_at DATETIME NULL,
+      approved_at DATETIME NULL,
       approved_by CHAR(36) NULL,
-      rejected_at DATETIME(3) NULL,
+      rejected_at DATETIME NULL,
       rejected_by CHAR(36) NULL,
       rejection_reason TEXT NULL,
-      paid_at DATETIME(3) NULL,
+      paid_at DATETIME NULL,
       paid_by CHAR(36) NULL,
       payment_note TEXT NULL,
       applicant_id CHAR(36) NOT NULL,
       created_by CHAR(36) NOT NULL,
       is_deleted TINYINT(1) NOT NULL DEFAULT 0,
-      deleted_at DATETIME(3) NULL,
-      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-      updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+      deleted_at DATETIME NULL,
+      created_at DATETIME NOT NULL,
+      updated_at DATETIME NOT NULL,
       CONSTRAINT chk_reimbursements_amount CHECK (amount > 0),
       CONSTRAINT fk_reimbursements_source_purchase FOREIGN KEY (source_purchase_id) REFERENCES purchases(id) ON DELETE SET NULL,
       CONSTRAINT fk_reimbursements_pending_approver FOREIGN KEY (pending_approver_id) REFERENCES hr_employees(id) ON DELETE SET NULL,
@@ -53,7 +53,7 @@ export async function ensureReimbursementsSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
-  await ensureColumn('reimbursements', 'details_json', "JSON NOT NULL DEFAULT (JSON_OBJECT())");
+  await ensureColumn('reimbursements', 'details_json', "TEXT NOT NULL");
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS reimbursement_workflow_logs (
@@ -64,7 +64,7 @@ export async function ensureReimbursementsSchema() {
       to_status ENUM('draft','pending_approval','approved','rejected','paid') NOT NULL,
       operator_id CHAR(36) NOT NULL,
       comment TEXT NULL,
-      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      created_at DATETIME NOT NULL,
       CONSTRAINT fk_reimbursement_logs_main FOREIGN KEY (reimbursement_id) REFERENCES reimbursements(id) ON DELETE CASCADE,
       CONSTRAINT fk_reimbursement_logs_operator FOREIGN KEY (operator_id) REFERENCES hr_employees(id) ON DELETE RESTRICT
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -604,8 +604,8 @@ async function insertLog(
   await ensurePurchasesSchema();
   const id = randomUUID();
   const sql = `
-    INSERT INTO reimbursement_logs (id, purchase_id, action, from_status, to_status, operator_id, comment)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO reimbursement_logs (id, purchase_id, action, from_status, to_status, operator_id, comment, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
   `;
   const params = [id, purchaseId, action, fromStatus, toStatus, operatorId, comment ?? null];
   if (connection) {
@@ -613,8 +613,8 @@ async function insertLog(
     return;
   }
   await mysqlQuery`
-    INSERT INTO reimbursement_logs (id, purchase_id, action, from_status, to_status, operator_id, comment)
-    VALUES (${id}, ${purchaseId}, ${action}, ${fromStatus}, ${toStatus}, ${operatorId}, ${comment ?? null})
+    INSERT INTO reimbursement_logs (id, purchase_id, action, from_status, to_status, operator_id, comment, created_at)
+    VALUES (${id}, ${purchaseId}, ${action}, ${fromStatus}, ${toStatus}, ${operatorId}, ${comment ?? null}, NOW())
   `;
 }
 
@@ -718,7 +718,11 @@ export async function createPurchase(
       'receipt_images',
       'notes',
       'attachments',
+      'notes',
+      'attachments',
       'created_by',
+      'created_at',
+      'updated_at'
     ];
 
     const insertSql = `
@@ -758,6 +762,8 @@ export async function createPurchase(
       input.notes ?? null,
       serializeArray(input.attachments),
       creatorId,
+      new Date(),
+      new Date(),
     ];
 
     await connection.query(insertSql, values);
