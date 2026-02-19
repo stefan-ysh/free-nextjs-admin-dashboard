@@ -286,7 +286,6 @@ export default function PurchaseTable({
 							<TableHead className="w-[140px] px-4 py-3">状态</TableHead>
 							<TableHead className="hidden lg:table-cell w-[120px] px-4 py-3">采购日期</TableHead>
 							<TableHead className="hidden xl:table-cell w-[140px] px-4 py-3">属性</TableHead>
-                            <TableHead className="hidden xl:table-cell w-[140px] px-4 py-3">入库进度</TableHead>
 							<TableHead className="w-[60px] px-4 py-3 text-right pr-6"></TableHead>
 						</TableRow>
 					</TableHeader>
@@ -294,9 +293,7 @@ export default function PurchaseTable({
 						{purchases.map((purchase) => {
 							const permissions = getRowPermissions(purchase);
 							const rowClassName = getRowClassName?.(purchase);
-							const inboundQuantity = Number(purchase.inboundQuantity ?? 0);
-							const totalQuantity = Number(purchase.quantity ?? 0);
-							const remainingInboundQuantity = Math.max(0, totalQuantity - inboundQuantity);
+
                             
 							return (
 								<TableRow 
@@ -334,15 +331,6 @@ export default function PurchaseTable({
                                                 {paymentLabels[purchase.paymentMethod]}
                                             </span>
                                         </div>
-                                    </TableCell>
-                                    <TableCell className="hidden xl:table-cell px-4 py-3 align-top">
-                                        {remainingInboundQuantity > 0 && inboundQuantity > 0 ? (
-                                            <div className="inline-flex items-center rounded-sm bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
-                                                入库: {formatQuantity(inboundQuantity)}/{formatQuantity(totalQuantity)}
-                                            </div>
-                                        ) : (
-                                            <span className="text-xs text-muted-foreground/50">-</span>
-                                        )}
                                     </TableCell>
 									<TableCell className="px-4 py-3 pr-6 text-right align-top" onClick={(e) => e.stopPropagation()}>
                                         <DropdownMenu>
