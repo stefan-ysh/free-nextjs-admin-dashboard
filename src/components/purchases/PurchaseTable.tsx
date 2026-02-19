@@ -68,6 +68,7 @@ type PurchaseTableProps = {
 	onSubmitReimbursement: (purchase: PurchaseRecord) => void;
 	onReceive: (purchase: PurchaseRecord) => void;
 	getRowClassName?: (purchase: PurchaseRecord) => string;
+    visibleColumns?: Set<string>;
 };
 
 function formatDate(value: string): string {
@@ -102,7 +103,9 @@ export default function PurchaseTable({
 	onSubmitReimbursement,
 	onReceive,
 	getRowClassName,
+    visibleColumns,
 }: PurchaseTableProps) {
+    const showColumn = (key: string) => !visibleColumns || visibleColumns.has(key);
 	const scrollContainerClassName = cn(
 		'custom-scrollbar',
 		scrollAreaClassName ?? 'max-h-[calc(100vh-280px)]'
@@ -280,12 +283,13 @@ export default function PurchaseTable({
 				>
 					<TableHeader className="bg-gray-50/50 dark:bg-gray-900/50 sticky top-0 z-10 backdrop-blur-sm">
 						<TableRow className="hover:bg-transparent border-b border-gray-200 dark:border-gray-800">
-							<TableHead className="w-[280px] px-4 py-3 pl-6">物品 / 单号</TableHead>
-                            <TableHead className="w-[180px] px-4 py-3">申请人</TableHead>
-							<TableHead className="w-[120px] px-4 py-3">金额</TableHead>
-							<TableHead className="w-[140px] px-4 py-3">状态</TableHead>
-							<TableHead className="w-[120px] px-4 py-3">采购日期</TableHead>
-							<TableHead className="px-4 py-3">属性</TableHead>
+							<TableHead className="min-w-[240px] px-4 py-3 pl-6">物品 / 单号</TableHead>
+                            {showColumn('purchaser') && <TableHead className="w-[180px] px-4 py-3">申请人</TableHead>}
+							{showColumn('amount') && <TableHead className="w-[120px] px-4 py-3">金额</TableHead>}
+							{showColumn('status') && <TableHead className="w-[140px] px-4 py-3">状态</TableHead>}
+							{showColumn('date') && <TableHead className="w-[120px] px-4 py-3">采购日期</TableHead>}
+							{showColumn('attributes') && <TableHead className="w-[140px] px-4 py-3">属性</TableHead>}
+                            {showColumn('inbound') && <TableHead className="w-[140px] px-4 py-3">入库进度</TableHead>}
 							<TableHead className="w-[60px] px-4 py-3 text-right pr-6"></TableHead>
 						</TableRow>
 					</TableHeader>
@@ -306,39 +310,55 @@ export default function PurchaseTable({
 									<TableCell className="px-4 py-3 pl-6 align-top">
 										<div className="font-medium text-foreground">{purchase.itemName}</div>
 										<div className="font-mono text-xs text-muted-foreground mt-0.5">{purchase.purchaseNumber}</div>
-                                        {remainingInboundQuantity > 0 && inboundQuantity > 0 && (
-                                            <div className="mt-1.5 inline-flex items-center rounded-sm bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
-                                                入库: {formatQuantity(inboundQuantity)}/{formatQuantity(totalQuantity)}
+									</TableCell>
+                                    {showColumn('purchaser') && (
+                                        <TableCell className="px-4 py-3 align-top">
+                                            <div className="flex items-center gap-2">
+                                                <Avatar className="h-6 w-6">
+                                                    <AvatarFallback className="text-[10px]">{getInitials(purchase.purchaserName)}</AvatarFallback>
+                                                </Avatar>
+                                                <span className="text-sm text-foreground/80">{purchase.purchaserName || '未知用户'}</span>
                                             </div>
-                                        )}
-									</TableCell>
-                                    <TableCell className="px-4 py-3 align-top">
-                                        <div className="flex items-center gap-2">
-                                            <Avatar className="h-6 w-6">
-                                                <AvatarFallback className="text-[10px]">{getInitials(purchase.purchaserName)}</AvatarFallback>
-                                            </Avatar>
-                                            <span className="text-sm text-foreground/80">{purchase.purchaserName || '未知用户'}</span>
-                                        </div>
-									</TableCell>
-									<TableCell className="px-4 py-3 align-top font-medium tracking-tight">
-										{currencyFormatter.format(purchase.totalAmount)}
-									</TableCell>
-									<TableCell className="px-4 py-3 align-top">
-										<PurchaseStatusBadge status={purchase.status} />
-									</TableCell>
-									<TableCell className="px-4 py-3 align-top text-muted-foreground">
-										{formatDate(purchase.purchaseDate)}
-									</TableCell>
-									<TableCell className="px-4 py-3 align-top">
-                                        <div className="flex flex-col gap-1">
-                                            <span className="inline-flex max-w-fit items-center rounded-sm bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                                {organizationLabels[purchase.organizationType]}
-                                            </span>
-                                            <span className="text-xs text-muted-foreground">
-                                                {paymentLabels[purchase.paymentMethod]}
-                                            </span>
-                                        </div>
-									</TableCell>
+                                        </TableCell>
+                                    )}
+									{showColumn('amount') && (
+                                        <TableCell className="px-4 py-3 align-top font-medium tracking-tight">
+                                            {currencyFormatter.format(purchase.totalAmount)}
+                                        </TableCell>
+                                    )}
+									{showColumn('status') && (
+                                        <TableCell className="px-4 py-3 align-top">
+                                            <PurchaseStatusBadge status={purchase.status} />
+                                        </TableCell>
+                                    )}
+									{showColumn('date') && (
+                                        <TableCell className="px-4 py-3 align-top text-muted-foreground">
+                                            {formatDate(purchase.purchaseDate)}
+                                        </TableCell>
+                                    )}
+									{showColumn('attributes') && (
+                                        <TableCell className="px-4 py-3 align-top">
+                                            <div className="flex flex-col gap-1">
+                                                <span className="inline-flex max-w-fit items-center rounded-sm bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                                    {organizationLabels[purchase.organizationType]}
+                                                </span>
+                                                <span className="text-xs text-muted-foreground">
+                                                    {paymentLabels[purchase.paymentMethod]}
+                                                </span>
+                                            </div>
+                                        </TableCell>
+                                    )}
+                                    {showColumn('inbound') && (
+                                        <TableCell className="px-4 py-3 align-top">
+                                            {remainingInboundQuantity > 0 && inboundQuantity > 0 ? (
+                                                <div className="inline-flex items-center rounded-sm bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
+                                                    入库: {formatQuantity(inboundQuantity)}/{formatQuantity(totalQuantity)}
+                                                </div>
+                                            ) : (
+                                                <span className="text-xs text-muted-foreground/50">-</span>
+                                            )}
+                                        </TableCell>
+                                    )}
 									<TableCell className="px-4 py-3 pr-6 text-right align-top" onClick={(e) => e.stopPropagation()}>
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
