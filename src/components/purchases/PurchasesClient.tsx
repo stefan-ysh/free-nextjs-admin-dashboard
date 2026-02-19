@@ -4,19 +4,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { ChevronLeft, ChevronRight, Settings2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { FORM_DRAWER_WIDTH_WIDE } from '@/components/common/form-drawer-width';
 import DatePicker from '@/components/ui/DatePicker';
 import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -228,9 +220,6 @@ export default function PurchasesClient() {
     open: false,
     purchase: null,
   });
-  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
-    new Set(['purchaser', 'amount', 'status', 'date', 'attributes', 'inbound'])
-  );
   const confirm = useConfirm();
 
   const permissions: PermissionSnapshot = useMemo(
@@ -1114,84 +1103,6 @@ export default function PurchasesClient() {
             >
               刷新
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-10 gap-1">
-                  <Settings2 className="h-3.5 w-3.5" />
-                  显示
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-40">
-                <DropdownMenuLabel>显示列</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuCheckboxItem
-                  checked={visibleColumns.has('purchaser')}
-                  onCheckedChange={(checked) => {
-                    const next = new Set(visibleColumns);
-                    if (checked) next.add('purchaser');
-                    else next.delete('purchaser');
-                    setVisibleColumns(next);
-                  }}
-                >
-                  申请人
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem
-                  checked={visibleColumns.has('amount')}
-                  onCheckedChange={(checked) => {
-                    const next = new Set(visibleColumns);
-                    if (checked) next.add('amount');
-                    else next.delete('amount');
-                    setVisibleColumns(next);
-                  }}
-                >
-                  金额
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem
-                  checked={visibleColumns.has('status')}
-                  onCheckedChange={(checked) => {
-                    const next = new Set(visibleColumns);
-                    if (checked) next.add('status');
-                    else next.delete('status');
-                    setVisibleColumns(next);
-                  }}
-                >
-                  状态
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem
-                  checked={visibleColumns.has('date')}
-                  onCheckedChange={(checked) => {
-                    const next = new Set(visibleColumns);
-                    if (checked) next.add('date');
-                    else next.delete('date');
-                    setVisibleColumns(next);
-                  }}
-                >
-                  采购日期
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem
-                  checked={visibleColumns.has('attributes')}
-                  onCheckedChange={(checked) => {
-                    const next = new Set(visibleColumns);
-                    if (checked) next.add('attributes');
-                    else next.delete('attributes');
-                    setVisibleColumns(next);
-                  }}
-                >
-                  属性
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem
-                  checked={visibleColumns.has('inbound')}
-                  onCheckedChange={(checked) => {
-                    const next = new Set(visibleColumns);
-                    if (checked) next.add('inbound');
-                    else next.delete('inbound');
-                    setVisibleColumns(next);
-                  }}
-                >
-                  入库进度
-                </DropdownMenuCheckboxItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
             <Button
               variant="outline"
               size="sm"
@@ -1250,7 +1161,6 @@ export default function PurchasesClient() {
           onPay={() => {}}
           onSubmitReimbursement={() => {}}
           onReceive={handleReceive}
-          visibleColumns={visibleColumns}
         />
 
       </div>
