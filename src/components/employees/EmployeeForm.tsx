@@ -176,7 +176,7 @@ export default function EmployeeForm({
 							name="employeeCode"
 							render={({ field }) => (
 								<FormItem>
-									<FormLabel>员工编号</FormLabel>
+									<FormLabel>工号</FormLabel>
 									<FormControl>
 										<Input placeholder="可选, 例如 EMP-001" {...field} />
 									</FormControl>
@@ -265,7 +265,7 @@ export default function EmployeeForm({
 										<FormControl>
 											<Input type="password" placeholder="设置初始登录密码" {...field} />
 										</FormControl>
-										<FormDescription>员工可用邮箱/手机号/员工编号登录。</FormDescription>
+										<FormDescription>员工可用邮箱/手机号/工号登录。</FormDescription>
 										<FormMessage />
 									</FormItem>
 								)}

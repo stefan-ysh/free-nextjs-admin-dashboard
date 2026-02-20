@@ -132,7 +132,7 @@ export async function PUT(
         return badRequestResponse('手机号已存在');
       }
       if (error.message === 'EMPLOYEE_CODE_EXISTS') {
-        return badRequestResponse('员工编号已存在');
+        return badRequestResponse('工号已存在');
       }
       if (error.message.startsWith('MISSING_')) {
         return badRequestResponse('缺少必填字段');

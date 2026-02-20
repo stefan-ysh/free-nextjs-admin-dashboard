@@ -231,7 +231,7 @@ export async function findUserById(id: string): Promise<UserRecord | null> {
 }
 
 /**
- * 通过员工编号查找用户
+ * 通过工号查找用户
  */
 export async function findUserByEmployeeCode(employeeCode: string): Promise<UserRecord | null> {
   await ensureHrSchema();
@@ -257,7 +257,7 @@ export async function createUser(
     throw new Error('EMAIL_EXISTS');
   }
 
-  // 如果提供了员工编号，检查是否重复
+  // 如果提供了工号，检查是否重复
   if (input.employeeCode) {
     const existingEmployee = await findUserByEmployeeCode(input.employeeCode);
     if (existingEmployee) {
@@ -356,7 +356,7 @@ export async function updateEmployeeInfo(
 ): Promise<UserRecord> {
   await ensureHrSchema();
 
-  // 如果要更新员工编号，检查是否重复
+  // 如果要更新工号，检查是否重复
   if (input.employeeCode) {
     const existing = await findUserByEmployeeCode(input.employeeCode);
     if (existing && existing.id !== userId) {

@@ -168,7 +168,7 @@ useEffect(() => {
 			};
 		}, [value, employees]);
 
-	const helper = helperText ?? '支持按姓名、邮箱搜索；首次选择将自动为员工生成账号（账号/初始密码=员工编号）。';
+	const helper = helperText ?? '支持按姓名、邮箱搜索；首次选择将自动为员工生成账号（账号/初始密码=工号）。';
 
 	const emptyStateText = useMemo(() => {
 		if (error) return error;

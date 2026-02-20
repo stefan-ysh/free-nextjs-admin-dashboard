@@ -473,7 +473,7 @@ type EmployeeExportColumn = {
 
 const EMPLOYEE_EXPORT_COLUMNS: EmployeeExportColumn[] = [
   { key: 'id', header: '员工ID' },
-  { key: 'employeeCode', header: '员工编号' },
+  { key: 'employeeCode', header: '工号' },
   { key: 'displayName', header: '姓名' },
   { key: 'email', header: '邮箱' },
   { key: 'phone', header: '电话' },
@@ -978,7 +978,7 @@ export async function importEmployeesFromPayload(
         message = '手机号已存在';
       }
       if (message === 'EMPLOYEE_CODE_EXISTS') {
-        message = '员工编号已存在';
+        message = '工号已存在';
       }
       const identifier = row.employeeCode ?? row.email ?? row.id ?? null;
       stats.errors.push({ index, message, identifier });

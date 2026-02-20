@@ -214,7 +214,7 @@ export default function PaymentQueueClient() {
         ) : (
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <div className="hidden md:flex flex-col flex-1 min-h-0">
-              <Table stickyHeader scrollAreaClassName="max-h-full custom-scrollbar" className="text-sm">
+              <Table stickyHeader scrollAreaClassName="max-h-full custom-scrollbar" className="text-sm whitespace-nowrap">
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     <TableHead className="w-[180px] pl-6">报销单号</TableHead>

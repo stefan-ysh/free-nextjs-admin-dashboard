@@ -87,7 +87,7 @@ const CSV_HEADER_ALIASES: Record<string, keyof EmployeeImportRow> = {
   'employee id': 'id',
   'employee_code': 'employeeCode',
   'employee code': 'employeeCode',
-  '员工编号': 'employeeCode',
+  '工号': 'employeeCode',
   '编号': 'employeeCode',
   '员工id': 'id',
   'name': 'displayName',
@@ -696,7 +696,7 @@ export default function EmployeeClient({
         accounts.push({ label: '手机号', value: created.phone });
       }
       if (created?.employeeCode) {
-        accounts.push({ label: '员工编号', value: created.employeeCode });
+        accounts.push({ label: '工号', value: created.employeeCode });
       }
       if (payload.initialPassword) {
         setCredentialsAccounts(accounts);
@@ -1450,7 +1450,7 @@ export default function EmployeeClient({
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span>最多一次导入 500 条，可在下方调整解析后的 JSON，系统会根据员工编号 / 邮箱匹配已有记录。</span>
+            <span>最多一次导入 500 条，可在下方调整解析后的 JSON，系统会根据工号 / 邮箱匹配已有记录。</span>
             <Button
               type="button"
               size="sm"
@@ -1476,7 +1476,7 @@ export default function EmployeeClient({
                 checked={importUseCodePassword}
                 onCheckedChange={(value) => setImportUseCodePassword(value === true)}
               />
-              使用员工编号作为初始密码（优先于默认密码）
+              使用工号作为初始密码（优先于默认密码）
             </label>
           </div>
           <Textarea

@@ -143,7 +143,7 @@ export async function POST(request: Request) {
         return badRequestResponse('手机号已存在');
       }
       if (error.message === 'EMPLOYEE_CODE_EXISTS') {
-        return badRequestResponse('员工编号已存在');
+        return badRequestResponse('工号已存在');
       }
       if (error.message === 'MISSING_PASSWORD') {
         return badRequestResponse('请设置初始密码');

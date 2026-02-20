@@ -50,7 +50,7 @@ export default function CustomFields({ control, name, disabled = false }: Custom
                                 <FormItem>
                                     <FormLabel>字段名</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="例如 员工编号2" {...fieldProps} disabled={disabled} />
+                                        <Input placeholder="例如 工号" {...fieldProps} disabled={disabled} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

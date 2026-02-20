@@ -34,7 +34,7 @@ const EMPLOYMENT_STATUS_META = {
 };
 
 export const metadata: Metadata = {
-  title: '宇元新材管理后台 - 运营概览',
+  title: '管理后台 - 运营概览',
   description: '根据权限展示采购、库存、财务与人事关键指标。',
 };
 

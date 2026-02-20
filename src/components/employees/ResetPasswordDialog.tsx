@@ -40,7 +40,7 @@ export default function ResetPasswordDialog({
         <DialogHeader>
           <DialogTitle>重置密码</DialogTitle>
           <DialogDescription>
-            为 {displayName} 设置新的登录密码。员工可使用邮箱、手机号或员工编号登录。
+            为 {displayName} 设置新的登录密码。员工可使用邮箱、手机号或工号登录。
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="space-y-4">

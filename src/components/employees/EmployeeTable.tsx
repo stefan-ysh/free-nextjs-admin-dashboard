@@ -207,7 +207,7 @@ export default function EmployeeTable({
 				>
 						<TableHeader>
 							<TableRow className="bg-muted/60">
-								<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground hidden md:table-cell">员工编号</TableHead>
+								<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground hidden md:table-cell">工号</TableHead>
 								<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">姓名</TableHead>
 								<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground hidden md:table-cell">邮箱</TableHead>
 								<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">状态</TableHead>

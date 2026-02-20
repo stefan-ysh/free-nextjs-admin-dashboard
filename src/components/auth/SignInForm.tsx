@@ -78,7 +78,7 @@ export default function SignInForm() {
             <Input
               id="email"
               name="email"
-              placeholder="邮箱/手机号/员工编号"
+              placeholder="邮箱/手机号/工号"
               type="text"
               autoCapitalize="none"
               autoComplete="email"
