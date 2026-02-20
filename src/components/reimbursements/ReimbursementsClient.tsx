@@ -217,24 +217,9 @@ export default function ReimbursementsClient() {
       return;
     }
 
-    // Default behaviors when no URL param is present
-    // For finance users/admins: default to 'all' to facilitate export/management
-    if (canViewAll && allowed.has('all')) {
-      setScope('all');
-      return;
-    }
-    // Then approval/pay tasks
-    if (allowed.has('approval')) {
-      setScope('approval');
-      return;
-    }
-    if (allowed.has('pay')) {
-      setScope('pay');
-      return;
-    }
-    
+    // Always default to 'mine' so users see their own submissions first
     setScope('mine');
-  }, [scopeOptions, searchParams, canViewAll]);
+  }, [scopeOptions, searchParams]);
 
   const role = user?.primaryRole;
 

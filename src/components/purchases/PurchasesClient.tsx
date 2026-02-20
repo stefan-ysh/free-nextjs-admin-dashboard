@@ -91,7 +91,7 @@ const DEFAULT_FILTERS: PurchaseFilters = {
   minAmount: null,
   maxAmount: null,
   purchaserId: null,
-  scope: 'all',
+  scope: 'mine',
 };
 
 
