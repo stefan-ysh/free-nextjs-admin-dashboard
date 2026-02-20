@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 import { createInventoryItem, listInventoryItems } from '@/lib/db/inventory';
 import { normalizeInventoryCategory } from '@/lib/inventory/catalog';
 import type { InventoryItemPayload } from '@/types/inventory';

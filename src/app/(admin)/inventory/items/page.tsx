@@ -10,8 +10,6 @@ import { useConfirm } from '@/hooks/useConfirm';
 import InventoryItemFormDialog from '@/components/inventory/InventoryItemFormDialog';
 import type { InventoryItem } from '@/types/inventory';
 
-const fmt = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: 2 });
-
 /* ─── Main Component ─── */
 export default function InventoryItemsPage() {
   const { hasPermission, loading: permLoading } = usePermissions();
@@ -29,7 +27,7 @@ export default function InventoryItemsPage() {
   const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/inventory/items');
+      const res = await fetch('/api/inventory/items', { cache: 'no-store' });
       const json = await res.json();
       setItems(json.data ?? []);
     } catch {

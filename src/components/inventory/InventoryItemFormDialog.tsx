@@ -97,10 +97,8 @@ export default function InventoryItemFormDialog({ open, onOpenChange, item, onSu
         unit: values.unit.trim(),
         category: normalizeInventoryCategory(values.category),
         safetyStock: Number(values.safetyStock),
+        imageUrl: values.imageUrl ? values.imageUrl.trim() : '',
       };
-      if (values.imageUrl) {
-        payload.imageUrl = values.imageUrl;
-      }
 
       const parsedSpecFields = values.specFields
         .map((field) => {
