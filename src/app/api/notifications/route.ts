@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireCurrentUser } from '@/lib/auth/current-user';
-import { listInAppNotificationsByRecipient, markInAppNotificationsAsRead } from '@/lib/db/notifications';
+import { listInAppNotificationsByRecipient, markInAppNotificationsAsRead, countUnreadNotifications } from '@/lib/db/notifications';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -11,6 +11,13 @@ export async function GET(request: Request) {
   try {
     const context = await requireCurrentUser();
     const url = new URL(request.url);
+
+    // 轻量级未读计数（铃铛 badge 用）
+    if (url.searchParams.get('countOnly') === 'true') {
+      const unreadCount = await countUnreadNotifications(context.user.id);
+      return NextResponse.json({ success: true, data: { unreadCount } });
+    }
+
     const page = Number(url.searchParams.get('page') ?? 1);
     const pageSize = Number(url.searchParams.get('pageSize') ?? 20);
     const data = await listInAppNotificationsByRecipient({

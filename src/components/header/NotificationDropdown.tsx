@@ -110,7 +110,33 @@ export default function NotificationDropdown() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<UiNotificationItem[]>([]);
-  const [activeTab, setActiveTab] = useState<"all" | "todo" | "notice">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "todo" | "notice">("todo");
+  const [badgeCount, setBadgeCount] = useState(0);
+
+  // 轻量级未读计数 — 组件挂载后立即获取，不依赖 dropdown 打开
+  const refreshBadgeCount = useCallback(async () => {
+    try {
+      const res = await fetch("/api/notifications?countOnly=true", {
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) return;
+      const payload = (await res.json()) as { success: boolean; data?: { unreadCount: number } };
+      if (payload.success && payload.data) {
+        setBadgeCount(payload.data.unreadCount);
+      }
+    } catch {
+      // 静默失败，不影响页面
+    }
+  }, []);
+
+  // 挂载时立即获取未读计数 + 定时刷新
+  useEffect(() => {
+    void refreshBadgeCount();
+    const timer = window.setInterval(() => {
+      void refreshBadgeCount();
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [refreshBadgeCount]);
 
   const markAsRead = useCallback(async (options: { ids?: string[]; markAll?: boolean }) => {
     const payload = {
@@ -206,7 +232,7 @@ export default function NotificationDropdown() {
   }, [open, loadNotifications]);
 
   const unreadCount = useMemo(() => items.filter((item) => item.unread).length, [items]);
-  const showingNotifyDot = unreadCount > 0;
+  const showingNotifyDot = badgeCount > 0 || unreadCount > 0;
   const tabCounters = useMemo(() => {
     const todo = items.filter((item) => item.type === "approval").length;
     const notice = items.filter((item) => item.type !== "approval").length;
@@ -236,6 +262,7 @@ export default function NotificationDropdown() {
     if (unreadIds.length === 0) return;
 
     setItems((prev) => prev.map((item) => ({ ...item, unread: false })));
+    setBadgeCount(0);
     void markAsRead({ ids: unreadIds });
   }, [items, markAsRead]);
 

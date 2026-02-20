@@ -173,6 +173,16 @@ export async function listInAppNotificationsByRecipient(params: {
   };
 }
 
+export async function countUnreadNotifications(recipientId: string): Promise<number> {
+  await ensureNotificationsSchema();
+  const pool = mysqlPool();
+  const [rows] = await pool.query<Array<RowDataPacket & { cnt: number }>>(
+    'SELECT COUNT(*) AS cnt FROM app_notifications WHERE recipient_id = ? AND is_read = 0',
+    [recipientId]
+  );
+  return Number(rows[0]?.cnt ?? 0);
+}
+
 export async function listFinanceRecipientIds(orgType?: 'school' | 'company') {
   await ensureNotificationsSchema();
   const pool = mysqlPool();
