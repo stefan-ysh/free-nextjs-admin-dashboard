@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { useCallback, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 
 import { FORM_DRAWER_WIDTH_WIDE } from '@/components/common/form-drawer-width';
 import DatePicker from '@/components/ui/DatePicker';
@@ -182,28 +182,21 @@ type PermissionSnapshot = {
 
 export default function PurchasesClient() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user: permissionUser, loading: permissionLoading, hasPermission } = usePermissions();
   const [filters, setFilters] = useState<PurchaseFilters>(DEFAULT_FILTERS);
   const [sortBy, setSortBy] = useState<SortField>('updatedAt');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [records, setRecords] = useState<PurchaseRecord[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [selectedPurchase, setSelectedPurchase] = useState<PurchaseDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
-  const [reloadToken, setReloadToken] = useState(0);
   const [isPending, startTransition] = useTransition();
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [stats, setStats] = useState<PurchaseStats | null>(null);
-  const [statsLoading, setStatsLoading] = useState(false);
-  const [statsError, setStatsError] = useState<string | null>(null);
   const [rejectDialog, setRejectDialog] = useState<{ open: boolean; purchase: PurchaseRecord | PurchaseDetail | null }>({
     open: false,
     purchase: null,
@@ -249,98 +242,60 @@ export default function PurchasesClient() {
     });
   }, []);
 
-  useEffect(() => {
-    if (permissionLoading) return;
-    if (!canViewPurchases) {
-      setRecords([]);
-      setTotal(0);
-    }
-  }, [permissionLoading, canViewPurchases]);
-
-  useEffect(() => {
-    if (permissionLoading || !canViewPurchases) return;
-
-    if (permissionLoading || !canViewPurchases) return;
-
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const query = buildQuery(filters, page, pageSize, sortBy, sortOrder);
-        const response = await fetch(`/api/purchases?${query}`, {
-          headers: { Accept: 'application/json' },
-        });
-        if (!response.ok) throw new Error('列表加载失败');
-        const payload: PurchaseListResponse = await response.json();
-        if (!payload.success || !payload.data) {
-          throw new Error(payload.error || '获取采购数据失败');
-        }
-        if (cancelled) return;
-        setRecords(payload.data.items);
-        setTotal(payload.data.total);
-      } catch (err) {
-        if (cancelled) return;
-        console.error('加载采购列表失败', err);
-        setError(err instanceof Error ? err.message : '未知错误');
-      } finally {
-        if (!cancelled) setLoading(false);
+  const {
+    data: listData,
+    isLoading: isListLoading,
+    isFetching: isListFetching,
+    error: listError,
+  } = useQuery({
+    queryKey: ['purchases', 'list', page, pageSize, sortBy, sortOrder, filters, permissionUser?.id],
+    queryFn: async () => {
+      const query = buildQuery(filters, page, pageSize, sortBy, sortOrder);
+      const response = await fetch(`/api/purchases?${query}`, {
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) throw new Error('列表加载失败');
+      const payload: PurchaseListResponse = await response.json();
+      if (!payload.success || !payload.data) {
+        throw new Error(payload.error || '获取采购数据失败');
       }
-    }
+      return payload.data;
+    },
+    enabled: canViewPurchases && !permissionLoading,
+    placeholderData: keepPreviousData,
+  });
 
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    permissionLoading,
-    canViewPurchases,
-    filters,
-    page,
-    pageSize,
-    sortBy,
-    sortOrder,
-    reloadToken,
-    permissionUser?.id,
-  ]);
+  const records = listData?.items ?? [];
+  const total = listData?.total ?? 0;
+  const loading = isListLoading || isListFetching;
+  const error = listError instanceof Error ? listError.message : null;
 
-  useEffect(() => {
-    if (permissionLoading || !canViewPurchases) return;
-
-    if (permissionLoading || !canViewPurchases) return;
-
-    let cancelled = false;
-
-    async function loadStats() {
-      setStatsLoading(true);
-      setStatsError(null);
-      try {
-        const query = buildQuery(filters, 1, 1, sortBy, sortOrder);
-        const response = await fetch(`/api/purchases/stats?${query}`, {
-          headers: { Accept: 'application/json' },
-        });
-        if (!response.ok) throw new Error('统计加载失败');
-        const payload: { success: boolean; data?: PurchaseStats; error?: string } = await response.json();
-        if (!payload.success || !payload.data) {
-          throw new Error(payload.error || '获取统计信息失败');
-        }
-        if (cancelled) return;
-        setStats(payload.data);
-      } catch (err) {
-        if (cancelled) return;
-        console.error('加载采购统计失败', err);
-        setStats(null);
-        setStatsError(err instanceof Error ? err.message : '获取统计信息失败');
-      } finally {
-        if (!cancelled) setStatsLoading(false);
+  const {
+    data: statsData,
+    isLoading: isStatsLoading,
+    isFetching: isStatsFetching,
+    error: statsQueryError,
+  } = useQuery({
+    queryKey: ['purchases', 'stats', sortBy, sortOrder, filters, permissionUser?.id],
+    queryFn: async () => {
+      const query = buildQuery(filters, 1, 1, sortBy, sortOrder);
+      const response = await fetch(`/api/purchases/stats?${query}`, {
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) throw new Error('统计加载失败');
+      const payload: { success: boolean; data?: PurchaseStats; error?: string } = await response.json();
+      if (!payload.success || !payload.data) {
+        throw new Error(payload.error || '获取统计信息失败');
       }
-    }
+      return payload.data;
+    },
+    enabled: canViewPurchases && !permissionLoading,
+    placeholderData: keepPreviousData,
+  });
 
-    loadStats();
-    return () => {
-      cancelled = true;
-    };
-  }, [permissionLoading, canViewPurchases, filters, sortBy, sortOrder, reloadToken, permissionUser?.id]);
+  const stats = statsData ?? null;
+  const statsLoading = isStatsLoading || isStatsFetching;
+  const statsError = statsQueryError instanceof Error ? statsQueryError.message : null;
 
   const loadPurchaseDetail = useCallback(async (purchaseId: string) => {
     setDetailLoading(true);
@@ -406,7 +361,7 @@ export default function PurchasesClient() {
   };
 
   const handleManualRefresh = () => {
-    setReloadToken((token) => token + 1);
+    void queryClient.invalidateQueries({ queryKey: ['purchases'] });
     if (selectedPurchase) {
       void loadPurchaseDetail(selectedPurchase.id);
     }
@@ -579,7 +534,7 @@ export default function PurchasesClient() {
         } else {
           void loadPurchaseDetail(purchaseId);
         }
-        setReloadToken((token) => token + 1);
+        void queryClient.invalidateQueries({ queryKey: ['purchases'] });
         toast.success(options?.successMessage ?? '操作已完成');
         return true;
       } catch (err) {
@@ -590,7 +545,7 @@ export default function PurchasesClient() {
         setMutatingId(null);
       }
     },
-    [loadPurchaseDetail]
+    [loadPurchaseDetail, queryClient]
   );
 
   const handleSubmit = async (purchase: PurchaseRecord) => {
@@ -699,7 +654,7 @@ export default function PurchasesClient() {
       if (!response.ok || !payload.success) {
         throw new Error(payload.error || '删除失败');
       }
-      setReloadToken((token) => token + 1);
+      void queryClient.invalidateQueries({ queryKey: ['purchases'] });
       toast.success('采购记录已删除');
     } catch (err) {
       console.error('删除采购失败', err);
@@ -1273,7 +1228,7 @@ export default function PurchasesClient() {
         }}
         onSuccess={() => {
           setInboundDrawer({ open: false, purchase: null });
-          setReloadToken((token) => token + 1);
+          void queryClient.invalidateQueries({ queryKey: ['purchases'] });
         }}
       />
     </div>
