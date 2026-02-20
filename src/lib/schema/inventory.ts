@@ -38,10 +38,10 @@ const defaultWarehouses = [
 async function seedDefaultItems(pool: Pool) {
   const items = buildInventoryItemsFromTemplates();
   const insertSql = `INSERT INTO inventory_items (
-    id, sku, name, unit, unit_price, category, safety_stock,
-    barcode, spec_fields_json, default_attributes_json, attributes_json,
+    id, sku, name, unit, category, safety_stock,
+    spec_fields_json, default_attributes_json, attributes_json,
     created_at, updated_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
   for (const item of items) {
     const [existing] = await pool.query<RowDataPacket[]>(
@@ -58,10 +58,8 @@ async function seedDefaultItems(pool: Pool) {
       item.sku,
       item.name,
       item.unit,
-      item.unitPrice,
       item.category,
       item.safetyStock,
-      null,
       item.specFields ? JSON.stringify(item.specFields) : null,
       defaultRecord ? JSON.stringify(defaultRecord) : null,
       null,
@@ -133,7 +131,7 @@ async function seedInitialSnapshotsAndMovements(pool: Pool) {
 
     const defaultRecord = specFieldsToDefaultRecord(item.specFields);
     const attributesJson = defaultRecord ? JSON.stringify(defaultRecord) : null;
-    const unitCost = item.unitPrice;
+    const unitCost = 0;
     const inboundTime = new Date(now - (index + 2) * 24 * 60 * 60 * 1000);
     const transferTime = new Date(inboundTime.getTime() + 2 * 60 * 60 * 1000);
     const outboundTime = new Date(inboundTime.getTime() + 6 * 60 * 60 * 1000);
@@ -264,10 +262,8 @@ export async function ensureInventorySchema() {
       sku VARCHAR(64) NOT NULL UNIQUE,
       name VARCHAR(255) NOT NULL,
       unit VARCHAR(32) NOT NULL,
-      unit_price DECIMAL(16,2) NOT NULL DEFAULT 0,
       category VARCHAR(120) NOT NULL,
       safety_stock INT NOT NULL DEFAULT 0,
-      barcode VARCHAR(120) NULL,
       is_deleted TINYINT(1) NOT NULL DEFAULT 0,
       deleted_at DATETIME NULL,
       spec_fields_json TEXT NULL,

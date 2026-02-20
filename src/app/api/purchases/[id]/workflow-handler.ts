@@ -119,7 +119,7 @@ async function notifySafely(
     if (!detail) return;
     await notifyPurchaseEvent(event, detail);
   } catch (error) {
-    console.warn(`短信通知发送失败: ${event}`, error);
+    console.warn(`邮件通知发送失败: ${event}`, error);
   }
 }
 

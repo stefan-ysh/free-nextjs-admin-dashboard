@@ -54,10 +54,9 @@ export async function POST(request: NextRequest) {
         generateSku(payload.category as string | undefined, payload.name as string | undefined),
       name: String(payload.name ?? '').trim(),
       unit: String(payload.unit ?? '').trim(),
-      unitPrice: Number(payload.unitPrice ?? 0),
       category: normalizeInventoryCategory(String(payload.category ?? '未分类')),
       safetyStock: Number(payload.safetyStock ?? 0),
-      barcode: payload.barcode?.trim() || undefined,
+      imageUrl: payload.imageUrl?.trim() || undefined,
       specFields: payload.specFields,
     };
 

@@ -123,7 +123,6 @@ export default function InventoryItemsPage() {
                 <th className="px-4 py-3">SKU</th>
                 <th className="px-4 py-3">分类</th>
                 <th className="px-4 py-3">单位</th>
-                <th className="px-4 py-3 text-right">单价</th>
                 <th className="px-4 py-3 text-right">安全库存</th>
                 <th className="px-4 py-3 text-right">当前库存</th>
                 <th className="px-4 py-3">规格</th>
@@ -134,14 +133,14 @@ export default function InventoryItemsPage() {
               {loading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <tr key={i}>
-                    <td colSpan={9} className="px-4 py-3">
+                    <td colSpan={8} className="px-4 py-3">
                       <div className="h-5 w-full animate-pulse rounded bg-muted" />
                     </td>
                   </tr>
                 ))
               ) : filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
                     <Package className="mx-auto mb-2 h-8 w-8 opacity-30" />
                     {search ? '未找到匹配的商品' : '暂无商品，点击「新增商品」创建'}
                   </td>
@@ -155,7 +154,6 @@ export default function InventoryItemsPage() {
                       <Badge variant="secondary" className="text-[10px]">{item.category}</Badge>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{item.unit}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{fmt.format(item.unitPrice)}</td>
                     <td className="px-4 py-3 text-right tabular-nums">{item.safetyStock}</td>
                     <td className="px-4 py-3 text-right tabular-nums">
                       <span className={

@@ -6,10 +6,8 @@ interface ProductTemplate {
   /** 人类可读 SKU，直接在商品管理中展示 */
   sku: string;
   name: string;
-  /** 计量单位，例如“米”“升” */
+  /** 计量单位，例如"米""升" */
   unit: string;
-  /** 默认单价，可在后台调整 */
-  unitPrice: number;
   category: string;
   /** 安全库存，用于低库存预警 */
   safetyStock: number;
@@ -27,7 +25,6 @@ export const PRODUCT_TEMPLATES: ProductTemplate[] = [
     sku: 'MAT-ELWIRE',
     name: '电致发光丝',
     unit: '米',
-    unitPrice: 95,
     category: '原材料',
     safetyStock: 150,
     specFields: [
@@ -46,7 +43,6 @@ export function buildInventoryItemsFromTemplates(): InventoryItem[] {
     sku: template.sku,
     name: template.name,
     unit: template.unit,
-    unitPrice: template.unitPrice,
     category: template.category,
     safetyStock: template.safetyStock,
     specFields: template.specFields,

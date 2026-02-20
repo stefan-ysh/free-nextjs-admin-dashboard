@@ -17,10 +17,8 @@ export interface InventoryItem {
   sku: string;
   name: string;
   unit: string;
-  unitPrice: number;
   category: string;
   safetyStock: number;
-  barcode?: string;
   imageUrl?: string;
   specFields?: InventorySpecField[];
   stockQuantity?: number;
@@ -161,10 +159,8 @@ export interface InventoryItemPayload {
   sku: string;
   name: string;
   unit: string;
-  unitPrice: number;
   category: string;
   safetyStock: number;
-  barcode?: string;
   imageUrl?: string;
   specFields?: InventorySpecField[];
 }

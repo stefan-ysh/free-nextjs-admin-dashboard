@@ -34,10 +34,8 @@ type InventoryItemRow = RowDataPacket & {
   sku: string;
   name: string;
   unit: string;
-  unit_price: number;
   category: string;
   safety_stock: number;
-  barcode: string | null;
   image_url: string | null;
   specFields: InventorySpecField[];
   spec_fields_json: string | null;
@@ -190,10 +188,8 @@ function mapInventoryItem(row: InventoryItemRow): InventoryItem {
     sku: row.sku,
     name: row.name,
     unit: row.unit,
-    unitPrice: Number(row.unit_price ?? 0),
     category: normalizeInventoryCategory(row.category),
     safetyStock: Number(row.safety_stock ?? 0),
-    barcode: row.barcode ?? undefined,
     imageUrl: row.image_url ?? undefined,
     specFields,
     createdAt: toIsoString(row.created_at),
@@ -402,19 +398,17 @@ export async function createInventoryItem(payload: InventoryItemPayload): Promis
 
   await pool.query(
     `INSERT INTO inventory_items (
-      id, sku, name, unit, unit_price, category, safety_stock, barcode, image_url,
+      id, sku, name, unit, category, safety_stock, image_url,
       spec_fields_json, default_attributes_json, attributes_json,
       created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       payload.sku,
       payload.name,
       payload.unit,
-      payload.unitPrice,
       normalizeInventoryCategory(payload.category),
       payload.safetyStock,
-      payload.barcode ?? null,
       payload.imageUrl ?? null,
       payload.specFields ? JSON.stringify(payload.specFields) : null,
       defaultRecord ? JSON.stringify(defaultRecord) : null,
@@ -452,10 +446,6 @@ export async function updateInventoryItem(
     updates.push('unit = ?');
     values.push(payload.unit);
   }
-  if (payload.unitPrice !== undefined) {
-    updates.push('unit_price = ?');
-    values.push(payload.unitPrice);
-  }
   if (payload.category !== undefined) {
     updates.push('category = ?');
     values.push(normalizeInventoryCategory(payload.category));
@@ -463,10 +453,6 @@ export async function updateInventoryItem(
   if (payload.safetyStock !== undefined) {
     updates.push('safety_stock = ?');
     values.push(payload.safetyStock);
-  }
-  if (payload.barcode !== undefined) {
-    updates.push('barcode = ?');
-    values.push(payload.barcode ?? null);
   }
   if (payload.imageUrl !== undefined) {
     updates.push('image_url = ?');

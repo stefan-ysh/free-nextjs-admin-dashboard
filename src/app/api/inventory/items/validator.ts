@@ -26,9 +26,6 @@ export function sanitizeItemPayload(
   raw: Partial<InventoryItemPayload>
 ): Partial<InventoryItemPayload> {
   const payload: Partial<InventoryItemPayload> = { ...raw };
-  if (raw.unitPrice !== undefined) {
-    payload.unitPrice = toNumber(raw.unitPrice);
-  }
   if (raw.safetyStock !== undefined) {
     payload.safetyStock = toNumber(raw.safetyStock);
   }
@@ -42,7 +39,6 @@ export function validateItemPayload(
   const required: Array<keyof InventoryItemPayload> = [
     'name',
     'unit',
-    'unitPrice',
     'category',
     'safetyStock',
   ];
@@ -60,12 +56,6 @@ export function validateItemPayload(
     }
   }
 
-  if (payload.unitPrice !== undefined && !Number.isFinite(payload.unitPrice)) {
-    return '商品单价必须是有效数字';
-  }
-  if (payload.unitPrice !== undefined && payload.unitPrice < 0) {
-    return '商品单价必须大于等于 0';
-  }
   if (payload.safetyStock !== undefined && !Number.isFinite(payload.safetyStock)) {
     return '安全库存必须是有效数字';
   }
