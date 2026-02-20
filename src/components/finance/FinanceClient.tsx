@@ -7,6 +7,7 @@ import { FinanceRecord, FinanceStats } from '@/types/finance';
 import FinanceTable from './FinanceTable';
 
 import FinanceStatsCards from './FinanceStatsCards';
+import Pagination from '@/components/tables/Pagination';
 import { Button } from '@/components/ui/button';
 import {
     Select,
@@ -770,24 +771,11 @@ export default function FinanceClient({
                 <div className="surface-card flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm text-muted-foreground">
                     <div>共 {pagination.total} 条 · 第 {pagination.page} / {pagination.totalPages} 页</div>
                     <div className="flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handlePageChange(pagination.page - 1)}
-                            disabled={pagination.page <= 1}
-                            className="h-9 px-3"
-                        >
-                            上一页
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handlePageChange(pagination.page + 1)}
-                            disabled={pagination.page >= pagination.totalPages}
-                            className="h-9 px-3"
-                        >
-                            下一页
-                        </Button>
+                        <Pagination
+                            currentPage={pagination.page}
+                            totalPages={pagination.totalPages}
+                            onPageChange={(p) => handlePageChange(p)}
+                        />
                     </div>
                 </div>
             )}

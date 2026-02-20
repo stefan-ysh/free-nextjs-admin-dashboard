@@ -179,10 +179,10 @@ export default function FinanceTable({
 				>
 					<TableHeader className="bg-gray-50/50 dark:bg-gray-900/50 sticky top-0 z-10 backdrop-blur-sm">
 						<TableRow className="hover:bg-transparent border-b border-gray-200 dark:border-gray-800">
-							<TableHead className="px-4 py-3 text-left">日期</TableHead>
+							<TableHead className="px-4 py-3 text-left hidden md:table-cell">日期</TableHead>
 							<TableHead className="px-4 py-3 text-left">名称</TableHead>
 							<TableHead className="px-4 py-3 text-left">类型</TableHead>
-							<TableHead className="px-4 py-3 text-left">分类</TableHead>
+							<TableHead className="px-4 py-3 text-left hidden md:table-cell">分类</TableHead>
 							<TableHead className="px-4 py-3 text-left">金额</TableHead>
 							<TableHead className="px-4 py-3 text-left">支付方式</TableHead>
 							<TableHead className="px-4 py-3 text-left">发票状态</TableHead>
@@ -196,7 +196,7 @@ export default function FinanceTable({
 							const canDeleteCurrent = canDelete && record.sourceType === 'budget_adjustment';
 							return (
 								<TableRow key={record.id}>
-									<TableCell className="px-4 py-3 text-muted-foreground">
+									<TableCell className="px-4 py-3 text-muted-foreground hidden md:table-cell">
 										{formatDate(record.date)}
 									</TableCell>
 									<TableCell className="px-4 py-3 font-medium text-foreground">
@@ -212,7 +212,7 @@ export default function FinanceTable({
 											{record.type === TransactionType.INCOME ? '收入' : '支出'}
 										</Badge>
 									</TableCell>
-									<TableCell className="px-4 py-3 text-sm text-muted-foreground">
+									<TableCell className="px-4 py-3 text-sm text-muted-foreground hidden md:table-cell">
 										{record.category}
 									</TableCell>
 									<TableCell

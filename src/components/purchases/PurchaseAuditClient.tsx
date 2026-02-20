@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
 import DataState from '@/components/common/DataState';
+import Pagination from '@/components/tables/Pagination';
 import { Button } from '@/components/ui/button';
 import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
@@ -136,6 +137,7 @@ export default function PurchaseAuditClient() {
       }
     }
     setExpandedPurchaseNumbers(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupByPurchase, items]);
 
   const groupedItems = useMemo(() => {
@@ -307,11 +309,11 @@ export default function PurchaseAuditClient() {
 
       <div className="flex items-center justify-between text-sm text-muted-foreground">
         <span>共 {total} 条</span>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1 || loading}>上一页</Button>
-          <span>{page} / {totalPages}</span>
-          <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages || loading}>下一页</Button>
-        </div>
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+        />
       </div>
     </div>
   );

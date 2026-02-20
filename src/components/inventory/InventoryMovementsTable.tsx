@@ -127,12 +127,12 @@ export default function InventoryMovementsTable({ movements, loading, emptyHint 
                     {isAllSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                   </button>
                 </th>
-                <th className="px-4 py-3 text-left">单据时间</th>
+                <th className="px-4 py-3 text-left hidden md:table-cell">单据时间</th>
                 <th className="px-4 py-3 text-left">SKU</th>
-                <th className="px-4 py-3 text-left">仓库</th>
+                <th className="px-4 py-3 text-left hidden md:table-cell">仓库</th>
                 <th className="px-4 py-3 text-left">方向</th>
                 <th className="px-4 py-3 text-left">数量</th>
-                <th className="px-4 py-3 text-left">单据号</th>
+                <th className="px-4 py-3 text-left hidden md:table-cell">单据号</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/70">
@@ -159,7 +159,7 @@ export default function InventoryMovementsTable({ movements, loading, emptyHint 
                           </button>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-foreground/90">
+                      <td className="px-4 py-3 text-foreground/90 hidden md:table-cell">
                         {formatDateTimeLocal(movement.occurredAt) ?? movement.occurredAt}
                       </td>
                       <td className="px-4 py-3 font-medium text-foreground">
@@ -170,7 +170,7 @@ export default function InventoryMovementsTable({ movements, loading, emptyHint 
                           {(movement.itemName ?? '未命名商品') + ` (#${movement.itemId})`}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-foreground/90">
+                      <td className="px-4 py-3 text-foreground/90 hidden md:table-cell">
                         <span className="block max-w-[120px] truncate" title={movement.warehouseName ?? movement.warehouseId}>
                           {movement.warehouseName ?? movement.warehouseId}
                         </span>
@@ -186,7 +186,7 @@ export default function InventoryMovementsTable({ movements, loading, emptyHint 
                           {movement.unitCost ? `（¥${movement.unitCost.toLocaleString()}）` : ''}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">
+                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
                         <span className="block max-w-[140px] truncate" title={movement.relatedOrderId ?? '—'}>
                           {movement.relatedOrderId ?? '—'}
                         </span>

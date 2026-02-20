@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Pencil, Plus, RefreshCcw, Trash2 } from 'lucide-react';
+import { Pencil, Plus, RefreshCcw, Trash2 } from 'lucide-react';
 
 import { usePermissions } from '@/hooks/usePermissions';
+import Pagination from '@/components/tables/Pagination';
 import { Button } from '@/components/ui/button';
 import { formatDateTimeLocal } from '@/lib/dates';
 import { Input } from '@/components/ui/input';
@@ -275,13 +276,8 @@ export default function DepartmentManager() {
     return departments.filter((dept) => !editing || dept.id !== editing.id);
   }, [departments, editing]);
 
-  const handlePageChange = (direction: 'prev' | 'next') => {
-    setPage((prev) => {
-      if (direction === 'prev') {
-        return Math.max(1, prev - 1);
-      }
-      return Math.min(totalPages, prev + 1);
-    });
+  const handlePageChange = (nextPage: number) => {
+    setPage(nextPage);
   };
 
   const handlePageSizeChange = (size: number) => {
@@ -396,26 +392,11 @@ export default function DepartmentManager() {
               </SelectContent>
             </Select>
             <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange('prev')}
-                disabled={page <= 1}
-                className="gap-1"
-              >
-                <ChevronLeft className="h-4 w-4" /> 上一页
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange('next')}
-                disabled={page >= totalPages}
-                className="gap-1"
-              >
-                下一页 <ChevronRight className="h-4 w-4" />
-              </Button>
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+              />
             </div>
           </div>
         </div>

@@ -207,11 +207,11 @@ export default function EmployeeTable({
 				>
 						<TableHeader>
 							<TableRow className="bg-muted/60">
-								<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">员工编号</TableHead>
+								<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground hidden md:table-cell">员工编号</TableHead>
 								<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">姓名</TableHead>
-								<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">邮箱</TableHead>
+								<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground hidden md:table-cell">邮箱</TableHead>
 								<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">状态</TableHead>
-								<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground">入职日期</TableHead>
+								<TableHead className="px-4 py-3 uppercase tracking-wide text-muted-foreground hidden md:table-cell">入职日期</TableHead>
 							{(canEdit || canDelete || canAssignRoles || canResetPassword) && (
 								<TableHead className="px-4 py-3 text-right uppercase tracking-wide text-muted-foreground">操作</TableHead>
 							)}
@@ -220,7 +220,7 @@ export default function EmployeeTable({
 					<TableBody>
 						{employees.map((employee) => (
 							<TableRow key={employee.id} className="text-sm text-foreground hover:bg-muted/40">
-								<TableCell className="px-4 py-4 font-mono text-xs text-muted-foreground">
+								<TableCell className="px-4 py-4 font-mono text-xs text-muted-foreground hidden md:table-cell">
 									{employee.employeeCode ?? '—'}
 								</TableCell>
 								<TableCell className="px-4 py-4">
@@ -239,11 +239,11 @@ export default function EmployeeTable({
 										</div>
 									</div>
 								</TableCell>
-								<TableCell className="px-4 py-4 text-sm text-muted-foreground">{employee.email ?? '—'}</TableCell>
+								<TableCell className="px-4 py-4 text-sm text-muted-foreground hidden md:table-cell">{employee.email ?? '—'}</TableCell>
 								<TableCell className="px-4 py-4">
 									<EmployeeStatusBadge status={employee.employmentStatus} />
 								</TableCell>
-								<TableCell className="px-4 py-4 text-muted-foreground">
+								<TableCell className="px-4 py-4 text-muted-foreground hidden md:table-cell">
 									{formatDate(employee.hireDate)}
 								</TableCell>
 								{(canEdit || canDelete || canAssignRoles || canResetPassword) && (
