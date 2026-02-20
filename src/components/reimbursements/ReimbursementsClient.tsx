@@ -925,6 +925,10 @@ export default function ReimbursementsClient() {
                 
                 <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
                   <div className="flex items-center justify-between gap-3">
+                    <span>申请人</span>
+                    <span className="text-foreground font-medium">{row.applicantName || '未知'}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
                     <span>来源</span>
                     <span className="text-foreground">{SOURCE_LABELS[row.sourceType]}</span>
                   </div>
@@ -995,6 +999,7 @@ export default function ReimbursementsClient() {
               <TableRow>
                 <TableHead>报销单号</TableHead>
                 <TableHead>标题</TableHead>
+                <TableHead>申请人</TableHead>
                 <TableHead>来源</TableHead>
                 <TableHead>关联采购单</TableHead>
                 <TableHead>组织</TableHead>
@@ -1007,13 +1012,13 @@ export default function ReimbursementsClient() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center text-muted-foreground">
                     加载中...
                   </TableCell>
                 </TableRow>
               ) : records.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center text-muted-foreground">
                     暂无报销记录
                   </TableCell>
                 </TableRow>
@@ -1025,6 +1030,9 @@ export default function ReimbursementsClient() {
                       <div className="max-w-[200px] truncate" title={row.title}>
                         {row.title}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {row.applicantName || '未知'}
                     </TableCell>
                     <TableCell>{SOURCE_LABELS[row.sourceType]}</TableCell>
                     <TableCell className="font-mono text-xs">{row.sourcePurchaseNumber ?? '-'}</TableCell>

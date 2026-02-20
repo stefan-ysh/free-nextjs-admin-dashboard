@@ -167,6 +167,10 @@ export default function ReimbursementDetailDrawer({
           <DrawerBody className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
+                <div className="text-sm font-medium text-muted-foreground">申请人</div>
+                <div className="text-sm">{record.applicantName || '未知'}</div>
+              </div>
+              <div className="space-y-2">
                 <div className="text-sm font-medium text-muted-foreground">报销来源</div>
                 <div className="text-sm">{record.sourceType === 'purchase' ? '关联采购' : '直接报销'}</div>
               </div>
