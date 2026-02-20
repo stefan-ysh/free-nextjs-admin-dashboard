@@ -9,15 +9,17 @@ import { checkPermission, Permissions } from '@/lib/permissions';
 
 import { formatDateOnly, formatDateTimeLocal } from '@/lib/dates';
 import { getInventoryStats } from '@/lib/db/inventory';
-import { getRecords, getStats as getFinanceStats } from '@/lib/db/finance';
+import { getRecords, getStats as getFinanceStats, getMonthlyTrend } from '@/lib/db/finance';
 import { getEmployeeDashboardStats } from '@/lib/hr/employees';
 import { getPurchaseStats, listPurchases } from '@/lib/db/purchases';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { USER_ROLE_LABELS } from '@/constants/user-roles';
 import { TransactionType } from '@/types/finance';
 import { UserRole } from '@/types/user';
+
+import DashboardTrendChart from '@/components/charts/DashboardTrendChart';
+import DashboardCategoryChart from '@/components/charts/DashboardCategoryChart';
 
 const currencyFormatter = new Intl.NumberFormat('zh-CN', {
   style: 'currency',
@@ -93,11 +95,13 @@ function DashboardSection({ title, description, children }: { title: string; des
 export default async function AdminDashboardPage() {
   const { user } = await requireCurrentUser();
   const profile = await toPermissionUser(user);
-  const activeRole = profile.primaryRole ?? UserRole.EMPLOYEE;
-  const isSuperAdmin = activeRole === UserRole.SUPER_ADMIN;
-  const isApprovalAdmin = activeRole === UserRole.APPROVER;
-  const isFinanceOperator = activeRole === UserRole.FINANCE_DIRECTOR || activeRole === UserRole.FINANCE_SCHOOL || activeRole === UserRole.FINANCE_COMPANY;
-  const isEmployee = activeRole === UserRole.EMPLOYEE;
+  
+  // 支持多角色叠加判定：只要用户的角色集合中包含以下角色，即认为具有该身份
+  const roles = profile.roles ?? [];
+  const isSuperAdmin = roles.includes(UserRole.SUPER_ADMIN);
+  const isApprovalAdmin = isSuperAdmin || roles.includes(UserRole.APPROVER);
+  const isFinanceOperator = isSuperAdmin || roles.some((r) => [UserRole.FINANCE_DIRECTOR, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY].includes(r));
+  const isEmployee = isSuperAdmin || roles.includes(UserRole.EMPLOYEE);
 
   const [
     inventoryPermission,
@@ -105,7 +109,6 @@ export default async function AdminDashboardPage() {
     hrPermission,
     purchaseCreatePermission,
     purchaseViewAllPermission,
-    // purchaseViewDepartmentPermission,
     purchaseApprovePermission,
   ] = await Promise.all([
     checkPermission(profile, Permissions.INVENTORY_VIEW_DASHBOARD),
@@ -113,7 +116,6 @@ export default async function AdminDashboardPage() {
     checkPermission(profile, Permissions.USER_VIEW_ALL),
     checkPermission(profile, Permissions.PURCHASE_CREATE),
     checkPermission(profile, Permissions.PURCHASE_VIEW_ALL),
-    // checkPermission(profile, Permissions.PURCHASE_VIEW_DEPARTMENT),
     checkPermission(profile, Permissions.PURCHASE_APPROVE),
   ]);
 
@@ -127,18 +129,27 @@ export default async function AdminDashboardPage() {
     (
       purchaseCreatePermission.allowed ||
       purchaseViewAllPermission.allowed ||
-      // purchaseViewDepartmentPermission.allowed ||
       purchaseApprovePermission.allowed
     );
-  const showFinanceOverview = financePermission.allowed && (isFinanceOperator || isSuperAdmin);
+    
+  const showFinanceOverview = financePermission.allowed && isFinanceOperator;
   const showPurchaseOverview = purchasePermissionAllowed && (isApprovalAdmin || isEmployee || isSuperAdmin);
-  const showApprovalTodo = purchaseApprovePermission.allowed && (isApprovalAdmin || isSuperAdmin);
+  const showApprovalTodo = purchaseApprovePermission.allowed && isApprovalAdmin;
   const showOtherOverview = (inventoryPermission.allowed || hrPermission.allowed) && isSuperAdmin;
 
-  const [inventoryStats, financeStats, recentFinanceRecords, hrStats, purchaseStats, pendingPurchases] = await Promise.all([
+  const [
+    inventoryStats,
+    financeStats,
+    recentFinanceRecords,
+    financeMonthlyTrend,
+    hrStats,
+    purchaseStats,
+    pendingPurchases
+  ] = await Promise.all([
     inventoryPermission.allowed ? getInventoryStats() : null,
     showFinanceOverview ? getFinanceStats({ startDate: monthStartText, endDate: todayText }) : null,
     showFinanceOverview ? getRecords({ startDate: monthStartText, endDate: todayText, limit: 6, offset: 0 }) : [],
+    showFinanceOverview ? getMonthlyTrend(12) : [],
     hrPermission.allowed ? getEmployeeDashboardStats() : null,
     showPurchaseOverview
       ? getPurchaseStats(
@@ -179,43 +190,29 @@ export default async function AdminDashboardPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {isFinanceOperator ? (
+          {/* Quick Action Buttons (Cumulative based on roles) */}
+          {isFinanceOperator && (
             <>
               <Button asChild size="sm" variant="outline">
                 <Link href="/finance">查看财务</Link>
               </Button>
-              <Button asChild size="sm">
-                <Link href="/workflow/todo">财务待办</Link>
-              </Button>
-            </>
-          ) : isApprovalAdmin ? (
-            <>
-              <Button asChild size="sm" variant="outline">
-                <Link href="/purchases/approvals">审批处理</Link>
-              </Button>
-              <Button asChild size="sm">
-                <Link href="/workflow/todo">审批待办</Link>
-              </Button>
-            </>
-          ) : isSuperAdmin ? (
-            <>
-              <Button asChild size="sm" variant="outline">
-                <Link href="/workflow/todo">查看流程</Link>
-              </Button>
-              <Button asChild size="sm">
-                <Link href="/purchases">查看采购</Link>
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button asChild size="sm" variant="outline">
-                <Link href="/purchases">我的采购</Link>
-              </Button>
-              <Button asChild size="sm">
-                <Link href="/workflow/todo">流程待办</Link>
-              </Button>
             </>
           )}
+          {isApprovalAdmin && (
+            <Button asChild size="sm" variant="outline">
+              <Link href="/purchases/approvals">审批处理</Link>
+            </Button>
+          )}
+          {isEmployee && (
+            <Button asChild size="sm" variant="outline">
+              <Link href="/purchases">我的采购</Link>
+            </Button>
+          )}
+          <Button asChild size="sm" variant="default">
+            <Link href="/workflow/todo">
+              {isApprovalAdmin || isFinanceOperator ? "待办事项" : "流程待办"}
+            </Link>
+          </Button>
         </div>
       </div>
 
@@ -224,63 +221,109 @@ export default async function AdminDashboardPage() {
           <CardHeader>
             <CardTitle>暂未配置仪表盘模块</CardTitle>
             <CardDescription>
-              当前账号没有可查看的业务权限，请联系管理员授予库存、财务、人事或客户等模块的访问权限。
+              当前账号没有可查看的业务权限，请联系管理员授予库存、财务、人事或业务等模块的访问权限。
             </CardDescription>
           </CardHeader>
         </Card>
       ) : (
         <div className="space-y-8">
           {showFinanceOverview && (
-            <DashboardSection title="财务概览" description="本月收支与最新记录">
+            <DashboardSection title="财务数据直通车" description="本月收支、环形图及近期流水的动态图景">
+              {/* Top Metric Cards */}
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <MetricCard label="本月收入" value={formatCurrency(financeStats?.totalIncome)} icon={<ArrowUpRight className="h-5 w-5 text-chart-5" />} tone="positive" />
                 <MetricCard label="本月支出" value={formatCurrency(financeStats?.totalExpense)} icon={<ArrowDownRight className="h-5 w-5 text-destructive" />} tone="negative" />
                 <MetricCard label="本月净额" value={formatCurrency(financeStats?.balance)} icon={<TrendingUp className="h-5 w-5 text-chart-2" />} tone={financeStats && financeStats.balance >= 0 ? 'positive' : 'negative'} />
                 <MetricCard label="记录数量" value={formatNumber(financeStats?.recordCount)} icon={<ClipboardList className="h-5 w-5 text-muted-foreground" />} helper="本月流水" />
               </div>
+
+              {/* Main Charts & Recent Records Layer */}
               <div className="grid gap-4 lg:grid-cols-3">
-                <Card className="border-none shadow-sm lg:col-span-2">
-                  <CardHeader>
-                    <CardTitle className="text-base">最近记录</CardTitle>
-                    <CardDescription>显示本月最新 6 笔</CardDescription>
+                
+                {/* 1. Category Chart */}
+                <Card className="border-none shadow-sm flex flex-col justify-between">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">本月支出结构</CardTitle>
+                    <CardDescription>各业务分类资金占比分布</CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    {recentFinanceRecords.length ? (
-                      recentFinanceRecords.map((record) => (
-                        <div key={record.id} className="flex items-center justify-between text-sm">
+                  <CardContent className="flex-1 flex flex-col justify-center px-0">
+                    <DashboardCategoryChart categoryStats={financeStats?.categoryStats ?? []} topN={5} />
+                  </CardContent>
+                </Card>
+
+                {/* 2. Monthly Trend Chart */}
+                <Card className="border-none shadow-sm lg:col-span-2">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">长效收支趋势 (近12个月)</CardTitle>
+                    <CardDescription>跟踪每月全局资金流入流出变化</CardDescription>
+                  </CardHeader>
+                  <CardContent className="px-2">
+                    <DashboardTrendChart data={financeMonthlyTrend} />
+                  </CardContent>
+                </Card>
+
+              </div>
+
+              {/* Bottom: Recent Records */}
+              <Card className="border-none shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-base">最近录入记录</CardTitle>
+                  <CardDescription>显示本月最新 6 笔明细流水</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {recentFinanceRecords.length ? (
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {recentFinanceRecords.map((record) => (
+                        <div key={record.id} className="flex items-center justify-between text-sm rounded-lg border border-border p-3 bg-card/60">
                           <div>
-                            <p className="font-medium text-foreground">{record.name}</p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="font-medium text-foreground truncate max-w-[150px]">{record.name}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
                               {record.category} · {record.date?.slice(0, 10)}
                             </p>
                           </div>
-                          <div className="text-right">
-                            <p className={record.type === TransactionType.INCOME ? 'text-chart-5' : 'text-destructive'}>
+                          <div className="text-right shrink-0">
+                            <p className={`font-semibold ${record.type === TransactionType.INCOME ? 'text-chart-5' : 'text-destructive'}`}>
                               {record.type === TransactionType.INCOME ? '+' : '-'}{formatCurrency(record.totalAmount)}
                             </p>
                           </div>
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground">暂无财务记录。</p>
-                    )}
-                  </CardContent>
-                </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground py-4 text-center">暂无财务记录。</p>
+                  )}
+                </CardContent>
+              </Card>
+            </DashboardSection>
+          )}
+
+          {/* Pending Approval Todo Layer */}
+          {showApprovalTodo && pendingPurchases && pendingPurchases.items.length > 0 && (
+            <DashboardSection title="我的待办" description="需要您处理的审批事项">
+              <div className="grid gap-4">
+                {/* Pending Purchase Approvals */}
                 <Card className="border-none shadow-sm">
-                  <CardHeader>
-                    <CardTitle className="text-base">分类 Top 5</CardTitle>
-                    <CardDescription>本月金额排序</CardDescription>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <div>
+                      <CardTitle className="text-base">采购审批</CardTitle>
+                      <CardDescription>共 {pendingPurchases.total} 条待审批</CardDescription>
+                    </div>
+                    <Clock className="h-5 w-5 text-chart-3" />
                   </CardHeader>
-                  <CardContent className="space-y-3 text-sm">
-                    {financeStats?.categoryStats?.length ? (
-                      financeStats.categoryStats.slice(0, 5).map((category) => (
-                        <div key={category.category} className="flex items-center justify-between">
-                          <span className="text-foreground">{category.category}</span>
-                          <span className="text-muted-foreground">{formatCurrency(category.amount)}</span>
+                  <CardContent className="space-y-3">
+                    {pendingPurchases.items.map((p) => (
+                      <Link key={p.id} href={`/purchases/${p.id}`} className="flex items-center justify-between rounded-lg border border-transparent px-2 py-1.5 text-sm transition-colors hover:border-border hover:bg-muted/50">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium text-foreground">{p.itemName}</p>
+                          <p className="text-xs text-muted-foreground">{p.purchaseNumber} · {p.purchaseDate?.slice(0, 10)}</p>
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground">暂无分类统计。</p>
+                        <span className="ml-3 shrink-0 text-sm font-semibold text-chart-3">{formatCurrency(p.totalAmount)}</span>
+                      </Link>
+                    ))}
+                    {pendingPurchases.total > 5 && (
+                      <Button asChild variant="ghost" size="sm" className="w-full text-xs">
+                        <Link href="/workflow/todo">查看全部 {pendingPurchases.total} 条 →</Link>
+                      </Button>
                     )}
                   </CardContent>
                 </Card>
@@ -288,8 +331,9 @@ export default async function AdminDashboardPage() {
             </DashboardSection>
           )}
 
+          {/* Purchasing Layer */}
           {showPurchaseOverview && (
-            <DashboardSection title="采购与流程" description="采购申请与审批进度概览">
+            <DashboardSection title="业务链路 / 采购汇总" description="采购申请与审批执行进度">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <MetricCard
                   label="采购总额"
@@ -305,16 +349,16 @@ export default async function AdminDashboardPage() {
                   tone="negative"
                 />
                 <MetricCard
-                  label="已入库金额"
+                  label="待入库/已入库"
                   value={formatCurrency(purchaseStats?.approvedAmount)}
-                  helper={`已入库 ${formatNumber(purchaseStats?.approvedCount)} 条`}
+                  helper={`已核电/在途 ${formatNumber(purchaseStats?.approvedCount)} 条`}
                   icon={<ArrowUpRight className="h-5 w-5 text-chart-2" />}
                   tone="info"
                 />
                 <MetricCard
-                  label="历史已完成金额"
+                  label="历史已付款落地金额"
                   value={formatCurrency(purchaseStats?.paidAmount)}
-                  helper={`历史已完成 ${formatNumber(purchaseStats?.paidCount)} 条`}
+                  helper={`沉淀落库 ${formatNumber(purchaseStats?.paidCount)} 条`}
                   icon={<TrendingUp className="h-5 w-5 text-chart-5" />}
                   tone="positive"
                 />
@@ -322,51 +366,16 @@ export default async function AdminDashboardPage() {
             </DashboardSection>
           )}
 
-          {/* My Approvals Section */}
-          {showApprovalTodo && pendingPurchases && pendingPurchases.items.length > 0 && (
-            <DashboardSection title="我的待办" description="需要您处理的审批事项">
-              <div className="grid gap-4">
-                {/* Pending Purchase Approvals */}
-                {pendingPurchases && pendingPurchases.items.length > 0 && (
-                  <Card className="border-none shadow-sm">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <div>
-                        <CardTitle className="text-base">采购审批</CardTitle>
-                        <CardDescription>共 {pendingPurchases.total} 条待审批</CardDescription>
-                      </div>
-                      <Clock className="h-5 w-5 text-chart-3" />
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {pendingPurchases.items.map((p) => (
-                        <Link key={p.id} href={`/purchases/${p.id}`} className="flex items-center justify-between rounded-lg border border-transparent px-2 py-1.5 text-sm transition-colors hover:border-border hover:bg-muted/50">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate font-medium text-foreground">{p.itemName}</p>
-                            <p className="text-xs text-muted-foreground">{p.purchaseNumber} · {p.purchaseDate?.slice(0, 10)}</p>
-                          </div>
-                          <span className="ml-3 shrink-0 text-sm font-semibold text-chart-3">{formatCurrency(p.totalAmount)}</span>
-                        </Link>
-                      ))}
-                      {pendingPurchases.total > 5 && (
-                        <Button asChild variant="ghost" size="sm" className="w-full text-xs">
-                          <Link href="/workflow/todo">查看全部 {pendingPurchases.total} 条 →</Link>
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            </DashboardSection>
-          )}
-
+          {/* Other Modules Layer */}
           {showOtherOverview && (
-            <DashboardSection title="其他概览" description="模块精简展示，避免干扰">
+            <DashboardSection title="边缘监测矩阵" description="模块精简展示，避免干扰核心信息">
               <div className="grid gap-4 md:grid-cols-2">
                 {inventoryPermission.allowed && (
                   <Card className="border-none shadow-sm">
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                       <div>
-                        <CardTitle className="text-base">库存预警</CardTitle>
-                        <CardDescription>低于安全库存的物品</CardDescription>
+                        <CardTitle className="text-base">库存预警水位线</CardTitle>
+                        <CardDescription>低于安全库存标准的材料物品</CardDescription>
                       </div>
                       <AlertTriangle className="h-5 w-5 text-destructive" />
                     </CardHeader>
@@ -385,32 +394,34 @@ export default async function AdminDashboardPage() {
                           ))}
                           {inventoryStats.lowStockItems.length > 5 && (
                             <Button asChild variant="ghost" size="sm" className="w-full text-xs">
-                              <Link href="/inventory">查看全部 {inventoryStats.lowStockItems.length} 个预警 →</Link>
+                              <Link href="/inventory">查看全部 {inventoryStats.lowStockItems.length} 个预警节点 →</Link>
                             </Button>
                           )}
                         </div>
                       ) : (
-                        <p className="text-sm text-muted-foreground">所有物品库存充足 ✓</p>
+                        <p className="text-sm text-muted-foreground mt-2">各仓库可用物料全部达到库存警戒线标准之上 ✓</p>
                       )}
                     </CardContent>
                   </Card>
                 )}
+                
                 {hrPermission.allowed && (
                   <Card className="border-none shadow-sm">
                     <CardHeader>
-                      <CardTitle className="text-base">员工状态</CardTitle>
-                      <CardDescription>在职/休假/离职</CardDescription>
+                      <CardTitle className="text-base">内部组织全景视图</CardTitle>
+                      <CardDescription>HR 在职与人员状态分布速览</CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-wrap gap-2 text-xs">
-                      <Badge variant={EMPLOYMENT_STATUS_META.active.badge}>在职 {formatNumber(hrStats?.activeEmployees)}</Badge>
-                      <Badge variant={EMPLOYMENT_STATUS_META.on_leave.badge}>休假 {formatNumber(hrStats?.onLeaveEmployees)}</Badge>
-                      <Badge variant={EMPLOYMENT_STATUS_META.terminated.badge}>离职 {formatNumber(hrStats?.terminatedEmployees)}</Badge>
+                      <Badge variant={EMPLOYMENT_STATUS_META.active.badge} className="px-3 py-1">在职 · {formatNumber(hrStats?.activeEmployees)}</Badge>
+                      <Badge variant={EMPLOYMENT_STATUS_META.on_leave.badge} className="px-3 py-1">休假 · {formatNumber(hrStats?.onLeaveEmployees)}</Badge>
+                      <Badge variant={EMPLOYMENT_STATUS_META.terminated.badge} className="px-3 py-1">离职排期 · {formatNumber(hrStats?.terminatedEmployees)}</Badge>
                     </CardContent>
                   </Card>
                 )}
               </div>
             </DashboardSection>
           )}
+
         </div>
       )}
     </div>

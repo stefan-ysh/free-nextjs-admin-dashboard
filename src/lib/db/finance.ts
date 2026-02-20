@@ -853,3 +853,63 @@ export async function updateBudgetAdjustment(
   }
   return mapBudgetAdjustment(rows[0]);
 }
+
+/** 月度趋势数据点类型 */
+export type MonthlyTrendPoint = {
+  month: string;   // 格式："2025-01"
+  income: number;
+  expense: number;
+};
+
+type MonthTrendRow = RowDataPacket & {
+  month: string;
+  type: TransactionType;
+  amount: number;
+};
+
+/**
+ * 查询过去 N 个月的每月收支趋势数据（从最早月份到当前月份）
+ * @param months 往前推的月数，默认 12
+ */
+export async function getMonthlyTrend(months = 12): Promise<MonthlyTrendPoint[]> {
+  await ensureFinanceSchema();
+
+  const [rows] = await pool.query<MonthTrendRow[]>(
+    `SELECT
+       DATE_FORMAT(date_value, '%Y-%m') AS month,
+       type,
+       SUM(total_amount) AS amount
+     FROM finance_records
+     WHERE date_value >= DATE_SUB(CURDATE(), INTERVAL ? MONTH)
+     GROUP BY month, type
+     ORDER BY month ASC`,
+    [months]
+  );
+
+  // 将 income/expense 行合并为单条记录
+  const map = new Map<string, MonthlyTrendPoint>();
+  for (const row of rows) {
+    const key = row.month;
+    if (!map.has(key)) {
+      map.set(key, { month: key, income: 0, expense: 0 });
+    }
+    const point = map.get(key)!;
+    const amount = Number(row.amount ?? 0);
+    if (row.type === TransactionType.INCOME) {
+      point.income = amount;
+    } else {
+      point.expense = amount;
+    }
+  }
+
+  // 填充缺失月份（如果某月没有数据，补 0）
+  const result: MonthlyTrendPoint[] = [];
+  const now = new Date();
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    result.push(map.get(key) ?? { month: key, income: 0, expense: 0 });
+  }
+
+  return result;
+}
