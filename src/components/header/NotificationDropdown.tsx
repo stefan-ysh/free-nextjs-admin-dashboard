@@ -29,19 +29,6 @@ type NotificationListResponse = {
   error?: string;
 };
 
-type ApprovalFallback = {
-  id: string;
-  purchaseNumber: string;
-  itemName: string;
-  totalAmount: number;
-  updatedAt: string;
-};
-
-type ApprovalListResponse = {
-  success: boolean;
-  data?: { items: ApprovalFallback[]; total: number; page: number; pageSize: number };
-  error?: string;
-};
 
 type UiNotificationItem = {
   id: string;
@@ -52,7 +39,7 @@ type UiNotificationItem = {
   link: string;
   unread: boolean;
   type: "approval" | "applicant" | "finance" | "other";
-  source: "in_app" | "pending_approval";
+  source: "in_app";
 };
 
 function timeAgo(dateValue: string): string {
@@ -110,7 +97,6 @@ export default function NotificationDropdown() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<UiNotificationItem[]>([]);
-  const [activeTab, setActiveTab] = useState<"all" | "todo" | "notice">("todo");
   const [badgeCount, setBadgeCount] = useState(0);
 
   // 轻量级未读计数 — 组件挂载后立即获取，不依赖 dropdown 打开
@@ -155,65 +141,31 @@ export default function NotificationDropdown() {
     setLoading(true);
     setError(null);
     try {
-      const [notificationsResponse, approvalsResponse] = await Promise.all([
-        fetch("/api/notifications?page=1&pageSize=20", {
-          headers: { Accept: "application/json" },
-        }),
-        fetch("/api/purchases/approvals?page=1&pageSize=10", {
-          headers: { Accept: "application/json" },
-        }),
-      ]);
+      const res = await fetch("/api/notifications?page=1&pageSize=20", {
+        headers: { Accept: "application/json" },
+      });
+
+      if (!res.ok) {
+        throw new Error("加载通知失败");
+      }
 
       const normalized: UiNotificationItem[] = [];
-      const approvalRelatedIds = new Set<string>();
+      const payload = (await res.json()) as NotificationListResponse;
 
-      if (notificationsResponse.ok) {
-        const payload = (await notificationsResponse.json()) as NotificationListResponse;
-        if (payload.success && payload.data) {
-          for (const item of payload.data.items) {
-            const mappedType = mapType(item.eventType);
-            if (mappedType === "approval" && item.relatedId) {
-              approvalRelatedIds.add(item.relatedId);
-            }
-            normalized.push({
-              id: item.id,
-              eventType: item.eventType,
-              title: item.title,
-              subtitle: item.content.split("\n")[0] ?? item.content,
-              time: timeAgo(item.createdAt),
-              link: toWorkbenchLink(item.eventType, item.linkUrl),
-              unread: !item.isRead,
-              type: mappedType,
-              source: "in_app",
-            });
-          }
+      if (payload.success && payload.data) {
+        for (const item of payload.data.items) {
+          normalized.push({
+            id: item.id,
+            eventType: item.eventType,
+            title: item.title,
+            subtitle: item.content.split("\n")[0] ?? item.content,
+            time: timeAgo(item.createdAt),
+            link: toWorkbenchLink(item.eventType, item.linkUrl),
+            unread: !item.isRead,
+            type: mapType(item.eventType),
+            source: "in_app",
+          });
         }
-      }
-
-      if (approvalsResponse.ok) {
-        const approvalPayload = (await approvalsResponse.json()) as ApprovalListResponse;
-        if (approvalPayload.success && approvalPayload.data?.items?.length) {
-          for (const item of approvalPayload.data.items) {
-            if (approvalRelatedIds.has(item.id)) {
-              continue;
-            }
-            normalized.push({
-              id: `fallback-${item.id}`,
-              eventType: "purchase_submitted",
-              title: `采购待审批：${item.itemName}`,
-              subtitle: `单号 ${item.purchaseNumber}`,
-              time: timeAgo(item.updatedAt),
-              link: "/workflow/todo",
-              unread: true,
-              type: "approval",
-              source: "pending_approval",
-            });
-          }
-        }
-      }
-
-      if (normalized.length === 0 && !notificationsResponse.ok && !approvalsResponse.ok) {
-        throw new Error("加载通知失败");
       }
 
       setItems(normalized);
@@ -233,20 +185,6 @@ export default function NotificationDropdown() {
 
   const unreadCount = useMemo(() => items.filter((item) => item.unread).length, [items]);
   const showingNotifyDot = badgeCount > 0 || unreadCount > 0;
-  const tabCounters = useMemo(() => {
-    const todo = items.filter((item) => item.type === "approval").length;
-    const notice = items.filter((item) => item.type !== "approval").length;
-    return { all: items.length, todo, notice };
-  }, [items]);
-  const visibleItems = useMemo(() => {
-    if (activeTab === "todo") {
-      return items.filter((item) => item.type === "approval");
-    }
-    if (activeTab === "notice") {
-      return items.filter((item) => item.type !== "approval");
-    }
-    return items;
-  }, [activeTab, items]);
 
   const typePillClass: Record<UiNotificationItem["type"], string> = {
     approval: "bg-chart-3/15 text-chart-3",
@@ -320,28 +258,6 @@ export default function NotificationDropdown() {
           </div>
         </div>
 
-        {!loading && !error ? (
-          <div className="mb-3 flex flex-wrap gap-2">
-            {[
-              { key: "all", label: "全部", count: tabCounters.all },
-              { key: "todo", label: "待办", count: tabCounters.todo },
-              { key: "notice", label: "通知", count: tabCounters.notice },
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActiveTab(tab.key as typeof activeTab)}
-                className={`rounded-full border px-3 py-1 text-xs transition ${
-                  activeTab === tab.key
-                    ? "border-primary bg-primary/15 text-primary"
-                    : "border-border text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                {tab.label} {tab.count}
-              </button>
-            ))}
-          </div>
-        ) : null}
 
         {loading ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">加载中...</div>
@@ -355,10 +271,10 @@ export default function NotificationDropdown() {
 
         {!loading && !error ? (
           <ul className="custom-scrollbar flex flex-1 flex-col overflow-y-auto">
-            {visibleItems.length === 0 ? (
+            {items.length === 0 ? (
               <li className="flex h-full items-center justify-center text-sm text-muted-foreground">暂无通知</li>
             ) : (
-              visibleItems.map((item) => (
+              items.map((item) => (
                 <li key={item.id}>
                   <Link
                     href={item.link}

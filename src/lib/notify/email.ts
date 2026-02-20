@@ -91,7 +91,8 @@ async function sendBySmtp(params: {
     throw new Error('EMAIL_NOTIFY_MISSING_CONFIG');
   }
   const senderName = envFirst('SMTP_SENDER_NAME', 'EMAIL_SENDER_NAME') || 'Cosmorigin 系统通知';
-  const from = `"${senderName}" <${rawFrom}>`;
+  // 根据经验，不带双引号且以 "Name <email>" 格式发件有助于降低被判为垃圾邮件的几率
+  const from = `${senderName} <${rawFrom}>`;
 
   const transporter = getSmtpTransporter();
   const replyTo = normalizeReplyTo(process.env.EMAIL_REPLY_TO);
