@@ -85,7 +85,7 @@ export default function ImageUpload({
                                 <Button
                                     type="button"
                                     variant="destructive"
-                                    size="icon"
+                                    size="sm"
                                     className="h-6 w-6 rounded-full shadow-md"
                                     onClick={(e) => {
                                         e.stopPropagation();

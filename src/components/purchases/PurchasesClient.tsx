@@ -197,6 +197,8 @@ export default function PurchasesClient() {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [batchActionLoading, setBatchActionLoading] = useState(false);
   const [rejectDialog, setRejectDialog] = useState<{ open: boolean; purchase: PurchaseRecord | PurchaseDetail | null }>({
     open: false,
     purchase: null,
@@ -239,6 +241,7 @@ export default function PurchasesClient() {
     startTransition(() => {
       setFilters((prev) => ({ ...prev, ...patch }));
       setPage(1);
+      setSelectedIds([]);
     });
   }, []);
 
@@ -265,7 +268,7 @@ export default function PurchasesClient() {
     placeholderData: keepPreviousData,
   });
 
-  const records = listData?.items ?? [];
+  const records = useMemo(() => listData?.items ?? [], [listData?.items]);
   const total = listData?.total ?? 0;
   const loading = isListLoading || isListFetching;
   const error = listError instanceof Error ? listError.message : null;
@@ -296,6 +299,105 @@ export default function PurchasesClient() {
   const stats = statsData ?? null;
   const statsLoading = isStatsLoading || isStatsFetching;
   const statsError = statsQueryError instanceof Error ? statsQueryError.message : null;
+
+  const handleSelect = useCallback((id: string, checked: boolean) => {
+    setSelectedIds((prev) =>
+      checked ? [...prev, id] : prev.filter((i) => i !== id)
+    );
+  }, []);
+
+  const handleSelectAll = useCallback((checked: boolean) => {
+    setSelectedIds(checked ? records.map((r) => r.id) : []);
+  }, [records]);
+
+  const handlePageChange = useCallback((newPage: number) => {
+    setPage(newPage);
+    setSelectedIds([]);
+  }, []);
+
+  const handlePageSizeChange = useCallback((newSize: number) => {
+    setPageSize(newSize);
+    setPage(1);
+    setSelectedIds([]);
+  }, []);
+
+  const handleBatchApprove = async () => {
+    if (selectedIds.length === 0) return;
+    const ok = await confirm({
+      title: '批量批准',
+      description: `确定要批准选中的 ${selectedIds.length} 项采购申请吗？`,
+    });
+    if (!ok) return;
+
+    setBatchActionLoading(true);
+    try {
+      const results = await Promise.all(
+        selectedIds.map(async (id) => {
+          try {
+            const res = await fetch(`/api/purchases/${id}/actions`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'approve' }),
+            });
+            return res.ok;
+          } catch {
+            return false;
+          }
+        })
+      );
+      const successCount = results.filter(Boolean).length;
+      if (successCount > 0) {
+        toast.success(`成功批准 ${successCount} 项${successCount < selectedIds.length ? `，${selectedIds.length - successCount} 项失败` : ''}`);
+        queryClient.invalidateQueries({ queryKey: ['purchases'] });
+        setSelectedIds([]);
+      } else {
+        toast.error('批量审批失败');
+      }
+    } catch {
+      toast.error('批量审批过程中发生错误');
+    } finally {
+      setBatchActionLoading(false);
+    }
+  };
+
+  const handleBatchReject = async () => {
+    if (selectedIds.length === 0) return;
+    const ok = await confirm({
+      title: '批量驳回',
+      description: `确定要驳回选中的 ${selectedIds.length} 项采购申请吗？`,
+    });
+    if (!ok) return;
+
+    setBatchActionLoading(true);
+    try {
+      const results = await Promise.all(
+        selectedIds.map(async (id) => {
+          try {
+            const res = await fetch(`/api/purchases/${id}/actions`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'reject', reason: '批量操作统一驳回' }),
+            });
+            return res.ok;
+          } catch {
+            return false;
+          }
+        })
+      );
+      const successCount = results.filter(Boolean).length;
+      if (successCount > 0) {
+        toast.success(`成功驳回 ${successCount} 项${successCount < selectedIds.length ? `，${selectedIds.length - successCount} 项失败` : ''}`);
+        queryClient.invalidateQueries({ queryKey: ['purchases'] });
+        setSelectedIds([]);
+      } else {
+        toast.error('批量驳回失败');
+      }
+    } catch {
+      toast.error('批量驳回过程中发生错误');
+    } finally {
+      setBatchActionLoading(false);
+    }
+  };
 
   const loadPurchaseDetail = useCallback(async (purchaseId: string) => {
     setDetailLoading(true);
@@ -348,16 +450,6 @@ export default function PurchasesClient() {
       setSortOrder('desc');
       setShowAdvancedFilters(false);
     });
-  };
-
-  const handlePageChange = (nextPage: number) => {
-    if (nextPage === page) return;
-    setPage(nextPage);
-  };
-
-  const handlePageSizeChange = (size: number) => {
-    setPageSize(size);
-    setPage(1);
   };
 
   const handleManualRefresh = () => {
@@ -828,7 +920,7 @@ export default function PurchasesClient() {
               value={filters.search}
               onChange={(event) => handleFilterChange({ search: event.target.value })}
               placeholder="按单号 / 物品 / 用途检索"
-              className="h-10 w-full"
+              className="w-full"
             />
           </div>
 
@@ -836,7 +928,7 @@ export default function PurchasesClient() {
           <div className="flex flex-wrap items-center gap-2">
             {permissions.canViewAll && permissions.canCreate && (
               <Select value={filters.scope} onValueChange={(value) => handleFilterChange({ scope: value as 'all' | 'mine' })}>
-                <SelectTrigger className="w-[140px] h-10">
+                <SelectTrigger className="w-[140px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -859,7 +951,7 @@ export default function PurchasesClient() {
 
             <Drawer open={filterSheetOpen} onOpenChange={setFilterSheetOpen} direction="right">
               <DrawerTrigger asChild>
-                <Button variant="outline" size="sm" className="h-10 px-4">
+                <Button variant="outline" size="sm" className="px-4">
                   筛选
                   {activeFilterChips.length > 0 && (
                     <Badge className="ml-1 rounded-full px-2 py-0 text-[10px]" variant="secondary">
@@ -989,14 +1081,14 @@ export default function PurchasesClient() {
                       value={filters.startDate ?? ''}
                       onChange={(value: string) => handleFilterChange({ startDate: value || null })}
                       containerClassName="space-y-1"
-                      className="h-10 justify-start px-3 text-sm"
+                      className="justify-start px-3 text-sm"
                     />
                     <DatePicker
                       placeholder="结束日期"
                       value={filters.endDate ?? ''}
                       onChange={(value: string) => handleFilterChange({ endDate: value || null })}
                       containerClassName="space-y-1"
-                      className="h-10 justify-start px-3 text-sm"
+                      className="justify-start px-3 text-sm"
                     />
                   </div>
 
@@ -1023,7 +1115,6 @@ export default function PurchasesClient() {
                               min={0}
                               value={filters.minAmount ?? ''}
                               onChange={(event) => handleAmountFilterChange('minAmount', event.target.value)}
-                              className="h-10"
                             />
                           </div>
                           <div>
@@ -1033,7 +1124,6 @@ export default function PurchasesClient() {
                               min={0}
                               value={filters.maxAmount ?? ''}
                               onChange={(event) => handleAmountFilterChange('maxAmount', event.target.value)}
-                              className="h-10"
                             />
                           </div>
                         </div>
@@ -1045,6 +1135,7 @@ export default function PurchasesClient() {
                   <Button
                     type="button"
                     variant="outline"
+                    size="sm"
                     onClick={() => {
                       handleResetFilters();
                       setShowAdvancedFilters(false);
@@ -1053,21 +1144,20 @@ export default function PurchasesClient() {
                     重置
                   </Button>
                   <DrawerClose asChild>
-                    <Button type="button">
+                    <Button type="button" size="sm">
                       完成
                     </Button>
                   </DrawerClose>
                 </DrawerFooter>
               </DrawerContent>
             </Drawer>
-            <Button variant="ghost" size="sm" onClick={handleResetFilters} className="h-10 px-3 text-muted-foreground">
+            <Button variant="ghost" size="sm" onClick={handleResetFilters} className="px-3 text-muted-foreground">
               清空
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={handleManualRefresh}
-              className="h-10"
               disabled={loading}
             >
               刷新
@@ -1077,13 +1167,12 @@ export default function PurchasesClient() {
               size="sm"
               onClick={handleExport}
               disabled={loading || exporting}
-              className="h-10"
             >
               {exporting ? '导出中...' : '导出 Excel'}
             </Button>
             {permissions.canCreate && (
-              <Button asChild size="sm" className="h-10">
-                <Link href="/purchases/new">+ 发起采购</Link>
+              <Button asChild size="sm">
+                <Link href="/purchases/new">发起采购</Link>
               </Button>
             )}
           </div>
@@ -1097,7 +1186,7 @@ export default function PurchasesClient() {
                   onClick={chip.onRemove}
                   variant="outline"
                   size="sm"
-                  className="h-8 shrink-0 rounded-full px-3 text-xs"
+                  className="shrink-0 rounded-full px-3 text-xs"
                 >
                   {chip.label}
                   <span aria-hidden="true">×</span>
@@ -1118,6 +1207,9 @@ export default function PurchasesClient() {
           loading={loading || isPending}
           mutatingId={mutatingId}
           getRowPermissions={getRowPermissions}
+          selectedIds={selectedIds}
+          onSelect={handleSelect}
+          onSelectAll={handleSelectAll}
           onView={handleView}
           onEdit={handleEdit}
           onDuplicate={handleDuplicate}
@@ -1231,6 +1323,48 @@ export default function PurchasesClient() {
           void queryClient.invalidateQueries({ queryKey: ['purchases'] });
         }}
       />
+
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center gap-4 py-2 px-4 bg-background border shadow-2xl rounded-full">
+            <span className="text-sm font-medium whitespace-nowrap pl-2">
+              已选中 <span className="text-primary">{selectedIds.length}</span> 项
+            </span>
+            <div className="w-px h-4 bg-border" />
+            <div className="flex items-center gap-2">
+              {permissions.canApprove && (
+                <Button 
+                  size="sm" 
+                  onClick={handleBatchApprove}
+                  disabled={batchActionLoading}
+                  className="h-8 rounded-full"
+                >
+                  批量批准
+                </Button>
+              )}
+              {permissions.canReject && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleBatchReject}
+                  disabled={batchActionLoading}
+                  className="h-8 rounded-full text-destructive hover:text-destructive border-destructive/20 hover:bg-destructive/10"
+                >
+                  批量驳回
+                </Button>
+              )}
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setSelectedIds([])}
+                className="h-8 rounded-full"
+              >
+                取消选中
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

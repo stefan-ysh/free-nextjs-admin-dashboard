@@ -1108,10 +1108,10 @@ export default function EmployeeClient({
                   }
                 }}
                 placeholder="搜索姓名/邮箱/电话"
-                className="h-10 w-full pl-10 text-sm"
+                className="w-full pl-10 text-sm"
               />
             </div>
-            <Button variant="secondary" size="sm" onClick={triggerImmediateSearch} className="h-10 px-4">
+            <Button variant="secondary" size="sm" onClick={triggerImmediateSearch} className="px-4">
               查询
             </Button>
           </div>
@@ -1119,7 +1119,7 @@ export default function EmployeeClient({
           <div className="flex flex-wrap items-center gap-2">
             <Drawer open={filterDrawerOpen} onOpenChange={setFilterDrawerOpen} direction="right">
               <DrawerTrigger asChild>
-                <Button variant="outline" size="sm" className="h-10 px-4">
+                <Button variant="outline" size="sm" className="px-4">
                   筛选
                   {activeFilterCount > 0 && (
                     <Badge className="ml-1 rounded-full px-2 py-0 text-[10px]" variant="secondary">
@@ -1137,7 +1137,7 @@ export default function EmployeeClient({
                   <div className="space-y-2">
                     <span className="text-xs font-medium text-muted-foreground">状态</span>
                     <Select value={filters.status} onValueChange={(value) => handleSearch({ status: value as EmployeeFilters['status'] })}>
-                      <SelectTrigger className="h-10">
+                      <SelectTrigger>
                         <SelectValue placeholder="全部状态" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1168,10 +1168,10 @@ export default function EmployeeClient({
                   </div>
                 </DrawerBody>
                 <DrawerFooter>
-                  <Button type="button" variant="outline" onClick={handleResetFilters}>
+                  <Button type="button" variant="outline" size="sm" onClick={handleResetFilters}>
                     重置
                   </Button>
-                  <Button type="button" onClick={() => setFilterDrawerOpen(false)}>
+                  <Button type="button" size="sm" onClick={() => setFilterDrawerOpen(false)}>
                     完成
                   </Button>
                 </DrawerFooter>
@@ -1384,12 +1384,12 @@ export default function EmployeeClient({
           </DrawerBody>
           <DrawerFooter className="px-4 py-3 border-t">
             <DrawerClose asChild>
-              <Button type="button" variant="outline" onClick={handleDialogClose}>
+              <Button type="button" variant="outline" size="sm" onClick={handleDialogClose}>
                 取消
               </Button>
             </DrawerClose>
             {(!selectedEmployee || isEditMode) && (
-              <Button type="submit" form="employee-details-form">
+              <Button type="submit" size="sm" form="employee-details-form">
                 {selectedEmployee ? '保存修改' : '确认新增'}
               </Button>
             )}
@@ -1506,11 +1506,11 @@ export default function EmployeeClient({
           </DrawerBody>
           <DrawerFooter>
             <DrawerClose asChild>
-              <Button type="button" variant="ghost" onClick={() => handleImportDialogChange(false)}>
+              <Button type="button" variant="ghost" size="sm" onClick={() => handleImportDialogChange(false)}>
                 取消
               </Button>
             </DrawerClose>
-            <Button type="button" onClick={handleImportSubmit} disabled={importing} className="gap-1">
+            <Button type="button" size="sm" onClick={handleImportSubmit} disabled={importing} className="gap-1">
               {importing ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
               {importing ? '导入中...' : '开始导入'}
             </Button>

@@ -215,11 +215,11 @@ export default function WarehouseFormDialog({ open, onOpenChange, warehouse, onS
 
         <DrawerFooter>
           <DrawerClose asChild>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
+            <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={submitting}>
               取消
             </Button>
           </DrawerClose>
-          <Button type="submit" form={formId} disabled={submitting}>
+          <Button type="submit" form={formId} disabled={submitting} size="sm">
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isEditMode ? '保存修改' : '创建仓库'}
           </Button>

@@ -274,12 +274,13 @@ export default function PurchasePayConfirmDialog({
           <DialogFooter>
             <Button
               variant="outline"
+              size="sm"
               onClick={() => onOpenChange(false)}
               disabled={busy}
             >
               取消
             </Button>
-            <Button onClick={() => void handlePay()} disabled={busy}>
+            <Button size="sm" onClick={() => void handlePay()} disabled={busy}>
               {busy ? '打款中...' : '确认打款'}
             </Button>
           </DialogFooter>

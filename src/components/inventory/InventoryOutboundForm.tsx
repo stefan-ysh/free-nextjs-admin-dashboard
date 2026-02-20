@@ -282,11 +282,11 @@ export default function InventoryOutboundForm({ onSuccess, onCancel, formId, hid
             {!hideActions && (
                 <div className="flex justify-end gap-3 pt-2">
                     {onCancel && (
-                        <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
+                        <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={submitting}>
                             取消
                         </Button>
                     )}
-                    <Button type="submit" disabled={submitting}>
+                    <Button type="submit" size="sm" disabled={submitting}>
                         {submitting ? '提交中...' : '创建出库单'}
                     </Button>
                 </div>

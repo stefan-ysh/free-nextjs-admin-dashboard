@@ -107,6 +107,7 @@ export default function InventoryOverviewPage() {
             <div className="grid grid-cols-2 gap-3">
               <Button
                 variant="outline"
+                size="sm"
                 className="h-auto flex-col gap-2 py-4 border-border/60 bg-background/50 hover:bg-accent hover:text-accent-foreground"
                 onClick={() => setInboundDrawerOpen(true)}
               >
@@ -115,6 +116,7 @@ export default function InventoryOverviewPage() {
               </Button>
               <Button
                 variant="outline"
+                size="sm"
                 className="h-auto flex-col gap-2 py-4 border-border/60 bg-background/50 hover:bg-accent hover:text-accent-foreground"
                 onClick={() => setOutboundDrawerOpen(true)}
               >
@@ -123,6 +125,7 @@ export default function InventoryOverviewPage() {
               </Button>
               <Button
                 variant="outline"
+                size="sm"
                 className="h-auto flex-col gap-2 py-4 border-border/60 bg-background/50 hover:bg-accent hover:text-accent-foreground"
                 asChild
               >
@@ -257,12 +260,13 @@ export default function InventoryOverviewPage() {
                 <Button
                   type="button"
                   variant="outline"
+                  size="sm"
                   onClick={() => setOutboundDrawerOpen(false)}
                 >
                   取消
                 </Button>
               </DrawerClose>
-              <Button type="submit" form={outboundFormId}>
+              <Button type="submit" form={outboundFormId} size="sm">
                 创建出库单
               </Button>
             </DrawerFooter>

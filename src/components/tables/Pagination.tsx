@@ -44,7 +44,7 @@ const Pagination: React.FC<PaginationProps> = ({
                 onPageSizeChange(Number(value));
               }}
             >
-              <SelectTrigger className="h-8 w-[70px] text-xs">
+              <SelectTrigger className="w-[70px] text-xs">
                 <SelectValue placeholder={pageSize.toString()} />
               </SelectTrigger>
               <SelectContent>
@@ -67,7 +67,7 @@ const Pagination: React.FC<PaginationProps> = ({
           size="sm"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage <= 1}
-          className="h-8 px-3 text-xs"
+          className="px-3 text-xs"
         >
           上一页
         </Button>
@@ -80,7 +80,7 @@ const Pagination: React.FC<PaginationProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={() => onPageChange(1)}
-                className="h-8 w-8 px-0 text-xs"
+                className="w-8 px-0 text-xs"
               >
                 1
               </Button>
@@ -95,7 +95,7 @@ const Pagination: React.FC<PaginationProps> = ({
               variant={currentPage === page ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => onPageChange(page)}
-              className="h-8 w-8 px-0 text-xs font-medium"
+              className="w-8 px-0 text-xs font-medium"
             >
               {page}
             </Button>
@@ -111,7 +111,7 @@ const Pagination: React.FC<PaginationProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={() => onPageChange(safeTotalPages)}
-                className="h-8 w-8 px-0 text-xs"
+                className="w-8 px-0 text-xs"
               >
                 {safeTotalPages}
               </Button>
@@ -129,7 +129,7 @@ const Pagination: React.FC<PaginationProps> = ({
           size="sm"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage >= safeTotalPages}
-          className="h-8 px-3 text-xs"
+          className="px-3 text-xs"
         >
           下一页
         </Button>

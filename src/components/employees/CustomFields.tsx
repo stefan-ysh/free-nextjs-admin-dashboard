@@ -74,6 +74,7 @@ export default function CustomFields({ control, name, disabled = false }: Custom
                                 <Button
                                     type="button"
                                     variant="ghost"
+                                    size="sm"
                                     className="shrink-0"
                                     onClick={() => remove(index)}
                                     disabled={disabled}

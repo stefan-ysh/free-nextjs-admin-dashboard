@@ -271,12 +271,13 @@ export default function ReimbursementDetailDrawer({
               </div>
           </DrawerBody>
           <DrawerFooter>
-            <Button variant="outline" onClick={onClose} disabled={actionLoading}>
+            <Button variant="outline" size="sm" onClick={onClose} disabled={actionLoading}>
               关闭
             </Button>
             {canRejectInDrawer && (
               <Button
                 variant="outline"
+                size="sm"
                 onClick={() => setRejectTarget(record)}
                 disabled={actionLoading}
               >
@@ -285,6 +286,7 @@ export default function ReimbursementDetailDrawer({
             )}
             {canApproveInDrawer && (
               <Button
+                size="sm"
                 onClick={() => void handleApprove()}
                 disabled={actionLoading}
               >
@@ -293,7 +295,7 @@ export default function ReimbursementDetailDrawer({
               </Button>
             )}
             {canOperatePay && (
-              <Button onClick={() => setPayTarget(record)} disabled={actionLoading}>
+              <Button size="sm" onClick={() => setPayTarget(record)} disabled={actionLoading}>
                 {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 标记打款
               </Button>

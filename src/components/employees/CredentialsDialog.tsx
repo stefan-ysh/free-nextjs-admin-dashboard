@@ -54,7 +54,7 @@ export default function CredentialsDialog({
               <div className="text-xs font-medium text-muted-foreground">{account.label}</div>
               <div className="flex items-center gap-2">
                 <Input value={account.value} readOnly />
-                <Button type="button" variant="outline" onClick={() => handleCopy(account.value, account.label)}>
+                <Button type="button" variant="outline" size="sm" onClick={() => handleCopy(account.value, account.label)}>
                   复制
                 </Button>
               </div>
@@ -64,14 +64,14 @@ export default function CredentialsDialog({
             <div className="text-xs font-medium text-muted-foreground">初始密码</div>
             <div className="flex items-center gap-2">
               <Input value={password} readOnly />
-              <Button type="button" variant="outline" onClick={() => handleCopy(password, '初始密码')}>
+              <Button type="button" variant="outline" size="sm" onClick={() => handleCopy(password, '初始密码')}>
                 复制
               </Button>
             </div>
           </div>
         </DialogBody>
         <DialogFooter>
-          <Button type="button" onClick={() => onOpenChange(false)}>
+          <Button type="button" size="sm" onClick={() => onOpenChange(false)}>
             知道了
           </Button>
         </DialogFooter>

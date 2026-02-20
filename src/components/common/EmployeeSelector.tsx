@@ -237,6 +237,7 @@ useEffect(() => {
 							type="button"
 							variant="outline"
 							role="combobox"
+							size="sm"
 							aria-expanded={open}
 							disabled={disabled}
 							className="w-full justify-between"
@@ -262,13 +263,13 @@ useEffect(() => {
 								<Button
 									type="button"
 									variant="outline"
-									size="icon"
+									size="sm"
 									onClick={() => setRefreshKey((prev) => prev + 1)}
 									disabled={loading}
 								>
 									<RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
 								</Button>
-								<Button type="button" variant="ghost" size="icon" onClick={handleClear} disabled={!value}>
+								<Button type="button" variant="ghost" size="sm" onClick={handleClear} disabled={!value}>
 									<XCircle className="h-4 w-4" />
 								</Button>
 							</div>

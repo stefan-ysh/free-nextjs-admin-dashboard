@@ -62,10 +62,10 @@ export function RejectionReasonDialog({
           className="max-h-[70vh]"
           footer={
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={handleClose} disabled={submitting}>
+              <Button variant="outline" size="sm" onClick={handleClose} disabled={submitting}>
                 取消
               </Button>
-              <Button onClick={handleSubmit} disabled={submitting}>
+              <Button onClick={handleSubmit} size="sm" disabled={submitting}>
                 {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 确认驳回
               </Button>

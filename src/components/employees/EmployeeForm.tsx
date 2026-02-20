@@ -452,11 +452,11 @@ export default function EmployeeForm({
 				{!hideActions && (
 					<div className="flex justify-end gap-4 pt-4 border-t">
 						{onCancel && (
-							<Button type="button" variant="outline" onClick={onCancel} disabled={formState.isSubmitting}>
+							<Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={formState.isSubmitting}>
 								取消
 							</Button>
 						)}
-						<Button type="submit" disabled={formState.isSubmitting}>
+						<Button type="submit" size="sm" disabled={formState.isSubmitting}>
 							{formState.isSubmitting ? '保存中...' : '保存'}
 						</Button>
 					</div>

@@ -220,9 +220,9 @@ export default function PurchaseDetailModal({
 					bodyClassName="p-0"
 					footer={
 						<DialogFooter className="gap-2 border-t bg-background/50 px-6 py-4 backdrop-blur-sm sm:justify-end">
-							<Button variant="ghost" onClick={onClose} className="hover:bg-muted">关闭</Button>
+							<Button variant="ghost" size="sm" onClick={onClose} className="hover:bg-muted">关闭</Button>
 							{actions.map((action) => (
-								<Button key={action.key} variant={action.variant} onClick={action.handler} disabled={busy} className="shadow-sm">
+								<Button key={action.key} variant={action.variant} size="sm" onClick={action.handler} disabled={busy} className="shadow-sm">
 									{action.label}
 								</Button>
 							))}
@@ -277,7 +277,7 @@ export default function PurchaseDetailModal({
                         </div>
 
                         {/* Tabs Navigation */}
-    					<Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="space-y-4">
+    					<Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'overview' | 'workflow' | 'finance')} className="space-y-4">
     						<TabsList className="bg-muted/50 p-1">
                                 <TabsTrigger value="overview" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                                     <FileText className="h-4 w-4" /> 概览 & 凭证
@@ -332,7 +332,7 @@ export default function PurchaseDetailModal({
                                                     <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
                                                         <Receipt className="h-4 w-4 text-primary" /> 凭证画廊
                                                     </h3>
-                                                    {['attachments', 'invoiceImages', 'receiptImages'].some(key => (purchase as any)[key]?.length) ? (
+                                                    {['attachments', 'invoiceImages', 'receiptImages'].some(key => (purchase[key as keyof PurchaseDetail] as string[] | undefined)?.length) ? (
                                                         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                                                             {purchase.attachments?.map((url, i) => <AttachmentCard key={`att-${i}`} url={url} type="file" />)}
                                                             {purchase.invoiceImages?.map((url, i) => <AttachmentCard key={`inv-${i}`} url={url} type="image" />)}

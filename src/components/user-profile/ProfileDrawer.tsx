@@ -188,11 +188,11 @@ export default function ProfileDrawer({ open, onOpenChange }: ProfileDrawerProps
 
                 <DrawerFooter className="gap-2 border-t border-border/60 pt-4">
                     <DrawerClose asChild>
-                        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+                        <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={saving}>
                             取消
                         </Button>
                     </DrawerClose>
-                    <Button onClick={handleSave} disabled={loading || saving}>
+                    <Button size="sm" onClick={handleSave} disabled={loading || saving}>
                         {saving ? "保存中..." : "保存"}
                     </Button>
                 </DrawerFooter>

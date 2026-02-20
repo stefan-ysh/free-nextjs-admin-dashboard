@@ -77,7 +77,7 @@ export default function FinanceForm({
     date: initialData?.date?.split('T')[0] ?? formatDateOnly(new Date()) ?? '',
     description: initialData?.description ?? '',
     tags: initialData?.tags ?? [],
-    handlerId: (initialData?.metadata as any)?.handlerId ?? currentUserId,
+    handlerId: (initialData?.metadata as Record<string, unknown>)?.handlerId as string || currentUserId,
     invoice: {
       type: initialData?.invoice?.type ?? InvoiceType.NONE,
       status: initialData?.invoice?.status ?? InvoiceStatus.NOT_REQUIRED,
@@ -514,11 +514,11 @@ export default function FinanceForm({
         {!hideActions && (
           <div className="flex justify-end gap-3">
             {onCancel && (
-              <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
+              <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={loading}>
                 取消
               </Button>
             )}
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" size="sm" disabled={loading}>
               {loading ? '提交中...' : initialData ? '更新' : '添加'}
             </Button>
           </div>

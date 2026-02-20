@@ -250,7 +250,7 @@ export default function EmployeeTable({
 									<TableCell className="px-4 py-4 text-right">
 										<DropdownMenu>
 											<DropdownMenuTrigger asChild>
-												<Button variant="ghost" size="icon" className="h-8 w-8">
+												<Button variant="ghost" size="sm" className="h-8 w-8">
 													<MoreHorizontal className="h-4 w-4" />
 													<span className="sr-only">打开操作菜单</span>
 												</Button>

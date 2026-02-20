@@ -4,7 +4,7 @@ import PurchaseStatusBadge from './PurchaseStatusBadge';
 import type { PurchaseRecord, PaymentMethod, PurchaseOrganization } from '@/types/purchase';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,6 +68,9 @@ type PurchaseTableProps = {
 	onSubmitReimbursement: (purchase: PurchaseRecord) => void;
 	onReceive: (purchase: PurchaseRecord) => void;
 	getRowClassName?: (purchase: PurchaseRecord) => string;
+	selectedIds?: string[];
+	onSelect?: (id: string, checked: boolean) => void;
+	onSelectAll?: (checked: boolean) => void;
 };
 
 function formatDate(value: string): string {
@@ -77,11 +80,6 @@ function formatDate(value: string): string {
 function formatQuantity(value: number): string {
 	if (!Number.isFinite(value)) return '0';
 	return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
-}
-
-function getInitials(name?: string | null) {
-    if (!name) return 'U';
-    return name.slice(0, 2).toUpperCase();
 }
 
 export default function PurchaseTable({
@@ -102,6 +100,9 @@ export default function PurchaseTable({
 	onSubmitReimbursement,
 	onReceive,
 	getRowClassName,
+	selectedIds = [],
+	onSelect,
+	onSelectAll,
 }: PurchaseTableProps) {
 	const scrollContainerClassName = cn(
 		'custom-scrollbar',
@@ -143,7 +144,16 @@ export default function PurchaseTable({
 						const inboundQuantity = Number(purchase.inboundQuantity ?? 0);
 						const totalQuantity = Number(purchase.quantity ?? 0);
 						return (
-							<div key={purchase.id} className={cn("rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm", rowClassName)}>
+							<div key={purchase.id} className={cn("relative rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm", rowClassName)}>
+								{onSelect && (
+									<div className="absolute top-4 right-4" onClick={(e) => e.stopPropagation()}>
+										<Checkbox
+											checked={selectedIds.includes(purchase.id)}
+											onCheckedChange={(checked) => onSelect(purchase.id, !!checked)}
+											aria-label="Select row"
+										/>
+									</div>
+								)}
                                 
                                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                                     <div>
@@ -193,7 +203,16 @@ export default function PurchaseTable({
 				>
 					<TableHeader className="bg-gray-50/50 dark:bg-gray-900/50 sticky top-0 z-10 backdrop-blur-sm">
 						<TableRow className="hover:bg-transparent border-b border-gray-200 dark:border-gray-800">
-							<TableHead className="min-w-[240px] px-4 py-3 pl-6">物品 / 单号</TableHead>
+							<TableHead className="w-12 px-4 py-3 text-center pl-6">
+								{onSelectAll && (
+									<Checkbox
+										checked={purchases.length > 0 && selectedIds.length === purchases.length}
+										onCheckedChange={(checked) => onSelectAll(!!checked)}
+										aria-label="Select all"
+									/>
+								)}
+							</TableHead>
+							<TableHead className="min-w-[240px] px-4 py-3">物品 / 单号</TableHead>
                             <TableHead className="hidden md:table-cell w-[180px] px-4 py-3">申请人</TableHead>
 							<TableHead className="w-[120px] px-4 py-3">金额</TableHead>
 							<TableHead className="w-[140px] px-4 py-3">状态</TableHead>
@@ -214,7 +233,16 @@ export default function PurchaseTable({
                                     className={cn("group transition-colors hover:bg-muted/40 cursor-pointer", rowClassName)}
                                     onClick={() => onView(purchase)}
                                 >
-									<TableCell className="px-4 py-3 pl-6 align-top">
+									<TableCell className="px-4 py-3 pl-6 text-center" onClick={(e) => e.stopPropagation()}>
+										{onSelect && (
+											<Checkbox
+												checked={selectedIds.includes(purchase.id)}
+												onCheckedChange={(checked) => onSelect(purchase.id, !!checked)}
+												aria-label="Select row"
+											/>
+										)}
+									</TableCell>
+									<TableCell className="px-4 py-3 align-top">
 										<div className="font-medium text-foreground">{purchase.itemName}</div>
 										<div className="font-mono text-xs text-muted-foreground mt-0.5">{purchase.purchaseNumber}</div>
 									</TableCell>

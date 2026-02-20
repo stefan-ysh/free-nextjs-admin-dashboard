@@ -223,7 +223,7 @@ export function SearchableEntitySelect<T>({
           <button
             type="button"
             className={cn(
-              'flex h-10 w-full items-center justify-between rounded-xl border border-input bg-card px-3 py-2 text-sm text-left transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+              'flex w-full items-center justify-between rounded-xl border border-input bg-card px-3 py-2 text-sm text-left transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
               !selectedOption && 'text-muted-foreground'
             )}
             disabled={disabled}
@@ -240,11 +240,11 @@ export function SearchableEntitySelect<T>({
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={searchPlaceholder}
-                className="h-9 w-full pl-9"
+                className="w-full pl-9"
                 autoFocus
               />
             </div>
-            <Button type="button" size="icon" variant="ghost" onClick={() => setRefreshKey((prev) => prev + 1)} disabled={loading}>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setRefreshKey((prev) => prev + 1)} disabled={loading}>
               <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
             </Button>
           </div>

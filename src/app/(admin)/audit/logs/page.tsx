@@ -211,7 +211,7 @@ export default function AuditLogsPage() {
             onChange={(e) => setEndDate(e.target.value)}
             placeholder="结束日期"
           />
-          <Button onClick={handleFilterChange}>查询</Button>
+          <Button variant="outline" size="sm" onClick={handleFilterChange}>查询</Button>
         </div>
       </div>
 

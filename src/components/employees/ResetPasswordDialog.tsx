@@ -68,13 +68,14 @@ export default function ResetPasswordDialog({
           </div>
         </DialogBody>
         <DialogFooter className="gap-2">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+          <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={saving}>
             取消
           </Button>
           <Button
             type="button"
             onClick={() => onSubmit({ newPassword, confirmPassword })}
             disabled={saving}
+            size="sm"
           >
             确认重置
           </Button>

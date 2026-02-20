@@ -8,7 +8,6 @@ import {
   DrawerBody,
   DrawerClose,
   DrawerContent,
-  DrawerDescription,
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
@@ -253,11 +252,11 @@ export default function PurchaseInboundDrawer({
         </DrawerBody>
         <DrawerFooter>
           <DrawerClose asChild>
-            <Button variant="outline" disabled={submitting}>
+            <Button variant="outline" size="sm" disabled={submitting}>
               取消
             </Button>
           </DrawerClose>
-          <Button onClick={handleSubmit} disabled={submitting || loading}>
+          <Button onClick={handleSubmit} size="sm" disabled={submitting || loading}>
             {submitting ? '入库中...' : '确认入库'}
           </Button>
         </DrawerFooter>

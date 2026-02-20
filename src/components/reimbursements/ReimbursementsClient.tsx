@@ -11,6 +11,7 @@ import DatePicker from '@/components/ui/DatePicker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Drawer, DrawerBody, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Textarea } from '@/components/ui/textarea';
@@ -32,6 +33,7 @@ import RejectionReasonDialog from '@/components/purchases/RejectionReasonDialog'
 import PaymentConfirmDialog from './PaymentConfirmDialog';
 import ReimbursementDetailDrawer from './ReimbursementDetailDrawer';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useConfirm } from '@/hooks/useConfirm';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { formatDateOnly } from '@/lib/dates';
 import type {
@@ -162,6 +164,7 @@ export default function ReimbursementsClient() {
   const { user, hasPermission, loading: permissionLoading } = usePermissions();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
 
   // Pagination state
   const [page, setPage] = useState(() => parseInt(searchParams.get('page') || '1', 10));
@@ -172,6 +175,8 @@ export default function ReimbursementsClient() {
   const [rejectTarget, setRejectTarget] = useState<ReimbursementRecord | null>(null);
   const [payTarget, setPayTarget] = useState<ReimbursementRecord | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [batchActionLoading, setBatchActionLoading] = useState(false);
   const [scope, setScope] = useState<'mine' | 'approval' | 'pay' | 'all'>('mine');
   const [search, setSearch] = useState('');
 
@@ -219,6 +224,7 @@ export default function ReimbursementsClient() {
 
     // Always default to 'mine' so users see their own submissions first
     setScope('mine');
+    setSelectedIds([]);
   }, [scopeOptions, searchParams]);
 
   const role = user?.primaryRole;
@@ -277,8 +283,87 @@ export default function ReimbursementsClient() {
   const loading = isListLoading || isListFetching;
 
   const fetchList = useCallback(async () => {
+    setSelectedIds([]);
     await queryClient.invalidateQueries({ queryKey: ['reimbursements', 'list'] });
   }, [queryClient]);
+
+  const handleSelect = useCallback((id: string, checked: boolean) => {
+    setSelectedIds((prev) =>
+      checked ? [...prev, id] : prev.filter((i) => i !== id)
+    );
+  }, []);
+
+  const handleSelectAll = useCallback((checked: boolean) => {
+    setSelectedIds(checked ? records.map((r) => r.id) : []);
+  }, [records]);
+
+  const handleBatchApprove = async () => {
+    if (selectedIds.length === 0) return;
+    const ok = await confirm({
+      title: '批量审批通过',
+      description: `确定要批准选中的 ${selectedIds.length} 项报销申请吗？`,
+    });
+    if (!ok) return;
+
+    setBatchActionLoading(true);
+    try {
+      const results = await Promise.all(
+        selectedIds.map(async (id) => {
+          try {
+            await runAction(id, 'approve');
+            return true;
+          } catch {
+            return false;
+          }
+        })
+      );
+      const successCount = results.filter(Boolean).length;
+      if (successCount > 0) {
+        toast.success(`成功审批 ${successCount} 项${successCount < selectedIds.length ? `，${selectedIds.length - successCount} 项失败` : ''}`);
+        await fetchList();
+      } else {
+        toast.error('批量审批失败');
+      }
+    } catch {
+      toast.error('批量操作过程中发生错误');
+    } finally {
+      setBatchActionLoading(false);
+    }
+  };
+
+  const handleBatchPay = async () => {
+    if (selectedIds.length === 0) return;
+    const ok = await confirm({
+      title: '批量标记打款',
+      description: `确定要对选中的 ${selectedIds.length} 项报销进行打款标记吗？`,
+    });
+    if (!ok) return;
+
+    setBatchActionLoading(true);
+    try {
+      const results = await Promise.all(
+        selectedIds.map(async (id) => {
+          try {
+            await runAction(id, 'pay', { note: '批量操作统一打款' });
+            return true;
+          } catch {
+            return false;
+          }
+        })
+      );
+      const successCount = results.filter(Boolean).length;
+      if (successCount > 0) {
+        toast.success(`成功打款 ${successCount} 项${successCount < selectedIds.length ? `，${selectedIds.length - successCount} 项失败` : ''}`);
+        await fetchList();
+      } else {
+        toast.error('批量打款失败');
+      }
+    } catch {
+      toast.error('批量操作过程中发生错误');
+    } finally {
+      setBatchActionLoading(false);
+    }
+  };
 
   const handleExport = useCallback(async () => {
     if (loading) return;
@@ -425,6 +510,7 @@ export default function ReimbursementsClient() {
 
   const handlePageChange = useCallback((newPage: number) => {
     setPage(newPage);
+    setSelectedIds([]);
   }, []);
 
   useEffect(() => {
@@ -883,13 +969,13 @@ export default function ReimbursementsClient() {
             placeholder="按单号/标题/分类搜索"
             className="w-[260px]"
           />
-          <Button variant="outline" onClick={handleExport} disabled={loading}>
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={loading}>
             导出
           </Button>
-          <Button variant="outline" onClick={() => void fetchList()} disabled={loading}>
+          <Button variant="outline" size="sm" onClick={() => void fetchList()} disabled={loading}>
             刷新
           </Button>
-          {canCreate && <Button onClick={openCreateDrawer}>发起报销</Button>}
+          {canCreate && <Button size="sm" onClick={openCreateDrawer}>发起报销</Button>}
         </div>
       </div>
 
@@ -903,14 +989,21 @@ export default function ReimbursementsClient() {
           ) : (
             records.map((row) => (
               <div key={row.id} className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm">
-                <div className="flex items-start justify-between gap-3">
+                <div className="relative flex items-start justify-between gap-3">
                   <div>
                     <div className="font-semibold text-foreground text-sm">{row.title}</div>
                     <div className="text-xs text-muted-foreground mt-1">{row.reimbursementNumber}</div>
                   </div>
-                  <span className={`rounded-full border px-2 py-0.5 text-xs whitespace-nowrap ${STATUS_STYLES[row.status]}`}>
-                    {STATUS_LABELS[row.status]}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-full border px-2 py-0.5 text-xs whitespace-nowrap ${STATUS_STYLES[row.status]}`}>
+                      {STATUS_LABELS[row.status]}
+                    </span>
+                    <Checkbox
+                      checked={selectedIds.includes(row.id)}
+                    onCheckedChange={(checked: boolean | 'indeterminate') => handleSelect(row.id, !!checked)}
+                      aria-label="Select row"
+                    />
+                  </div>
                 </div>
                 
                 <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
@@ -987,6 +1080,13 @@ export default function ReimbursementsClient() {
           <Table stickyHeader scrollAreaClassName="custom-scrollbar max-h-[calc(100vh-280px)]" className="whitespace-nowrap">
             <TableHeader className="bg-gray-50/50 dark:bg-gray-900/50 sticky top-0 z-10 backdrop-blur-sm">
               <TableRow>
+                <TableHead className="w-12 px-4 text-center">
+                  <Checkbox
+                    checked={records.length > 0 && selectedIds.length === records.length}
+                    onCheckedChange={(checked: boolean | 'indeterminate') => handleSelectAll(!!checked)}
+                    aria-label="Select all"
+                  />
+                </TableHead>
                 <TableHead>报销单号</TableHead>
                 <TableHead>标题</TableHead>
                 <TableHead>申请人</TableHead>
@@ -1015,6 +1115,13 @@ export default function ReimbursementsClient() {
               ) : (
                 records.map((row) => (
                   <TableRow key={row.id}>
+                    <TableCell className="px-4 text-center">
+                      <Checkbox
+                        checked={selectedIds.includes(row.id)}
+                        onCheckedChange={(checked: boolean | 'indeterminate') => handleSelect(row.id, !!checked)}
+                        aria-label="Select row"
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">{row.reimbursementNumber}</TableCell>
                     <TableCell className="min-w-[150px] whitespace-normal">
                       <div className="max-w-[200px] truncate" title={row.title}>
@@ -1479,11 +1586,12 @@ export default function ReimbursementsClient() {
 
           </DrawerBody>
           <DrawerFooter>
-            <Button variant="outline" onClick={() => setDrawerOpen(false)} disabled={submitting}>
+            <Button variant="outline" size="sm" onClick={() => setDrawerOpen(false)} disabled={submitting}>
               取消
             </Button>
             <Button
               variant="outline"
+              size="sm"
               onClick={() => void submitForm('draft')}
               disabled={
                 submitting ||
@@ -1493,6 +1601,7 @@ export default function ReimbursementsClient() {
               {submitting && submitIntent === 'draft' ? '保存中...' : editingId ? '保存修改' : '保存草稿'}
             </Button>
             <Button
+              size="sm"
               onClick={() => void submitForm('submit')}
               disabled={
                 submitting ||
@@ -1544,6 +1653,47 @@ export default function ReimbursementsClient() {
         onSubmit={confirmPay}
         submitting={actionLoading}
       />
+
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center gap-4 py-2 px-4 bg-background border shadow-2xl rounded-full">
+            <span className="text-sm font-medium whitespace-nowrap pl-2">
+              已选中 <span className="text-primary">{selectedIds.length}</span> 项
+            </span>
+            <div className="w-px h-4 bg-border" />
+            <div className="flex items-center gap-2">
+              {canApprove && (
+                <Button 
+                  size="sm" 
+                  onClick={handleBatchApprove}
+                  disabled={batchActionLoading}
+                  className="h-8 rounded-full"
+                >
+                  批量通过
+                </Button>
+              )}
+              {canPay && (
+                <Button 
+                  size="sm" 
+                  onClick={handleBatchPay}
+                  disabled={batchActionLoading}
+                  className="h-8 rounded-full"
+                >
+                  批量打款
+                </Button>
+              )}
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setSelectedIds([])}
+                className="h-8 rounded-full"
+              >
+                取消选中
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useConfirm } from '@/hooks/useConfirm';
 import InventoryItemFormDialog from '@/components/inventory/InventoryItemFormDialog';
@@ -31,6 +32,8 @@ export default function InventoryItemsPage() {
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
 
   const { data, isLoading, refetch } = useInventoryItems({ page, pageSize, search });
   const items = data?.data ?? [];
@@ -83,12 +86,58 @@ export default function InventoryItemsPage() {
     try {
       const res = await fetch(`/api/inventory/items/${item.id}`, { method: 'DELETE' });
       const json = await res.json();
-      if (!res.ok) { alert(json.error || '删除失败'); return; }
+      if (!res.ok) { toast.error(json.error || '删除失败'); return; }
       toast.success('删除成功');
       queryClient.invalidateQueries({ queryKey: ['inventory-items'] });
     } catch {
-      alert('网络错误');
+      toast.error('网络错误');
     }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.length === 0) return;
+    const ok = await confirm({
+      title: '批量删除商品',
+      description: `确定要删除选中的 ${selectedIds.length} 个商品吗？此操作不可撤回。`,
+      confirmText: '批量删除',
+    });
+    if (!ok) return;
+
+    setIsBatchDeleting(true);
+    try {
+      const results = await Promise.all(
+        selectedIds.map(async (id) => {
+          try {
+            const res = await fetch(`/api/inventory/items/${id}`, { method: 'DELETE' });
+            return res.ok;
+          } catch {
+            return false;
+          }
+        })
+      );
+      const successCount = results.filter(Boolean).length;
+      if (successCount > 0) {
+        toast.success(`成功删除 ${successCount} 个商品${successCount < selectedIds.length ? `，${selectedIds.length - successCount} 个失败` : ''}`);
+        setSelectedIds([]);
+        queryClient.invalidateQueries({ queryKey: ['inventory-items'] });
+      } else {
+        toast.error('批量删除失败');
+      }
+    } catch {
+      toast.error('批量操作过程中出现错误');
+    } finally {
+      setIsBatchDeleting(false);
+    }
+  };
+
+  const handleSelect = (id: string, checked: boolean) => {
+    setSelectedIds((prev) =>
+      checked ? [...prev, id] : prev.filter((i) => i !== id)
+    );
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    setSelectedIds(checked ? items.map((i) => i.id) : []);
   };
 
   /* ─── Permission gate ─── */
@@ -139,6 +188,12 @@ export default function InventoryItemsPage() {
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-border bg-muted text-left text-xs font-medium text-muted-foreground">
+                <th className="w-10 px-4 py-3 text-center">
+                  <Checkbox
+                    checked={items.length > 0 && selectedIds.length === items.length}
+                    onCheckedChange={(checked: boolean | 'indeterminate') => handleSelectAll(!!checked)}
+                  />
+                </th>
                 <th className="px-4 py-3">商品名称</th>
                 <th className="px-4 py-3">SKU</th>
                 <th className="px-4 py-3">分类</th>
@@ -168,6 +223,12 @@ export default function InventoryItemsPage() {
               ) : (
                 items.map((item) => (
                   <tr key={item.id} className="transition-colors hover:bg-muted/20">
+                    <td className="px-4 py-3 text-center">
+                      <Checkbox
+                        checked={selectedIds.includes(item.id)}
+                        onCheckedChange={(checked: boolean | 'indeterminate') => handleSelect(item.id, !!checked)}
+                      />
+                    </td>
                     <td className="px-4 py-3 font-medium text-foreground">{item.name}</td>
                     <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{item.sku}</td>
                     <td className="px-4 py-3">
@@ -193,10 +254,10 @@ export default function InventoryItemsPage() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)}>
+                        <Button variant="ghost" size="sm" className="h-7 w-7" onClick={() => openEdit(item)}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(item)}>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(item)}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
@@ -240,6 +301,36 @@ export default function InventoryItemsPage() {
           queryClient.invalidateQueries({ queryKey: ['inventory-items'] });
         }}
       />
+
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center gap-4 py-2 px-4 bg-background border shadow-2xl rounded-full">
+            <span className="text-sm font-medium whitespace-nowrap pl-2">
+              已选中 <span className="text-primary">{selectedIds.length}</span> 项
+            </span>
+            <div className="w-px h-4 bg-border" />
+            <div className="flex items-center gap-2">
+              <Button 
+                size="sm" 
+                variant="destructive"
+                onClick={handleBatchDelete}
+                disabled={isBatchDeleting}
+                className="h-8 rounded-full"
+              >
+                批量删除
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setSelectedIds([])}
+                className="h-8 rounded-full"
+              >
+                取消选中
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -742,6 +742,7 @@ export default function PurchaseForm({
             <Button
               type="button"
               variant="outline"
+              size="sm"
               onClick={onCancel}
               disabled={isSubmitting}
               className="min-w-[100px]"
@@ -749,7 +750,7 @@ export default function PurchaseForm({
               取消
             </Button>
           ) : null}
-          <Button type="submit" disabled={isSubmitting} className="min-w-[120px]">
+          <Button type="submit" size="sm" disabled={isSubmitting} className="min-w-[120px]">
             {isSubmitting ? (mode === 'create' ? '提交中...' : '保存中...') : mode === 'create' ? '提交采购申请' : '保存修改'}
           </Button>
         </div>

@@ -497,7 +497,7 @@ export default function FinanceClient({
                                     <div className="space-y-2">
                                         <span className="text-xs font-medium text-muted-foreground">时间范围</span>
                                         <Select value={currentRange} onValueChange={handleRangeChange}>
-                                            <SelectTrigger className="h-10 w-full">
+                                            <SelectTrigger className="w-full">
                                                 <SelectValue placeholder="时间范围" />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -514,7 +514,7 @@ export default function FinanceClient({
                                     <div className="space-y-2">
                                         <span className="text-xs font-medium text-muted-foreground">收支类型</span>
                                         <Select value={selectedType} onValueChange={handleTypeChange}>
-                                            <SelectTrigger className="h-10">
+                                            <SelectTrigger>
                                                 <SelectValue placeholder="全部" />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -527,7 +527,7 @@ export default function FinanceClient({
                                     <div className="space-y-2">
                                         <span className="text-xs font-medium text-muted-foreground">分类</span>
                                         <Select value={categoryValue} onValueChange={handleCategoryChange}>
-                                            <SelectTrigger className="h-10">
+                                            <SelectTrigger>
                                                 <SelectValue placeholder="全部分类" />
                                             </SelectTrigger>
                                             <SelectContent className="max-h-72 overflow-y-auto">
@@ -554,7 +554,7 @@ export default function FinanceClient({
                                                 type="number"
                                                 inputMode="decimal"
                                                 placeholder="Min"
-                                                className="h-10 px-3 text-xs"
+                                                className="px-3 text-xs"
                                                 value={minAmountInput}
                                                 onChange={(e) => setMinAmountInput(e.target.value)}
                                             />
@@ -562,7 +562,7 @@ export default function FinanceClient({
                                                 type="number"
                                                 inputMode="decimal"
                                                 placeholder="Max"
-                                                className="h-10 px-3 text-xs"
+                                                className="px-3 text-xs"
                                                 value={maxAmountInput}
                                                 onChange={(e) => setMaxAmountInput(e.target.value)}
                                             />
@@ -582,7 +582,6 @@ export default function FinanceClient({
                                                 });
                                             }}
                                             placeholder="全部人员"
-                                            className="h-10"
                                         />
                                     </div>
                                 </DrawerBody>
@@ -590,12 +589,14 @@ export default function FinanceClient({
                                     <Button
                                         type="button"
                                         variant="outline"
+                                        size="sm"
                                         onClick={handleResetFilters}
                                     >
                                         重置
                                     </Button>
                                     <Button
                                         type="button"
+                                        size="sm"
                                         onClick={() => {
                                             handleApplyFilters();
                                             setFilterDrawerOpen(false);
@@ -725,6 +726,7 @@ export default function FinanceClient({
                                             <Button
                                                 type="button"
                                                 variant="outline"
+                                                size="sm"
                                                 onClick={() => {
                                                     setIsBudgetDrawerOpen(false);
                                                     resetBudgetForm();
@@ -733,7 +735,7 @@ export default function FinanceClient({
                                                 取消
                                             </Button>
                                         </DrawerClose>
-                                        <Button type="button" onClick={handleBudgetSubmit} disabled={budgetSubmitting}>
+                                        <Button type="button" size="sm" onClick={handleBudgetSubmit} disabled={budgetSubmitting}>
                                             {budgetSubmitting ? '保存中...' : editingBudgetAdjustmentId ? '更新调整' : '保存调整'}
                                         </Button>
                                     </DrawerFooter>

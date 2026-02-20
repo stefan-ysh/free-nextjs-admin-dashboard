@@ -103,11 +103,11 @@ export default function InventoryReserveDialog({
             {error && <p className="text-xs text-rose-500">{error}</p>}
           </div>
         </DialogBody>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={submitting}>
             取消
           </Button>
-          <Button onClick={handleSubmit} disabled={submitting}>
+          <Button size="sm" onClick={handleSubmit} disabled={submitting}>
             {mode === 'reserve' ? '确认预留' : '确认释放'}
           </Button>
         </DialogFooter>

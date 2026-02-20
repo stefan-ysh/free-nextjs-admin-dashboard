@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Loader2 } from 'lucide-react';
 
@@ -88,7 +88,7 @@ export default function RoleAssignmentDialog({
 
   const canSubmit = Boolean(employee?.userId && selectedRoles.length > 0);
 
-  const handleToggleRole = (role: UserRole, checked: boolean) => {
+  const handleToggleRole = useCallback((role: UserRole, checked: boolean) => {
     setLocalError(null);
     setSelectedRoles((prev) => {
       if (checked) {
@@ -103,7 +103,7 @@ export default function RoleAssignmentDialog({
       }
       return next;
     });
-  };
+  }, [primaryRole]);
 
   const handleSubmit = () => {
     if (!employee?.userId) {
@@ -174,7 +174,7 @@ export default function RoleAssignmentDialog({
           </div>
         );
       }),
-    [primaryRole, selectedRoles]
+    [primaryRole, selectedRoles, handleToggleRole]
   );
 
   const employeeName = employee?.displayName || employee?.email || employee?.employeeCode || '未命名';
@@ -193,10 +193,10 @@ export default function RoleAssignmentDialog({
           bodyClassName="space-y-4"
           footer={
             <DialogFooter className="gap-2">
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
                 取消
               </Button>
-              <Button type="button" onClick={handleSubmit} disabled={!canSubmit || saving} className="gap-2">
+              <Button type="button" size="sm" onClick={handleSubmit} disabled={!canSubmit || saving} className="gap-2">
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}
                 保存角色
               </Button>

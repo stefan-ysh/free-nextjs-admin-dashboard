@@ -130,10 +130,10 @@ export default function InventoryInboundPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-lg font-semibold">到货入库</h1>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => void fetchInboundMovements()} disabled={movementsLoading}>
+            <Button size="sm" variant="outline" onClick={() => void fetchInboundMovements()} disabled={movementsLoading}>
               刷新
             </Button>
-            <Button onClick={() => setInboundDrawerOpen(true)}>创建入库</Button>
+            <Button size="sm" onClick={() => setInboundDrawerOpen(true)}>创建入库</Button>
           </div>
         </div>
       </div>
@@ -223,11 +223,11 @@ export default function InventoryInboundPage() {
             </div>
             <DrawerFooter className="border-t px-6 py-4">
               <DrawerClose asChild>
-                <Button type="button" variant="outline" onClick={() => setInboundDrawerOpen(false)}>
+                <Button type="button" size="sm" variant="outline" onClick={() => setInboundDrawerOpen(false)}>
                   取消
                 </Button>
               </DrawerClose>
-              <Button type="submit" form={inboundFormId}>
+              <Button type="submit" size="sm" form={inboundFormId}>
                 确认入库
               </Button>
             </DrawerFooter>
