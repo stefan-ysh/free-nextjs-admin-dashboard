@@ -570,7 +570,9 @@ export default function WorkflowWorkbenchClient({
           statusLabel: statusText(item),
           statusClass: statusBadgeClass(item.status),
           actionLabel: '去处理',
-          onAction: () => openPurchaseDetail(item.id),
+          onAction: () => {
+            window.location.href = `/purchases/${item.id}/edit`;
+          },
         }))
       );
     }

@@ -577,7 +577,7 @@ async function pickAutoApproverId(): Promise<string> {
       WHERE e.is_active = 1
         AND (
           e.primary_role = 'finance'
-          OR JSON_CONTAINS(COALESCE(e.roles, JSON_ARRAY()), JSON_QUOTE('finance'), '$')
+          OR COALESCE(e.roles, '') LIKE '%"finance"%'
         )
       ORDER BY
         COALESCE(approver_load.pending_count, 0) ASC,

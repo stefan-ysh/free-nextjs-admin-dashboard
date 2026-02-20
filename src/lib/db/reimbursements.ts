@@ -313,7 +313,7 @@ async function pickAutoApproverId(orgType: ReimbursementOrganizationType): Promi
       WHERE e.is_active = 1
         AND (
           e.primary_role = ?
-          OR JSON_CONTAINS(COALESCE(e.roles, JSON_ARRAY()), JSON_QUOTE(?), '$')
+          OR COALESCE(e.roles, '') LIKE CONCAT('%"', ?, '"%')
         )
       ORDER BY
         COALESCE(approver_load.pending_count, 0) ASC,

@@ -560,7 +560,7 @@ export async function listUsers(params: ListUsersParams = {}): Promise<ListUsers
 
   // 角色筛选
   if (params.roles && params.roles.length > 0) {
-    const roleClauses = params.roles.map(() => 'JSON_CONTAINS(roles, JSON_QUOTE(?), "$")');
+    const roleClauses = params.roles.map(() => "COALESCE(roles, '') LIKE CONCAT('%\"', ?, '\"%')");
     conditions.push(`(${roleClauses.join(' OR ')})`);
     params.roles.forEach(role => values.push(role));
   }

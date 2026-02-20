@@ -898,9 +898,9 @@ export default function ReimbursementsClient() {
         </div>
       </div>
 
-      <div className="surface-card">
-        <Table>
-          <TableHeader>
+      <div className="surface-card flex-1 min-h-0 flex flex-col">
+        <Table stickyHeader scrollAreaClassName="custom-scrollbar max-h-[calc(100vh-280px)]">
+          <TableHeader className="bg-gray-50/50 dark:bg-gray-900/50 sticky top-0 z-10 backdrop-blur-sm">
             <TableRow>
               <TableHead>报销单号</TableHead>
               <TableHead>标题</TableHead>

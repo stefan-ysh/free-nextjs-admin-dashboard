@@ -178,11 +178,11 @@ export async function listFinanceRecipientIds(orgType?: 'school' | 'company') {
   const pool = mysqlPool();
   const schoolClause = `
          primary_role = 'finance_school'
-         OR JSON_CONTAINS(roles, JSON_QUOTE('finance_school'), '$')
+         OR COALESCE(roles, '') LIKE '%"finance_school"%'
   `;
   const companyClause = `
          primary_role = 'finance_company'
-         OR JSON_CONTAINS(roles, JSON_QUOTE('finance_company'), '$')
+         OR COALESCE(roles, '') LIKE '%"finance_company"%'
   `;
   const bothClause = `${schoolClause} OR ${companyClause}`;
   const scopedFinanceClause = orgType === 'school' ? schoolClause : orgType === 'company' ? companyClause : bothClause;
@@ -204,7 +204,7 @@ export async function listSuperAdminRecipientIds() {
      WHERE is_active = 1
        AND (
          primary_role = 'super_admin'
-         OR JSON_CONTAINS(roles, JSON_QUOTE('super_admin'), '$')
+         OR COALESCE(roles, '') LIKE '%"super_admin"%'
        )`
   );
   return rows.map((row) => row.id);
