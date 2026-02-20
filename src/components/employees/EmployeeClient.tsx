@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { Plus, RefreshCcw, Search, Download, Upload, FileJson } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import Papa from 'papaparse';
 import EmployeeForm from './EmployeeForm';
 import EmployeeStatusHistory from './EmployeeStatusHistory';
@@ -296,15 +297,75 @@ export default function EmployeeClient({
   initialPage = 1,
   initialPageSize = 20,
 }: EmployeeClientProps) {
+  const { hasPermission, loading: permissionLoading } = usePermissions();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const confirm = useConfirm();
+  const hasFetchedInitial = useRef(initialData.length > 0);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSearchTermRef = useRef(DEFAULT_FILTERS.search);
+
+  const permissionFlags = useMemo(() => {
+    if (permissionLoading) {
+      return {
+        canViewEmployees: false,
+        canCreateEmployee: false,
+        canUpdateEmployee: false,
+        canDeleteEmployee: false,
+        canAssignRoles: false,
+      };
+    }
+
+    return {
+      canViewEmployees: hasPermission('USER_VIEW_ALL'),
+      canCreateEmployee: hasPermission('USER_CREATE'),
+      canUpdateEmployee: hasPermission('USER_UPDATE'),
+      canDeleteEmployee: hasPermission('USER_DELETE'),
+      canAssignRoles: hasPermission('USER_ASSIGN_ROLES'),
+    };
+  }, [hasPermission, permissionLoading]);
+
+  const { canViewEmployees, canCreateEmployee, canUpdateEmployee, canDeleteEmployee, canAssignRoles } = permissionFlags;
+
   const [filters, setFilters] = useState<EmployeeFilters>(DEFAULT_FILTERS);
   const [searchInput, setSearchInput] = useState(DEFAULT_FILTERS.search);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [page, setPage] = useState(initialPage);
   const [pageSize, setPageSize] = useState(initialPageSize);
-  const [employees, setEmployees] = useState<Employee[]>(initialData);
-  const [total, setTotal] = useState(initialTotal);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data: queryData,
+    isLoading: isQueryLoading,
+    isFetching,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: ['employees', page, pageSize, filters],
+    queryFn: async () => {
+      const query = buildQuery(filters, page, pageSize);
+      const response = await fetch(`/api/employees?${query}`, {
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) {
+        throw new Error('列表加载失败');
+      }
+      const payload: EmployeeListResponse = await response.json();
+      if (!payload.success || !payload.data) {
+        throw new Error(payload.error || '获取数据失败');
+      }
+      return payload.data;
+    },
+    enabled: canViewEmployees,
+    placeholderData: keepPreviousData,
+  });
+
+  const employees = queryData?.items ?? initialData;
+  const total = queryData?.total ?? initialTotal;
+  const loading = isQueryLoading || isFetching;
+  const error = queryError instanceof Error ? queryError.message : null;
+  const refreshList = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -332,14 +393,6 @@ export default function EmployeeClient({
   const [credentialsPassword, setCredentialsPassword] = useState('');
   const [autoBindingEmployeeId, setAutoBindingEmployeeId] = useState<string | null>(null);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
-  const { hasPermission, loading: permissionLoading } = usePermissions();
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
-  const confirm = useConfirm();
-  const hasFetchedInitial = useRef(initialData.length > 0);
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSearchTermRef = useRef(DEFAULT_FILTERS.search);
 
   useEffect(() => {
     if (credentialsOpen) return;
@@ -348,29 +401,6 @@ export default function EmployeeClient({
       setCredentialsAccounts([]);
     }
   }, [credentialsOpen, credentialsPassword, credentialsAccounts]);
-
-
-  const permissionFlags = useMemo(() => {
-    if (permissionLoading) {
-      return {
-        canViewEmployees: false,
-        canCreateEmployee: false,
-        canUpdateEmployee: false,
-        canDeleteEmployee: false,
-        canAssignRoles: false,
-      };
-    }
-
-    return {
-      canViewEmployees: hasPermission('USER_VIEW_ALL'),
-      canCreateEmployee: hasPermission('USER_CREATE'),
-      canUpdateEmployee: hasPermission('USER_UPDATE'),
-      canDeleteEmployee: hasPermission('USER_DELETE'),
-      canAssignRoles: hasPermission('USER_ASSIGN_ROLES'),
-    };
-  }, [hasPermission, permissionLoading]);
-
-  const { canViewEmployees, canCreateEmployee, canUpdateEmployee, canDeleteEmployee, canAssignRoles } = permissionFlags;
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
 
@@ -395,40 +425,7 @@ export default function EmployeeClient({
     };
   }, []);
 
-  const refreshList = useCallback(
-    async (nextPage: number = page, nextPageSize: number = pageSize, nextFilters: EmployeeFilters = filters) => {
-      if (!canViewEmployees) {
-        setLoading(false);
-        return;
-      }
-      const query = buildQuery(nextFilters, nextPage, nextPageSize);
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await fetch(`/api/employees?${query}`, {
-          headers: { Accept: 'application/json' },
-        });
-        if (!response.ok) {
-          throw new Error('列表加载失败');
-        }
-        const payload: EmployeeListResponse = await response.json();
-        if (!payload.success || !payload.data) {
-          throw new Error(payload.error || '获取数据失败');
-        }
-        const { items, total: count, page: resPage, pageSize: resPageSize } = payload.data;
-        setEmployees(items);
-        setTotal(count);
-        setPage(resPage);
-        setPageSize(resPageSize);
-      } catch (err) {
-        console.error('加载员工列表失败', err);
-        setError(err instanceof Error ? err.message : '未知错误');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [filters, page, pageSize, canViewEmployees]
-  );
+  // refreshList is now managed synchronously via refetch above and automatic useQuery re-fetching.
 
   const handleExportCsv = useCallback(async () => {
     if (!canViewEmployees || exporting) return;
@@ -590,9 +587,8 @@ export default function EmployeeClient({
       const mergedFilters = { ...filters, ...nextFilters };
       setFilters(mergedFilters);
       setPage(1);
-      refreshList(1, pageSize, mergedFilters);
     },
-    [filters, pageSize, refreshList, canViewEmployees]
+    [filters, canViewEmployees]
   );
 
   const handleResetFilters = useCallback(() => {
@@ -601,8 +597,7 @@ export default function EmployeeClient({
     lastSearchTermRef.current = '';
     setFilters(DEFAULT_FILTERS);
     setPage(1);
-    refreshList(1, pageSize, DEFAULT_FILTERS);
-  }, [canViewEmployees, pageSize, refreshList]);
+  }, [canViewEmployees]);
 
   const runSearchQuery = useCallback(
     (rawValue: string) => {
@@ -654,9 +649,9 @@ export default function EmployeeClient({
     (nextPage: number) => {
       if (!canViewEmployees) return;
       if (nextPage === page) return;
-      refreshList(nextPage);
+      setPage(nextPage);
     },
-    [page, refreshList, canViewEmployees]
+    [page, canViewEmployees]
   );
 
   const handlePageSizeChange = useCallback(
@@ -665,10 +660,9 @@ export default function EmployeeClient({
       startTransition(() => {
         setPageSize(nextSize);
         setPage(1);
-        refreshList(1, nextSize);
       });
     },
-    [refreshList, canViewEmployees]
+    [canViewEmployees]
   );
 
   const handleCreate = useCallback(async (payload: EmployeeFormSubmitPayload) => {
@@ -835,7 +829,7 @@ export default function EmployeeClient({
           ...employee,
           userId: payload.data.userId,
         };
-        setEmployees((prev) => prev.map((item) => (item.id === employee.id ? updatedEmployee : item)));
+        await refreshList();
         if (selectedEmployee?.id === employee.id) {
           setSelectedEmployee(updatedEmployee);
         }
@@ -851,7 +845,7 @@ export default function EmployeeClient({
         setAutoBindingEmployeeId(null);
       }
     },
-    [selectedEmployee]
+    [selectedEmployee, refreshList]
   );
 
   const handleRoleAssignClick = useCallback(
@@ -965,7 +959,6 @@ export default function EmployeeClient({
         }
         const updated = payload.data;
         if (updated) {
-          setEmployees((prev) => prev.map((emp) => (emp.id === updated.id ? updated : emp)));
           if (selectedEmployee?.id === updated.id) {
             setSelectedEmployee(updated);
           }
@@ -1012,11 +1005,9 @@ export default function EmployeeClient({
       return;
     }
     hasFetchedInitial.current = true;
-    refreshList(initialPage, initialPageSize, DEFAULT_FILTERS).catch((err) => {
-      console.error('初始化员工列表失败', err);
-      hasFetchedInitial.current = false;
-    });
-  }, [permissionLoading, canViewEmployees, initialPage, initialPageSize, refreshList, searchParams, canCreateEmployee, pathname, router]);
+    // With React Query, initial fetch is handled automatically by the useQuery hook 
+    // when options change, so we don't need a manual fetch here.
+  }, [permissionLoading, canViewEmployees, initialPage, initialPageSize, searchParams, canCreateEmployee, pathname, router]);
 
   const activeCount = useMemo(() => employees.filter((emp) => emp.employmentStatus === 'active').length, [employees]);
   const onLeaveCount = useMemo(() => employees.filter((emp) => emp.employmentStatus === 'on_leave').length, [employees]);
