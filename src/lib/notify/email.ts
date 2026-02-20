@@ -86,13 +86,22 @@ async function sendBySmtp(params: {
   text: string;
   html?: string;
 }): Promise<void> {
-  const from = envFirst('SMTP_FROM', 'EMAIL_FROM', 'SMTP_USER', 'EMAIL_SMTP_USER');
-  if (!from) {
+  const rawFrom = envFirst('SMTP_FROM', 'EMAIL_FROM', 'SMTP_USER', 'EMAIL_SMTP_USER');
+  if (!rawFrom) {
     throw new Error('EMAIL_NOTIFY_MISSING_CONFIG');
   }
+  const senderName = envFirst('SMTP_SENDER_NAME', 'EMAIL_SENDER_NAME') || 'Cosmorigin 系统通知';
+  const from = `"${senderName}" <${rawFrom}>`;
 
   const transporter = getSmtpTransporter();
   const replyTo = normalizeReplyTo(process.env.EMAIL_REPLY_TO);
+  console.log('from', from);
+  console.log('to', params.to);
+  console.log('subject', params.subject);
+  console.log('text', params.text);
+  console.log('html', params.html);
+  console.log('replyTo', replyTo);
+
   await transporter.sendMail({
     from,
     to: params.to,
