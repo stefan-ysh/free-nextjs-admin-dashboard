@@ -42,6 +42,8 @@ export async function GET(request: Request) {
     if (!isSuperAdmin) {
       if (scope === 'workflow_done') {
         params.relatedUserId = context.user.id;
+      } else if (scope === 'mine') {
+        params.purchaserId = context.user.id;
       } else if (scope === 'rejected_own') {
         // 财务人员或普通员工查看自己被驳回的采购，始终按用户ID过滤
         params.purchaserId = context.user.id;

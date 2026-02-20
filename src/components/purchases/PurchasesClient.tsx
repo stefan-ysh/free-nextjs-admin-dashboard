@@ -77,6 +77,7 @@ type PurchaseFilters = {
   minAmount: number | null;
   maxAmount: number | null;
   purchaserId: string | null;
+  scope: 'all' | 'mine';
 };
 
 const DEFAULT_FILTERS: PurchaseFilters = {
@@ -90,6 +91,7 @@ const DEFAULT_FILTERS: PurchaseFilters = {
   minAmount: null,
   maxAmount: null,
   purchaserId: null,
+  scope: 'all',
 };
 
 
@@ -136,6 +138,7 @@ function buildQuery(
   if (filters.minAmount != null) params.set('minAmount', String(filters.minAmount));
   if (filters.maxAmount != null) params.set('maxAmount', String(filters.maxAmount));
   if (filters.purchaserId) params.set('purchaserId', filters.purchaserId);
+  if (filters.scope === 'mine') params.set('scope', 'mine');
   params.set('page', String(page));
   params.set('pageSize', String(pageSize));
   params.set('sortBy', sortBy);
@@ -876,7 +879,28 @@ export default function PurchasesClient() {
 
           {/* Filters Group */}
           <div className="flex flex-wrap items-center gap-2">
-            {permissions.canViewAll && (
+            {permissions.canViewAll && permissions.canCreate && (
+              <div className="flex rounded-md border border-border p-0.5 bg-muted/50 h-10">
+                <Button
+                  variant={filters.scope === 'all' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-full rounded-sm px-3 shadow-none text-xs"
+                  onClick={() => handleFilterChange({ scope: 'all' })}
+                >
+                  全部申请
+                </Button>
+                <Button
+                  variant={filters.scope === 'mine' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-full rounded-sm px-3 shadow-none text-xs"
+                  onClick={() => handleFilterChange({ scope: 'mine' })}
+                >
+                  我的申请
+                </Button>
+              </div>
+            )}
+            
+            {permissions.canViewAll && filters.scope !== 'mine' && (
               <div className="w-[160px]">
                 <UserSelect
                   value={filters.purchaserId}
