@@ -67,8 +67,10 @@ function parseJsonArray<T = string>(value: unknown): T[] {
   if (!value) return [];
   if (Array.isArray(value)) return value as T[];
   if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
     try {
-      const parsed = JSON.parse(value);
+      const parsed = JSON.parse(trimmed);
       return Array.isArray(parsed) ? (parsed as T[]) : [];
     } catch (error) {
       console.warn('Failed to parse JSON array column', error);
@@ -82,8 +84,10 @@ function parseJsonObject(value: unknown): Record<string, unknown> {
     return value as Record<string, unknown>;
   }
   if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return {};
     try {
-      const parsed = JSON.parse(value);
+      const parsed = JSON.parse(trimmed);
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         return parsed as Record<string, unknown>;
       }
