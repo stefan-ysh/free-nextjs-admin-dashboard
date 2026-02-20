@@ -5,6 +5,8 @@ export const dynamic = 'force-dynamic';
 import { createInventoryItem, listInventoryItems } from '@/lib/db/inventory';
 import { normalizeInventoryCategory } from '@/lib/inventory/catalog';
 import { inventoryItemSchema } from '@/lib/validations/inventory';
+import { logSystemAudit } from '@/lib/audit';
+import { requireCurrentUser } from '@/lib/auth/current-user';
 
 function slugify(input?: string) {
   if (!input) return '';
@@ -72,6 +74,20 @@ export async function POST(request: NextRequest) {
     };
 
     const data = await createInventoryItem(finalPayload);
+
+    try {
+      const context = await requireCurrentUser();
+      await logSystemAudit({
+        userId: context.user.id,
+        userName: context.user.display_name ?? '未知用户',
+        action: 'CREATE',
+        entityType: 'INVENTORY_ITEM',
+        entityId: data.id,
+        entityName: finalPayload.name,
+        newValues: { sku: finalPayload.sku, name: finalPayload.name, category: finalPayload.category },
+      });
+    } catch { /* 审计写入不阻塞主流程 */ }
+
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
     console.error('[inventory.items] failed to create item', error);

@@ -7,6 +7,7 @@ import { updateBudgetAdjustment } from '@/lib/db/finance';
 import { checkPermission, Permissions } from '@/lib/permissions';
 import { UserRole } from '@/types/user';
 import { budgetAdjustmentSchema } from '@/lib/validations/finance';
+import { logSystemAudit } from '@/lib/audit';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -62,6 +63,17 @@ export async function PATCH(
     if (!updated) {
       return NextResponse.json({ success: false, error: '预算调整记录不存在' }, { status: 404 });
     }
+
+    await logSystemAudit({
+      userId: permissionUser.id,
+      userName: permissionUser.displayName,
+      action: 'UPDATE',
+      entityType: 'BUDGET_ADJUSTMENT',
+      entityId: id,
+      entityName: title,
+      newValues: { organizationType: resolvedOrgType, adjustmentType, amount, title },
+    });
+
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHENTICATED') return unauthorizedResponse();

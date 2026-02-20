@@ -10,6 +10,8 @@ import {
 } from '@/lib/db/inventory';
 import { normalizeInventoryCategory } from '@/lib/inventory/catalog';
 import { inventoryItemUpdateSchema } from '@/lib/validations/inventory';
+import { logSystemAudit } from '@/lib/audit';
+import { requireCurrentUser } from '@/lib/auth/current-user';
 
 function notFoundResponse() {
   return NextResponse.json({ error: '商品不存在' }, { status: 404 });
@@ -66,6 +68,20 @@ export async function PATCH(
     if (!data) {
       return notFoundResponse();
     }
+
+    try {
+      const context = await requireCurrentUser();
+      await logSystemAudit({
+        userId: context.user.id,
+        userName: context.user.display_name ?? '未知用户',
+        action: 'UPDATE',
+        entityType: 'INVENTORY_ITEM',
+        entityId: itemId,
+        entityName: data.name,
+        newValues: payload as Record<string, unknown>,
+      });
+    } catch { /* 审计写入不阻塞主流程 */ }
+
     return NextResponse.json({ data });
   } catch (error) {
     console.error('[inventory.item] failed to update item', error);
@@ -82,10 +98,25 @@ export async function DELETE(
 ) {
   try {
     const { itemId } = await params;
+    const existing = await getInventoryItem(itemId);
     const success = await deleteInventoryItem(itemId);
     if (!success) {
       return notFoundResponse();
     }
+
+    try {
+      const context = await requireCurrentUser();
+      await logSystemAudit({
+        userId: context.user.id,
+        userName: context.user.display_name ?? '未知用户',
+        action: 'DELETE',
+        entityType: 'INVENTORY_ITEM',
+        entityId: itemId,
+        entityName: existing?.name,
+        oldValues: existing ? { sku: existing.sku, name: existing.name } : undefined,
+      });
+    } catch { /* 审计写入不阻塞主流程 */ }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[inventory.item] failed to delete item', error);

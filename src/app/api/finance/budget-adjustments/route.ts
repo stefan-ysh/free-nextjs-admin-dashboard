@@ -7,6 +7,7 @@ import { createBudgetAdjustment, listBudgetAdjustments } from '@/lib/db/finance'
 import { checkPermission, Permissions } from '@/lib/permissions';
 import { UserRole } from '@/types/user';
 import { budgetAdjustmentSchema } from '@/lib/validations/finance';
+import { logSystemAudit } from '@/lib/audit';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -28,6 +29,7 @@ function badRequestWithZodErrors(errors: z.ZodError) {
 function resolveFinanceOrgByRole(role: UserRole): 'school' | 'company' | undefined {
   if (role === UserRole.FINANCE_SCHOOL) return 'school';
   if (role === UserRole.FINANCE_COMPANY) return 'company';
+  // 财务总监不限定组织类型
   return undefined;
 }
 
@@ -83,6 +85,16 @@ export async function POST(request: Request) {
       note,
       occurredAt,
       createdBy: permissionUser.id,
+    });
+
+    await logSystemAudit({
+      userId: permissionUser.id,
+      userName: permissionUser.displayName,
+      action: 'CREATE',
+      entityType: 'BUDGET_ADJUSTMENT',
+      entityId: created.id,
+      entityName: title,
+      newValues: { organizationType: resolvedOrgType, adjustmentType, amount, title },
     });
 
     return NextResponse.json({ success: true, data: created }, { status: 201 });

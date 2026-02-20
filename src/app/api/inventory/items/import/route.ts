@@ -5,6 +5,7 @@ import { requireCurrentUser } from '@/lib/auth/current-user';
 import { toPermissionUser } from '@/lib/auth/permission-user';
 import { checkPermission, Permissions } from '@/lib/permissions';
 import { createInventoryItem } from '@/lib/db/inventory';
+import { logSystemAudit } from '@/lib/audit';
 
 const importItemSchema = z.object({
   name: z.string().min(1, '名称不能为空'),
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        await createInventoryItem({
+        const created = await createInventoryItem({
           name: parseResult.data.name,
           sku: parseResult.data.sku,
           category: parseResult.data.category,
@@ -67,6 +68,16 @@ export async function POST(request: NextRequest) {
         });
         results.push({ index: i, success: true, sku: parseResult.data.sku });
         successCount++;
+
+        await logSystemAudit({
+          userId: permissionUser.id,
+          userName: permissionUser.displayName,
+          action: 'CREATE',
+          entityType: 'INVENTORY_ITEM',
+          entityId: created.id,
+          entityName: parseResult.data.name,
+          newValues: { sku: parseResult.data.sku, name: parseResult.data.name, source: 'import' },
+        }).catch(() => { /* 审计写入不阻塞导入 */ });
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : '创建失败';
         results.push({ index: i, success: false, sku: item.sku, error: errorMessage });
