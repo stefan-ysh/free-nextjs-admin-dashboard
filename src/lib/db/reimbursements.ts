@@ -479,8 +479,9 @@ export async function listReimbursements(params: ListReimbursementsParams): Prom
       where.push('(r.applicant_id = ? OR r.created_by = ? OR r.organization_type = ?)');
       values.push(params.currentUserId, params.currentUserId, params.financeOrgType);
     }
-    // Only show submitted records (exclude drafts) in "All" view
-    where.push("r.status != 'draft'");
+    // Only show submitted records for others (exclude others' drafts), but keep own drafts
+    where.push("(r.status != 'draft' OR r.applicant_id = ? OR r.created_by = ?)");
+    values.push(params.currentUserId, params.currentUserId);
   }
 
   const whereClause = `WHERE ${where.join(' AND ')}`;
