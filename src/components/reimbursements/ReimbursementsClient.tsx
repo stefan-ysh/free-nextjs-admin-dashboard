@@ -899,92 +899,183 @@ export default function ReimbursementsClient() {
       </div>
 
       <div className="surface-card flex-1 min-h-0 flex flex-col">
-        <Table stickyHeader scrollAreaClassName="custom-scrollbar max-h-[calc(100vh-280px)]">
-          <TableHeader className="bg-gray-50/50 dark:bg-gray-900/50 sticky top-0 z-10 backdrop-blur-sm">
-            <TableRow>
-              <TableHead>报销单号</TableHead>
-              <TableHead>标题</TableHead>
-              <TableHead>来源</TableHead>
-              <TableHead>关联采购单</TableHead>
-              <TableHead>组织</TableHead>
-              <TableHead>金额</TableHead>
-              <TableHead>状态</TableHead>
-              <TableHead>发生日期</TableHead>
-              <TableHead className="text-right">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground">
-                  加载中...
-                </TableCell>
-              </TableRow>
-            ) : records.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground">
-                  暂无报销记录
-                </TableCell>
-              </TableRow>
-            ) : (
-              records.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell className="font-medium">{row.reimbursementNumber}</TableCell>
-                  <TableCell>{row.title}</TableCell>
-                  <TableCell>{SOURCE_LABELS[row.sourceType]}</TableCell>
-                  <TableCell>{row.sourcePurchaseNumber ?? '-'}</TableCell>
-                  <TableCell>{ORG_LABELS[row.organizationType]}</TableCell>
-                  <TableCell>{MONEY.format(row.amount)}</TableCell>
-                  <TableCell>
-                    <span className={`rounded-full border px-2 py-0.5 text-xs ${STATUS_STYLES[row.status]}`}>
-                      {STATUS_LABELS[row.status]}
-                    </span>
-                  </TableCell>
-                  <TableCell>{toDateInputValue(row.occurredAt)}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button size="sm" variant="outline" onClick={() => openDetailDrawer(row)}>
-                        详情
+        {/* Mobile View */}
+        <div className="md:hidden space-y-3 p-4 overflow-y-auto">
+          {loading ? (
+            <div className="text-center text-muted-foreground p-4">加载中...</div>
+          ) : records.length === 0 ? (
+            <div className="text-center text-muted-foreground p-4">暂无报销记录</div>
+          ) : (
+            records.map((row) => (
+              <div key={row.id} className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-semibold text-foreground text-sm">{row.title}</div>
+                    <div className="text-xs text-muted-foreground mt-1">{row.reimbursementNumber}</div>
+                  </div>
+                  <span className={`rounded-full border px-2 py-0.5 text-xs whitespace-nowrap ${STATUS_STYLES[row.status]}`}>
+                    {STATUS_LABELS[row.status]}
+                  </span>
+                </div>
+                
+                <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>来源</span>
+                    <span className="text-foreground">{SOURCE_LABELS[row.sourceType]}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>组织</span>
+                    <span className="text-foreground">{ORG_LABELS[row.organizationType]}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>金额</span>
+                    <span className="text-foreground font-medium">{MONEY.format(row.amount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>关联单号</span>
+                    <span className="text-foreground truncate max-w-[150px]">{row.sourcePurchaseNumber ?? '-'}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>发生日期</span>
+                    <span className="text-foreground">{toDateInputValue(row.occurredAt)}</span>
+                  </div>
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-dashed flex flex-wrap justify-end gap-2">
+                  <Button size="sm" variant="outline" className="h-8 px-3" onClick={() => openDetailDrawer(row)}>
+                    详情
+                  </Button>
+                  {editable(row) && (
+                    <>
+                      <Button size="sm" variant="outline" className="h-8 px-3" onClick={() => openEditDrawer(row)}>
+                        编辑
                       </Button>
-                      {editable(row) && (
-                        <>
-                          <Button size="sm" variant="outline" onClick={() => openEditDrawer(row)}>
-                            编辑
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => void handleDelete(row)}>
-                            删除
-                          </Button>
-                        </>
-                      )}
-                      {isOwner(row) && (row.status === 'draft' || row.status === 'rejected') && (
-                        <Button size="sm" variant="outline" onClick={() => void handleSubmit(row)}>
-                          提交
+                      <Button size="sm" variant="outline" className="h-8 px-3 text-destructive hover:text-destructive" onClick={() => void handleDelete(row)}>
+                        删除
+                      </Button>
+                    </>
+                  )}
+                  {isOwner(row) && (row.status === 'draft' || row.status === 'rejected') && (
+                    <Button size="sm" variant="outline" className="h-8 px-3" onClick={() => void handleSubmit(row)}>
+                      提交
+                    </Button>
+                  )}
+                  {canApprove && row.status === 'pending_approval' && (
+                    <>
+                      <Button size="sm" variant="outline" className="h-8 px-3 text-destructive hover:text-destructive" onClick={() => void handleReject(row)}>
+                        驳回
+                      </Button>
+                      {!canPay ? (
+                        <Button size="sm" variant="default" className="h-8 px-3" onClick={() => void handleApprove(row)}>
+                          通过
                         </Button>
-                      )}
-                      {canApprove && row.status === 'pending_approval' && (
-                        <>
-                          <Button size="sm" variant="outline" onClick={() => void handleReject(row)}>
-                            驳回
-                          </Button>
-                          {!canPay ? (
-                            <Button size="sm" variant="outline" onClick={() => void handleApprove(row)}>
-                              通过
-                            </Button>
-                          ) : null}
-                        </>
-                      )}
-                      {canOperatePay(row) && (
-                        <Button size="sm" variant="outline" onClick={() => handlePay(row)}>
-                          标记打款
-                        </Button>
-                      )}
-                    </div>
+                      ) : null}
+                    </>
+                  )}
+                  {canOperatePay(row) && (
+                    <Button size="sm" variant="default" className="h-8 px-3" onClick={() => handlePay(row)}>
+                      标记打款
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop View */}
+        <div className="hidden md:flex md:flex-col flex-1 min-h-0">
+          <Table stickyHeader scrollAreaClassName="custom-scrollbar max-h-[calc(100vh-280px)]" className="whitespace-nowrap">
+            <TableHeader className="bg-gray-50/50 dark:bg-gray-900/50 sticky top-0 z-10 backdrop-blur-sm">
+              <TableRow>
+                <TableHead>报销单号</TableHead>
+                <TableHead>标题</TableHead>
+                <TableHead>来源</TableHead>
+                <TableHead>关联采购单</TableHead>
+                <TableHead>组织</TableHead>
+                <TableHead>金额</TableHead>
+                <TableHead>状态</TableHead>
+                <TableHead>发生日期</TableHead>
+                <TableHead className="text-right">操作</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center text-muted-foreground">
+                    加载中...
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : records.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center text-muted-foreground">
+                    暂无报销记录
+                  </TableCell>
+                </TableRow>
+              ) : (
+                records.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="font-medium">{row.reimbursementNumber}</TableCell>
+                    <TableCell className="min-w-[150px] whitespace-normal">
+                      <div className="max-w-[200px] truncate" title={row.title}>
+                        {row.title}
+                      </div>
+                    </TableCell>
+                    <TableCell>{SOURCE_LABELS[row.sourceType]}</TableCell>
+                    <TableCell className="font-mono text-xs">{row.sourcePurchaseNumber ?? '-'}</TableCell>
+                    <TableCell>{ORG_LABELS[row.organizationType]}</TableCell>
+                    <TableCell className="font-medium">{MONEY.format(row.amount)}</TableCell>
+                    <TableCell>
+                      <span className={`rounded-full border px-2 py-0.5 text-xs ${STATUS_STYLES[row.status]}`}>
+                        {STATUS_LABELS[row.status]}
+                      </span>
+                    </TableCell>
+                    <TableCell>{toDateInputValue(row.occurredAt)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="outline" onClick={() => openDetailDrawer(row)}>
+                          详情
+                        </Button>
+                        {editable(row) && (
+                          <>
+                            <Button size="sm" variant="outline" onClick={() => openEditDrawer(row)}>
+                              编辑
+                            </Button>
+                            <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => void handleDelete(row)}>
+                              删除
+                            </Button>
+                          </>
+                        )}
+                        {isOwner(row) && (row.status === 'draft' || row.status === 'rejected') && (
+                          <Button size="sm" variant="outline" onClick={() => void handleSubmit(row)}>
+                            提交
+                          </Button>
+                        )}
+                        {canApprove && row.status === 'pending_approval' && (
+                          <>
+                            <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => void handleReject(row)}>
+                              驳回
+                            </Button>
+                            {!canPay ? (
+                              <Button size="sm" variant="default" onClick={() => void handleApprove(row)}>
+                                通过
+                              </Button>
+                            ) : null}
+                          </>
+                        )}
+                        {canOperatePay(row) && (
+                          <Button size="sm" variant="default" onClick={() => handlePay(row)}>
+                            标记打款
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       <Drawer

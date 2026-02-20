@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+
 
 import { FORM_DRAWER_WIDTH_WIDE } from '@/components/common/form-drawer-width';
 import DatePicker from '@/components/ui/DatePicker';
@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import UserSelect from '@/components/common/UserSelect';
+import Pagination from '@/components/tables/Pagination';
 import PurchaseDetailModal from './PurchaseDetailModal';
 import PurchaseTable, { type PurchaseRowPermissions } from './PurchaseTable';
 import PurchaseInboundDrawer from './PurchaseInboundDrawer';
@@ -391,11 +392,9 @@ export default function PurchasesClient() {
     });
   };
 
-  const handlePageChange = (direction: 'prev' | 'next') => {
-    setPage((prev) => {
-      if (direction === 'prev') return Math.max(1, prev - 1);
-      return Math.min(totalPages, prev + 1);
-    });
+  const handlePageChange = (nextPage: number) => {
+    if (nextPage === page) return;
+    setPage(nextPage);
   };
 
   const handlePageSizeChange = (size: number) => {
@@ -1182,26 +1181,11 @@ export default function PurchasesClient() {
           </Select>
           {showPaginationNav && (
             <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange('prev')}
-                disabled={page === 1}
-                className="gap-1"
-              >
-                <ChevronLeft className="h-4 w-4" /> 上一页
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange('next')}
-                disabled={page === totalPages}
-                className="gap-1"
-              >
-                下一页 <ChevronRight className="h-4 w-4" />
-              </Button>
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+              />
             </div>
           )}
         </div>

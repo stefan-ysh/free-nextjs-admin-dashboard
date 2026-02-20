@@ -144,18 +144,6 @@ export default function PurchaseTable({
 						const totalQuantity = Number(purchase.quantity ?? 0);
 						return (
 							<div key={purchase.id} className={cn("rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm", rowClassName)}>
-								<div className="flex items-start justify-between gap-3">
-									<div className="flex gap-3">
-                                        <Avatar className="h-10 w-10 border-2 border-background shadow-sm">
-                                            <AvatarFallback>{getInitials(purchase.purchaserName)}</AvatarFallback>
-                                        </Avatar>
-                                        <div>
-    										<div className="text-sm font-semibold text-foreground">{purchase.itemName}</div>
-    										<div className="mt-1 text-xs text-muted-foreground">#{purchase.purchaseNumber}</div>
-                                        </div>
-									</div>
-									<PurchaseStatusBadge status={purchase.status} />
-								</div>
                                 
                                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                                     <div>
@@ -189,81 +177,6 @@ export default function PurchaseTable({
 									<Button variant="outline" size="sm" onClick={() => onView(purchase)} className="h-8">
 										详情
 									</Button>
-                                    
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                                <span className="sr-only">打开菜单</span>
-                                                <MoreHorizontal className="h-4 w-4" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end" className="w-[160px]">
-                                            <DropdownMenuLabel>操作</DropdownMenuLabel>
-                                            <DropdownMenuItem onClick={() => onView(purchase)}>
-                                                查看详情
-                                            </DropdownMenuItem>
-                                            {permissions.canEdit && (
-                                                <DropdownMenuItem onClick={() => onEdit(purchase)}>
-                                                    编辑记录
-                                                </DropdownMenuItem>
-                                            )}
-                                            {permissions.canReceive && (
-                                                <DropdownMenuItem onClick={() => onReceive(purchase)}>
-                                                    到货入库
-                                                </DropdownMenuItem>
-                                            )}
-                                            {permissions.canDuplicate && (
-                                                <DropdownMenuItem onClick={() => onDuplicate(purchase)}>
-                                                    复制记录
-                                                </DropdownMenuItem>
-                                            )}
-                                            
-                                            <DropdownMenuSeparator />
-                                            
-                                            {permissions.canSubmit && (
-                                                <DropdownMenuItem onClick={() => onSubmit(purchase)}>
-                                                    提交审批
-                                                </DropdownMenuItem>
-                                            )}
-                                            {permissions.canWithdraw && (
-                                                <DropdownMenuItem onClick={() => onWithdraw(purchase)}>
-                                                    撤回申请
-                                                </DropdownMenuItem>
-                                            )}
-                                            {permissions.canApprove && (
-                                                <DropdownMenuItem onClick={() => onApprove(purchase)}>
-                                                    批准申请
-                                                </DropdownMenuItem>
-                                            )}
-                                            {permissions.canTransfer && (
-                                                <DropdownMenuItem onClick={() => onTransfer(purchase)}>
-                                                    转交审批
-                                                </DropdownMenuItem>
-                                            )}
-                                            {permissions.canReject && (
-                                                <DropdownMenuItem onClick={() => onReject(purchase)} className="text-destructive focus:text-destructive">
-                                                    驳回申请
-                                                </DropdownMenuItem>
-                                            )}
-                                            {permissions.canPay && (
-                                                <DropdownMenuItem onClick={() => onPay(purchase)}>
-                                                    标记打款
-                                                </DropdownMenuItem>
-                                            )}
-                                            {permissions.canSubmitReimbursement && (
-                                                <DropdownMenuItem onClick={() => onSubmitReimbursement(purchase)}>
-                                                    提交报销
-                                                </DropdownMenuItem>
-                                            )}
-                                            
-                                            {(permissions.canDelete) && <DropdownMenuSeparator />}
-                                            {permissions.canDelete && (
-                                                <DropdownMenuItem onClick={() => onDelete(purchase)} className="text-destructive focus:text-destructive">
-                                                    删除记录
-                                                </DropdownMenuItem>
-                                            )}
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
 								</div>
 							</div>
 						);
@@ -307,9 +220,6 @@ export default function PurchaseTable({
 									</TableCell>
                                     <TableCell className="hidden md:table-cell px-4 py-3 align-top">
                                         <div className="flex items-center gap-2">
-                                            <Avatar className="h-6 w-6">
-                                                <AvatarFallback className="text-[10px]">{getInitials(purchase.purchaserName)}</AvatarFallback>
-                                            </Avatar>
                                             <span className="text-sm text-foreground/80">{purchase.purchaserName || '未知用户'}</span>
                                         </div>
                                     </TableCell>

@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { Plus, RefreshCcw, Search, ChevronLeft, ChevronRight, Download, Upload, FileJson } from 'lucide-react';
+import { Plus, RefreshCcw, Search, Download, Upload, FileJson } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import Papa from 'papaparse';
 import EmployeeForm from './EmployeeForm';
 import EmployeeStatusHistory from './EmployeeStatusHistory';
 import EmployeeTable from './EmployeeTable';
+import Pagination from '@/components/tables/Pagination';
 import RoleAssignmentDialog, { type RoleAssignmentPayload } from './RoleAssignmentDialog';
 import ResetPasswordDialog from './ResetPasswordDialog';
 import CredentialsDialog from './CredentialsDialog';
@@ -650,13 +651,12 @@ export default function EmployeeClient({
   }, [runSearchQuery, searchInput]);
 
   const handlePageChange = useCallback(
-    (direction: 'prev' | 'next') => {
+    (nextPage: number) => {
       if (!canViewEmployees) return;
-      const nextPage = direction === 'prev' ? Math.max(1, page - 1) : Math.min(totalPages, page + 1);
       if (nextPage === page) return;
       refreshList(nextPage);
     },
-    [page, totalPages, refreshList, canViewEmployees]
+    [page, refreshList, canViewEmployees]
   );
 
   const handlePageSizeChange = useCallback(
@@ -1299,26 +1299,11 @@ export default function EmployeeClient({
             </SelectContent>
           </Select>
           <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange('prev')}
-              disabled={page <= 1}
-              className="h-9 gap-1 px-3"
-            >
-              <ChevronLeft className="h-4 w-4" /> 上一页
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange('next')}
-              disabled={page >= totalPages}
-              className="h-9 gap-1 px-3"
-            >
-              下一页 <ChevronRight className="h-4 w-4" />
-            </Button>
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+            />
           </div>
         </div>
       </div>
