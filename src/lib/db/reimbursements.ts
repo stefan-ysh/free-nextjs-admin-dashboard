@@ -474,10 +474,10 @@ export async function listReimbursements(params: ListReimbursementsParams): Prom
       values.push(params.financeOrgType);
     }
   } else if (scope === 'all') {
-    // For finance roles viewing "all", restrict to their organization
+    // For finance roles viewing "all", restrict to their organization + their own
     if (params.financeOrgType) {
-      where.push('r.organization_type = ?');
-      values.push(params.financeOrgType);
+      where.push('(r.applicant_id = ? OR r.created_by = ? OR r.organization_type = ?)');
+      values.push(params.currentUserId, params.currentUserId, params.financeOrgType);
     }
     // Only show submitted records (exclude drafts) in "All" view
     where.push("r.status != 'draft'");

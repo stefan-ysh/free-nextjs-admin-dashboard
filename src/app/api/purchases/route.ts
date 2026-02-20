@@ -51,11 +51,11 @@ export async function GET(request: Request) {
       } else if (isFinanceDirector) {
         // 财务总监可查看所有组织类型的采购
       } else if (isFinanceSchool) {
-        // 学校财务仅查看学校采购
-        params.organizationType = 'school';
+        // 学校财务可查看学校采购，以及自己发起的（可能是单位的）采购
+        params.mineOrOrg = { userId: context.user.id, orgType: 'school' };
       } else if (isFinanceCompany) {
-        // 单位财务仅查看单位采购
-        params.organizationType = 'company';
+        // 单位财务可查看单位采购，以及自己发起的（可能是学校的）采购
+        params.mineOrOrg = { userId: context.user.id, orgType: 'company' };
       } else {
         // 普通员工只能查看自己的采购
         params.purchaserId = context.user.id;

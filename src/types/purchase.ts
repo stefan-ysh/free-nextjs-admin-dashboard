@@ -263,6 +263,7 @@ export interface ListPurchasesParams {
   relatedUserId?: string;
   currentUserId?: string;
   hideOthersDrafts?: boolean;
+  mineOrOrg?: { userId: string; orgType: PurchaseOrganization };
   organizationType?: PurchaseOrganization;
   financeOrgType?: 'school' | 'company';
   pendingApproverId?: string;

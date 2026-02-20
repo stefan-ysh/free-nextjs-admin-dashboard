@@ -460,7 +460,12 @@ function buildPurchaseFilterClause(params: ListPurchasesParams = {}, tableAlias 
     values.push(params.currentUserId, params.currentUserId);
   }
 
-  if (params.organizationType) {
+  if (params.mineOrOrg) {
+    conditions.push(
+      `(${column('purchaser_id')} = ? OR ${column('organization_type')} = ?)`
+    );
+    values.push(params.mineOrOrg.userId, params.mineOrOrg.orgType);
+  } else if (params.organizationType) {
     conditions.push(`${column('organization_type')} = ?`);
     values.push(params.organizationType);
   }

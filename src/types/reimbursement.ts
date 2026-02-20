@@ -178,6 +178,7 @@ export interface ListReimbursementsParams {
   currentUserId: string;
   scope?: 'mine' | 'approval' | 'pay' | 'all';
   financeOrgType?: ReimbursementOrganizationType | null;
+  mineOrOrg?: { userId: string; orgType: ReimbursementOrganizationType };
 }
 
 export interface ListReimbursementsResult {
