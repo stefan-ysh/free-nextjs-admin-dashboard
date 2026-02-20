@@ -101,24 +101,24 @@ export const Permissions = {
   } as PermissionConfig,
   
   USER_CREATE: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.APPROVER],
   } as PermissionConfig,
   
   USER_UPDATE: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.APPROVER],
   } as PermissionConfig,
   
   USER_DELETE: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.APPROVER],
   } as PermissionConfig,
   
   USER_ASSIGN_ROLES: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.APPROVER],
   } as PermissionConfig,
   
   // ============ 采购管理 ============
   PURCHASE_VIEW_ALL: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.APPROVER, UserRole.FINANCE_DIRECTOR, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
   
 
@@ -144,24 +144,24 @@ export const Permissions = {
   } as PermissionConfig,
   
   PURCHASE_APPROVE: {
-    anyRoles: [UserRole.FINANCE],
+    anyRoles: [UserRole.APPROVER],
   } as PermissionConfig,
   
   PURCHASE_REJECT: {
-    anyRoles: [UserRole.FINANCE],
+    anyRoles: [UserRole.APPROVER],
   } as PermissionConfig,
   
   PURCHASE_MONITOR_VIEW: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.APPROVER],
   } as PermissionConfig,
 
   PURCHASE_AUDIT_VIEW: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.APPROVER],
   } as PermissionConfig,
 
   // ============ 报销管理 ============
   REIMBURSEMENT_VIEW_ALL: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.APPROVER, UserRole.FINANCE_DIRECTOR, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
 
   REIMBURSEMENT_CREATE: {
@@ -178,24 +178,24 @@ export const Permissions = {
   } as PermissionConfig,
 
   REIMBURSEMENT_APPROVE: {
-    anyRoles: [UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
+    anyRoles: [UserRole.FINANCE_DIRECTOR, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
 
   REIMBURSEMENT_REJECT: {
-    anyRoles: [UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
+    anyRoles: [UserRole.FINANCE_DIRECTOR, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
 
   REIMBURSEMENT_PAY: {
-    anyRoles: [UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
+    anyRoles: [UserRole.FINANCE_DIRECTOR, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
   
   // ============ 财务管理 ============
   FINANCE_VIEW_ALL: {
-    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
+    anyRoles: [UserRole.SUPER_ADMIN, UserRole.FINANCE_DIRECTOR, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
   
   FINANCE_MANAGE: {
-    anyRoles: [UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
+    anyRoles: [UserRole.FINANCE_DIRECTOR, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
 
   // ============ 进销存管理 ============
@@ -204,15 +204,15 @@ export const Permissions = {
   } as PermissionConfig,
 
   INVENTORY_MANAGE_ITEMS: {
-    anyRoles: [UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
+    anyRoles: [UserRole.FINANCE_DIRECTOR, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
 
   INVENTORY_MANAGE_WAREHOUSE: {
-    anyRoles: [UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
+    anyRoles: [UserRole.FINANCE_DIRECTOR, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
 
   INVENTORY_OPERATE_INBOUND: {
-    anyRoles: [UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
+    anyRoles: [UserRole.FINANCE_DIRECTOR, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
 
   INVENTORY_INBOUND_CREATE_OWN_PURCHASE_ONLY: {
@@ -220,7 +220,7 @@ export const Permissions = {
   } as PermissionConfig,
 
   INVENTORY_OPERATE_OUTBOUND: {
-    anyRoles: [UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
+    anyRoles: [UserRole.FINANCE_DIRECTOR, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY],
   } as PermissionConfig,
 
   INVENTORY_VIEW_ALL: {
@@ -268,7 +268,7 @@ export function canAccessDepartmentData(
   }
 
   // 财务角色可访问全部部门数据（用于审批与打款）
-  if (hasAnyActiveRole(user, [UserRole.FINANCE, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY])) {
+  if (hasAnyActiveRole(user, [UserRole.APPROVER, UserRole.FINANCE_DIRECTOR, UserRole.FINANCE_SCHOOL, UserRole.FINANCE_COMPANY])) {
     return true;
   }
 

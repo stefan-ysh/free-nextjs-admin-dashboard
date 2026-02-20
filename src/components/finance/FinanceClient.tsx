@@ -263,6 +263,13 @@ export default function FinanceClient({
         router.push(`${pathname}?${params.toString()}`);
     };
 
+    const handlePageSizeChange = (newPageSize: number) => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('page', '1');
+        params.set('pageSize', newPageSize.toString());
+        router.push(`${pathname}?${params.toString()}`);
+    };
+
     const handleTypeChange = (value: string) => {
         updateFilters((params) => {
             if (value === 'all') {
@@ -768,15 +775,14 @@ export default function FinanceClient({
 
             {/* Pagination */}
             {pagination.totalPages > 1 && (
-                <div className="surface-card flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm text-muted-foreground">
-                    <div>共 {pagination.total} 条 · 第 {pagination.page} / {pagination.totalPages} 页</div>
-                    <div className="flex items-center gap-2">
-                        <Pagination
-                            currentPage={pagination.page}
-                            totalPages={pagination.totalPages}
-                            onPageChange={(p) => handlePageChange(p)}
-                        />
-                    </div>
+                <div className="surface-card p-4 text-sm text-muted-foreground">
+                    <Pagination
+                        currentPage={pagination.page}
+                        totalPages={pagination.totalPages}
+                        onPageChange={handlePageChange}
+                        pageSize={pagination.limit}
+                        onPageSizeChange={handlePageSizeChange}
+                    />
                 </div>
             )}
         </div>

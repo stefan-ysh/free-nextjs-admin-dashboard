@@ -14,6 +14,7 @@ import { toast } from '@/components/ui/sonner';
 import { INVENTORY_CATEGORY_OPTIONS, normalizeInventoryCategory } from '@/lib/inventory/catalog';
 import type { InventoryItem } from '@/types/inventory';
 import { FORM_DRAWER_WIDTH_STANDARD } from '@/components/common/form-drawer-width';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 const Required = () => <span className="ml-1 text-destructive">*</span>;
 
@@ -82,6 +83,15 @@ export default function InventoryItemFormDialog({ open, onOpenChange, item, onSu
       form.reset(buildDefaultValues(item));
     }
   }, [open, item, form]);
+
+  useKeyboardShortcuts({
+    onEscape: () => onOpenChange(false),
+    onEnter: () => {
+      const formEl = document.getElementById(formId) as HTMLFormElement | null;
+      formEl?.dispatchEvent(new Event('submit', { bubbles: true }));
+    },
+    enabled: open,
+  });
 
   const handleSubmit = form.handleSubmit(async (values) => {
     try {

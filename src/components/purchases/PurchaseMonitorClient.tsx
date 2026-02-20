@@ -7,6 +7,7 @@ import PurchaseStatusBadge from '@/components/purchases/PurchaseStatusBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   type PurchaseMonitorData,
@@ -212,28 +213,28 @@ export default function PurchaseMonitorClient() {
           <Badge variant="outline" className="text-xs">Top 10</Badge>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead>
-              <tr className="border-b border-border/70 text-left text-xs text-muted-foreground">
-                <th className="px-2 py-2 font-medium">审批人</th>
-                <th className="px-2 py-2 font-medium">待审批数</th>
-                <th className="px-2 py-2 font-medium">待处理金额</th>
-                <th className="px-2 py-2 font-medium">平均停留(h)</th>
-                <th className="px-2 py-2 font-medium">最长停留(h)</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table className="w-full min-w-[720px] text-sm">
+            <TableHeader>
+              <TableRow className="border-b border-border/70 text-left text-xs text-muted-foreground">
+                <TableHead className="font-medium">审批人</TableHead>
+                <TableHead className="font-medium">待审批数</TableHead>
+                <TableHead className="font-medium">待处理金额</TableHead>
+                <TableHead className="font-medium">平均停留(h)</TableHead>
+                <TableHead className="font-medium">最长停留(h)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {(monitor?.approverLoad ?? []).map((item) => (
-                <tr key={`${item.approverId ?? 'unassigned'}-${item.approverName}`} className="border-b border-border/40">
-                  <td className="px-2 py-2">{item.approverName}</td>
-                  <td className="px-2 py-2">{item.pendingCount}</td>
-                  <td className="px-2 py-2">{amountFormatter.format(item.totalPendingAmount)}</td>
-                  <td className="px-2 py-2">{hourFormatter.format(item.avgPendingHours)}</td>
-                  <td className="px-2 py-2">{hourFormatter.format(item.maxPendingHours)}</td>
-                </tr>
+                <TableRow key={`${item.approverId ?? 'unassigned'}-${item.approverName}`} className="border-b border-border/40">
+                  <TableCell>{item.approverName}</TableCell>
+                  <TableCell>{item.pendingCount}</TableCell>
+                  <TableCell>{amountFormatter.format(item.totalPendingAmount)}</TableCell>
+                  <TableCell>{hourFormatter.format(item.avgPendingHours)}</TableCell>
+                  <TableCell>{hourFormatter.format(item.maxPendingHours)}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
           {(monitor?.approverLoad?.length ?? 0) === 0 ? <p className="py-4 text-xs text-muted-foreground">暂无待审批负载</p> : null}
         </div>
       </section>
@@ -244,30 +245,30 @@ export default function PurchaseMonitorClient() {
           <Badge variant="outline" className="text-xs">按停留时长排序</Badge>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] text-sm">
-            <thead>
-              <tr className="border-b border-border/70 text-left text-xs text-muted-foreground">
-                <th className="px-2 py-2 font-medium">单号</th>
-                <th className="px-2 py-2 font-medium">物品</th>
-                <th className="px-2 py-2 font-medium">申请人</th>
-                <th className="px-2 py-2 font-medium">当前审批人</th>
-                <th className="px-2 py-2 font-medium">停留时长(h)</th>
-                <th className="px-2 py-2 font-medium">应付金额</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table className="w-full min-w-[960px] text-sm">
+            <TableHeader>
+              <TableRow className="border-b border-border/70 text-left text-xs text-muted-foreground">
+                <TableHead className="font-medium">单号</TableHead>
+                <TableHead className="font-medium">物品</TableHead>
+                <TableHead className="font-medium">申请人</TableHead>
+                <TableHead className="font-medium">当前审批人</TableHead>
+                <TableHead className="font-medium">停留时长(h)</TableHead>
+                <TableHead className="font-medium">应付金额</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {(monitor?.stuckRecords ?? []).map((item) => (
-                <tr key={item.id} className="border-b border-border/40">
-                  <td className="px-2 py-2">{item.purchaseNumber}</td>
-                  <td className="px-2 py-2">{item.itemName}</td>
-                  <td className="px-2 py-2">{item.purchaserName}</td>
-                  <td className="px-2 py-2">{item.pendingApproverName}</td>
-                  <td className="px-2 py-2">{item.pendingHours}</td>
-                  <td className="px-2 py-2">{amountFormatter.format(item.dueAmount)}</td>
-                </tr>
+                <TableRow key={item.id} className="border-b border-border/40">
+                  <TableCell>{item.purchaseNumber}</TableCell>
+                  <TableCell>{item.itemName}</TableCell>
+                  <TableCell>{item.purchaserName}</TableCell>
+                  <TableCell>{item.pendingApproverName}</TableCell>
+                  <TableCell>{item.pendingHours}</TableCell>
+                  <TableCell>{amountFormatter.format(item.dueAmount)}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
           {(monitor?.stuckRecords?.length ?? 0) === 0 ? <p className="py-4 text-xs text-muted-foreground">暂无卡点单据</p> : null}
         </div>
       </section>

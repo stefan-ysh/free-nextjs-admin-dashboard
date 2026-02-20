@@ -38,9 +38,9 @@ const createMockUser = (roles: UserRole[] = [UserRole.EMPLOYEE], overrides: Part
 describe('Permission System', () => {
     describe('checkPermission', () => {
         it('should allow access if user has one of the required roles (anyRoles)', async () => {
-            const user = createMockUser([UserRole.FINANCE]);
+            const user = createMockUser([UserRole.APPROVER]);
             const config: PermissionConfig = {
-                anyRoles: [UserRole.ADMIN, UserRole.FINANCE],
+                anyRoles: [UserRole.FINANCE_DIRECTOR, UserRole.APPROVER],
             };
 
             const result = await checkPermission(user, config);
@@ -50,7 +50,7 @@ describe('Permission System', () => {
         it('should deny access if user does not have any of the required roles', async () => {
             const user = createMockUser([UserRole.EMPLOYEE]);
             const config: PermissionConfig = {
-                anyRoles: [UserRole.ADMIN, UserRole.FINANCE],
+                anyRoles: [UserRole.FINANCE_DIRECTOR, UserRole.APPROVER],
             };
 
             const result = await checkPermission(user, config);
@@ -58,9 +58,9 @@ describe('Permission System', () => {
         });
 
         it('should allow access if user has ALL required roles (allRoles)', async () => {
-            const user = createMockUser([UserRole.FINANCE, UserRole.ADMIN]);
+            const user = createMockUser([UserRole.APPROVER, UserRole.FINANCE_DIRECTOR]);
             const config: PermissionConfig = {
-                allRoles: [UserRole.FINANCE, UserRole.ADMIN],
+                allRoles: [UserRole.APPROVER, UserRole.FINANCE_DIRECTOR],
             };
 
             const result = await checkPermission(user, config);
@@ -68,9 +68,9 @@ describe('Permission System', () => {
         });
 
         it('should deny access if user is missing one of the required roles (allRoles)', async () => {
-            const user = createMockUser([UserRole.FINANCE]);
+            const user = createMockUser([UserRole.APPROVER]);
             const config: PermissionConfig = {
-                allRoles: [UserRole.FINANCE, UserRole.ADMIN],
+                allRoles: [UserRole.APPROVER, UserRole.FINANCE_DIRECTOR],
             };
 
             const result = await checkPermission(user, config);

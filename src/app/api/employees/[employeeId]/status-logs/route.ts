@@ -27,7 +27,7 @@ export async function GET(
 
     const { employeeId } = await params;
     const { searchParams } = new URL(request.url);
-    const limitParam = Number.parseInt(searchParams.get('limit') ?? '', 10);
+    const limitParam = Number.parseInt(searchParams.get('pageSize') ?? searchParams.get('limit') ?? '', 10);
     const limit = Number.isNaN(limitParam)
       ? 25
       : Math.min(Math.max(limitParam, 1), 100);

@@ -6,6 +6,7 @@ import DataState from '@/components/common/DataState';
 import type { InventoryMovement } from '@/types/inventory';
 import { formatDateOnly, formatDateTimeLocal } from '@/lib/dates';
 import { exportDeliveryNote, type DeliveryNoteData } from '@/lib/excel-export';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export type InventoryMovementRow = InventoryMovement & {
   itemName?: string;
@@ -119,37 +120,37 @@ export default function InventoryMovementsTable({ movements, loading, emptyHint 
 
       <div className="surface-table flex-1 min-h-0 flex flex-col">
         <div className="max-h-[calc(100vh-350px)] overflow-auto custom-scrollbar">
-          <table className="min-w-full divide-y divide-border text-sm whitespace-nowrap">
-            <thead className="sticky top-0 z-10 bg-muted/60 text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3 w-10">
+          <Table>
+            <TableHeader className="sticky top-0 z-10 bg-muted/60 text-xs uppercase text-muted-foreground">
+              <TableRow>
+                <TableHead className="w-10">
                   <button onClick={toggleSelectAll} className="flex items-center justify-center text-muted-foreground hover:text-foreground">
                     {isAllSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                   </button>
-                </th>
-                <th className="px-4 py-3 text-left hidden md:table-cell">单据时间</th>
-                <th className="px-4 py-3 text-left">SKU</th>
-                <th className="px-4 py-3 text-left hidden md:table-cell">仓库</th>
-                <th className="px-4 py-3 text-left">方向</th>
-                <th className="px-4 py-3 text-left">数量</th>
-                <th className="px-4 py-3 text-left hidden md:table-cell">单据号</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/70">
+                </TableHead>
+                <TableHead className="text-left hidden md:table-cell">单据时间</TableHead>
+                <TableHead className="text-left">SKU</TableHead>
+                <TableHead className="text-left hidden md:table-cell">仓库</TableHead>
+                <TableHead className="text-left">方向</TableHead>
+                <TableHead className="text-left">数量</TableHead>
+                <TableHead className="text-left hidden md:table-cell">单据号</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {loading ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-10">
+                <TableRow>
+                  <TableCell colSpan={9} className="py-10">
                     <DataState variant="loading" description="库存流水正在加载" />
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ) : movements.length ? (
                 movements.map((movement) => {
                   const isOutbound = movement.direction === 'outbound';
                   const isSelected = selectedIds.has(movement.id);
 
                   return (
-                    <tr key={movement.id} className={isSelected ? 'bg-primary/10' : ''}>
-                      <td className="px-4 py-3">
+                    <TableRow key={movement.id} className={isSelected ? 'bg-primary/10' : ''}>
+                      <TableCell>
                         {isOutbound && (
                           <button
                             onClick={() => toggleSelect(movement.id)}
@@ -158,55 +159,55 @@ export default function InventoryMovementsTable({ movements, loading, emptyHint 
                             {isSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                           </button>
                         )}
-                      </td>
-                      <td className="px-4 py-3 text-foreground/90 hidden md:table-cell">
+                      </TableCell>
+                      <TableCell className="text-foreground/90 hidden md:table-cell">
                         {formatDateTimeLocal(movement.occurredAt) ?? movement.occurredAt}
-                      </td>
-                      <td className="px-4 py-3 font-medium text-foreground">
+                      </TableCell>
+                      <TableCell className="font-medium text-foreground">
                         <span
                           className="block max-w-[220px] truncate"
                           title={`${movement.itemName ?? movement.itemId} (#${movement.itemId})`}
                         >
                           {(movement.itemName ?? '未命名商品') + ` (#${movement.itemId})`}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-foreground/90 hidden md:table-cell">
+                      </TableCell>
+                      <TableCell className="text-foreground/90 hidden md:table-cell">
                         <span className="block max-w-[120px] truncate" title={movement.warehouseName ?? movement.warehouseId}>
                           {movement.warehouseName ?? movement.warehouseId}
                         </span>
-                      </td>
-                      <td className="px-4 py-3">
+                      </TableCell>
+                      <TableCell>
                         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${directionBadge[movement.direction]}`}>
                           {movement.direction === 'inbound' ? '入库' : '出库'}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-foreground">
+                      </TableCell>
+                      <TableCell className="text-foreground">
                         <span title={movement.unitCost ? `单价 ¥${movement.unitCost.toLocaleString()}` : undefined}>
                           {movement.quantity}
                           {movement.unitCost ? `（¥${movement.unitCost.toLocaleString()}）` : ''}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
+                      </TableCell>
+                      <TableCell className="text-muted-foreground hidden md:table-cell">
                         <span className="block max-w-[140px] truncate" title={movement.relatedOrderId ?? '—'}>
                           {movement.relatedOrderId ?? '—'}
                         </span>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })
               ) : (
-                <tr>
-                  <td colSpan={9} className="px-4 py-10">
+                <TableRow>
+                  <TableCell colSpan={9} className="py-10">
                     <DataState
                       variant="empty"
                       title={emptyHint || '暂无库存流水'}
                       description="调整筛选条件或导入历史记录"
                     />
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </div>
     </div>

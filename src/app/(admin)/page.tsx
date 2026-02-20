@@ -95,8 +95,8 @@ export default async function AdminDashboardPage() {
   const profile = await toPermissionUser(user);
   const activeRole = profile.primaryRole ?? UserRole.EMPLOYEE;
   const isSuperAdmin = activeRole === UserRole.SUPER_ADMIN;
-  const isApprovalAdmin = activeRole === UserRole.FINANCE;
-  const isFinanceOperator = activeRole === UserRole.FINANCE_SCHOOL || activeRole === UserRole.FINANCE_COMPANY;
+  const isApprovalAdmin = activeRole === UserRole.APPROVER;
+  const isFinanceOperator = activeRole === UserRole.FINANCE_DIRECTOR || activeRole === UserRole.FINANCE_SCHOOL || activeRole === UserRole.FINANCE_COMPANY;
   const isEmployee = activeRole === UserRole.EMPLOYEE;
 
   const [

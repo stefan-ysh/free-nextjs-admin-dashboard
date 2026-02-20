@@ -25,6 +25,7 @@ import { isAdmin, UserRole } from '@/types/user';
 import { getEmployeeById } from '@/lib/hr/employees';
 import { ensureDepartmentBudgetWithinLimit } from '@/lib/purchases/budget-guard';
 import { notifyPurchaseEvent } from '@/lib/notify';
+import { logSystemAudit } from '@/lib/audit';
 
 const financeErrorMessages: Record<string, string> = {
   INVALID_DATE: '生成财务记录失败：日期格式不正确，请联系管理员处理',
@@ -155,6 +156,17 @@ export async function handlePurchaseWorkflowAction(
           actor: permissionUser,
         });
         await submitPurchase(id, context.user.id);
+        
+        await logSystemAudit({
+          userId: context.user.id,
+          userName: context.user.display_name ?? '未知用户',
+          action: 'CREATE',
+          entityType: 'PURCHASE',
+          entityId: id,
+          entityName: purchase.itemName,
+          newValues: { status: 'pending_approval' },
+        });
+        
         await notifySafely('purchase_submitted', id);
         return respondWithDetail(id);
       }
@@ -171,6 +183,18 @@ export async function handlePurchaseWorkflowAction(
         const comment = options.comment?.trim();
         // Hardcoded: removed dynamic node checks
         const updated = await approvePurchase(id, context.user.id, comment);
+        
+        await logSystemAudit({
+          userId: context.user.id,
+          userName: context.user.display_name ?? '未知用户',
+          action: 'UPDATE',
+          entityType: 'PURCHASE',
+          entityId: id,
+          entityName: purchase.itemName,
+          oldValues: { status: purchase.status },
+          newValues: { status: updated.status, comment },
+        });
+        
         if (updated.status === 'pending_approval') {
           await notifySafely('purchase_submitted', id);
         } else if (updated.status === 'approved' || updated.status === 'pending_inbound' || updated.status === 'paid') {
@@ -191,6 +215,18 @@ export async function handlePurchaseWorkflowAction(
         const reason = options.reason?.trim();
         if (!reason) return badRequestResponse('驳回原因不能为空');
         await rejectPurchase(id, context.user.id, reason);
+        
+        await logSystemAudit({
+          userId: context.user.id,
+          userName: context.user.display_name ?? '未知用户',
+          action: 'UPDATE',
+          entityType: 'PURCHASE',
+          entityId: id,
+          entityName: purchase.itemName,
+          oldValues: { status: purchase.status },
+          newValues: { status: 'rejected', reason },
+        });
+        
         await notifySafely('purchase_rejected', id);
         return respondWithDetail(id);
       }

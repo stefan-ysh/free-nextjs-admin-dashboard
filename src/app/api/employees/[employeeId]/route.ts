@@ -11,6 +11,7 @@ import {
   UpdateEmployeeInput,
 } from '@/lib/hr/employees';
 import { checkPermission, Permissions } from '@/lib/permissions';
+import { logSystemAudit } from '@/lib/audit';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -105,6 +106,17 @@ export async function PUT(
       return notFoundResponse();
     }
 
+    await logSystemAudit({
+      userId: context.user.id,
+      userName: context.user.display_name ?? '未知用户',
+      action: 'UPDATE',
+      entityType: 'EMPLOYEE',
+      entityId: employeeId,
+      entityName: existingRecord.displayName ?? undefined,
+      oldValues: existingRecord as unknown as Record<string, unknown>,
+      newValues: body as unknown as Record<string, unknown>,
+    });
+
     let finalRecord = updated;
     if (!finalRecord.userId) {
       try {
@@ -171,6 +183,17 @@ export async function DELETE(
     }
 
     await deleteEmployee(employeeId);
+
+    await logSystemAudit({
+      userId: context.user.id,
+      userName: context.user.display_name ?? '未知用户',
+      action: 'DELETE',
+      entityType: 'EMPLOYEE',
+      entityId: employeeId,
+      entityName: record.displayName ?? undefined,
+      oldValues: record as unknown as Record<string, unknown>,
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHENTICATED') {

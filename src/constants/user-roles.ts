@@ -11,25 +11,31 @@ export const USER_ROLE_OPTIONS: UserRoleOption[] = [
   {
     value: UserRole.SUPER_ADMIN,
     label: '超级管理员',
-    description: '系统最高权限，拥有全部模块的读写能力',
+    description: '系统最高权限，拥有全部模块的只读能力',
     category: 'core',
   },
   {
-    value: UserRole.FINANCE,
+    value: UserRole.APPROVER,
     label: '审批管理员',
-    description: '负责采购审批、驳回与转审，不参与打款',
+    description: '负责采购审批、驳回与转审，以及用户管理',
+    category: 'core',
+  },
+  {
+    value: UserRole.FINANCE_DIRECTOR,
+    label: '财务总监',
+    description: '同时拥有学校财务和单位财务的全部权限',
     category: 'finance',
   },
   {
     value: UserRole.FINANCE_SCHOOL,
     label: '学校财务',
-    description: '仅负责学校组织的打款与付款异常处理',
+    description: '负责学校组织的报销审批、打款与收支管理',
     category: 'finance',
   },
   {
     value: UserRole.FINANCE_COMPANY,
     label: '单位财务',
-    description: '仅负责单位组织的打款与付款异常处理',
+    description: '负责单位组织的报销审批、打款与收支管理',
     category: 'finance',
   },
   {

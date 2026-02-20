@@ -4,8 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { createInventoryItem, listInventoryItems } from '@/lib/db/inventory';
 import { normalizeInventoryCategory } from '@/lib/inventory/catalog';
-import type { InventoryItemPayload } from '@/types/inventory';
-import { sanitizeItemPayload, validateItemPayload } from './validator';
+import { inventoryItemSchema } from '@/lib/validations/inventory';
 
 function slugify(input?: string) {
   if (!input) return '';
@@ -32,10 +31,16 @@ function isDuplicateError(error: unknown) {
   );
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const data = await listInventoryItems();
-    return NextResponse.json({ data });
+    const searchParams = request.nextUrl.searchParams;
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('pageSize') || searchParams.get('limit') || '50', 10);
+    const search = searchParams.get('search') || undefined;
+    const category = searchParams.get('category') || undefined;
+
+    const { items, total } = await listInventoryItems({ page, limit, search, category });
+    return NextResponse.json({ data: items, total });
   } catch (error) {
     console.error('[inventory.items] failed to load items', error);
     return NextResponse.json({ error: '获取商品失败' }, { status: 500 });
@@ -44,21 +49,25 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const raw = (await request.json()) as Partial<InventoryItemPayload>;
-    const payload = sanitizeItemPayload(raw);
-    const errorMessage = validateItemPayload(payload);
-    if (errorMessage) {
-      return NextResponse.json({ error: errorMessage }, { status: 400 });
+    const raw = await request.json();
+    const result = inventoryItemSchema.safeParse(raw);
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error.issues[0]?.message || '请求参数格式错误' },
+        { status: 400 }
+      );
     }
 
-    const finalPayload: InventoryItemPayload = {
-      sku: (payload.sku && typeof payload.sku === 'string' ? payload.sku.trim() : '') ||
-        generateSku(payload.category as string | undefined, payload.name as string | undefined),
-      name: String(payload.name ?? '').trim(),
-      unit: String(payload.unit ?? '').trim(),
-      category: normalizeInventoryCategory(String(payload.category ?? '未分类')),
-      safetyStock: Number(payload.safetyStock ?? 0),
-      imageUrl: payload.imageUrl?.trim() || undefined,
+    const payload = result.data;
+
+    const finalPayload = {
+      sku: payload.sku || generateSku(payload.category, payload.name),
+      name: payload.name,
+      unit: payload.unit,
+      category: normalizeInventoryCategory(payload.category),
+      safetyStock: payload.safetyStock,
+      imageUrl: payload.imageUrl,
       specFields: payload.specFields,
     };
 

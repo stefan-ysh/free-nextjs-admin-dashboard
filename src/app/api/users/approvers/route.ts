@@ -5,7 +5,7 @@ import { listUsers } from '@/lib/users';
 import { mysqlPool } from '@/lib/mysql';
 import { UserRole } from '@/types/user';
 
-const APPROVAL_ROLES: readonly UserRole[] = [UserRole.FINANCE];
+const APPROVAL_ROLES: readonly UserRole[] = [UserRole.APPROVER];
 
 type ApproverLoadRow = RowDataPacket & {
   pending_approver_id: string;

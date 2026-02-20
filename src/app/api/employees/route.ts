@@ -11,6 +11,7 @@ import {
   ensureEmployeeUserAccount,
 } from '@/lib/hr/employees';
 import { checkPermission, Permissions } from '@/lib/permissions';
+import { logSystemAudit } from '@/lib/audit';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -129,6 +130,16 @@ export async function POST(request: Request) {
         console.warn('自动生成系统账号失败', autoBindError);
       }
     }
+
+    await logSystemAudit({
+      userId: context.user.id,
+      userName: context.user.display_name ?? '未知用户',
+      action: 'CREATE',
+      entityType: 'EMPLOYEE',
+      entityId: finalRecord.id,
+      entityName: finalRecord.displayName ?? undefined,
+      newValues: body as unknown as Record<string, unknown>,
+    });
 
     return NextResponse.json({ success: true, data: finalRecord }, { status: 201 });
   } catch (error) {

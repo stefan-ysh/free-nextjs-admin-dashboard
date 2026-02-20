@@ -7,6 +7,7 @@ import { listReimbursements, createReimbursement } from '@/lib/db/reimbursements
 import { mapReimbursementError } from '@/lib/reimbursements/error-messages';
 import { isReimbursementOrganizationType, isReimbursementSourceType, isReimbursementStatus } from '@/types/reimbursement';
 import { UserRole } from '@/types/user';
+import { logSystemAudit } from '@/lib/audit';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -87,6 +88,17 @@ export async function POST(request: Request) {
     if (!rawBody || typeof rawBody !== 'object') return badRequestResponse('请求体格式错误');
 
     const created = await createReimbursement(rawBody as Parameters<typeof createReimbursement>[0], permissionUser.id);
+    
+    await logSystemAudit({
+      userId: context.user.id,
+      userName: context.user.display_name ?? '未知用户',
+      action: 'CREATE',
+      entityType: 'REIMBURSEMENT',
+      entityId: created.id,
+      entityName: `${created.applicantName} - ${created.amount}元`,
+      newValues: rawBody as unknown as Record<string, unknown>,
+    });
+    
     return NextResponse.json({ success: true, data: created }, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHENTICATED') return unauthorizedResponse();

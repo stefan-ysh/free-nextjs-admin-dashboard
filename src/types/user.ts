@@ -3,15 +3,10 @@
  */
 export enum UserRole {
   SUPER_ADMIN = 'super_admin',
-  ADMIN = 'admin',
-  FINANCE = 'finance',
+  APPROVER = 'approver',
+  FINANCE_DIRECTOR = 'finance_director',
   FINANCE_SCHOOL = 'finance_school',
   FINANCE_COMPANY = 'finance_company',
-  HR = 'hr',
-  DEPARTMENT_MANAGER = 'department_manager',
-  INVENTORY_MANAGER = 'inventory_manager',
-  INVENTORY_OPERATOR = 'inventory_operator',
-  AUDITOR = 'auditor',
   EMPLOYEE = 'employee',
 }
 
@@ -214,18 +209,4 @@ export function getEmployeeInfo(user: UserRecord | UserProfile): EmployeeInfo | 
  */
 export function isAdmin(user: UserRecord | UserProfile): boolean {
   return user.primaryRole === UserRole.SUPER_ADMIN;
-}
-
-/**
- * 辅助函数：判断用户是否是财务人员
- */
-export function isFinance(user: UserRecord | UserProfile): boolean {
-  return hasRole(user, UserRole.FINANCE);
-}
-
-/**
- * 辅助函数：判断用户是否是人事专员
- */
-export function isHR(user: UserRecord | UserProfile): boolean {
-  return hasRole(user, UserRole.HR);
 }

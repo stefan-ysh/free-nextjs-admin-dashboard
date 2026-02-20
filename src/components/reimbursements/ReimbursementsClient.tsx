@@ -15,6 +15,7 @@ import { Drawer, DrawerBody, DrawerContent, DrawerFooter, DrawerHeader, DrawerTi
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import Pagination from '@/components/tables/Pagination';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -160,6 +161,11 @@ export default function ReimbursementsClient() {
   const searchParams = useSearchParams();
   const [records, setRecords] = useState<ReimbursementRecord[]>([]);
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalItems, setTotalItems] = useState(0);
+
   // Dialog states
   const [deleteTarget, setDeleteTarget] = useState<ReimbursementRecord | null>(null);
   const [rejectTarget, setRejectTarget] = useState<ReimbursementRecord | null>(null);
@@ -257,10 +263,15 @@ export default function ReimbursementsClient() {
   const fetchList = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
+      const qPage = searchParams.get('page') || '1';
+      const qPageSize = searchParams.get('pageSize') || '20';
+      const parsedPage = parseInt(qPage, 10) || 1;
+      const parsedPageSize = parseInt(qPageSize, 10) || 20;
+
       const params = new URLSearchParams();
       params.set('scope', scope);
-      params.set('page', '1');
-      params.set('pageSize', '50');
+      params.set('page', parsedPage.toString());
+      params.set('pageSize', parsedPageSize.toString());
       if (search.trim()) params.set('search', search.trim());
       
       const response = await fetch(`/api/reimbursements?${params.toString()}`, { 
@@ -274,9 +285,12 @@ export default function ReimbursementsClient() {
       }
       if (!signal?.aborted) {
         setRecords(payload.data.items);
+        setPage(payload.data.page);
+        setPageSize(payload.data.pageSize);
+        setTotalItems(payload.data.total);
       }
-    } catch (error: any) {
-      if (error?.name === 'AbortError' || error?.toString().includes('AbortError')) return;
+    } catch (error) {
+      if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('AbortError'))) return;
       // Ignore abort errors from signal
       if (signal?.aborted) return;
       
@@ -287,7 +301,7 @@ export default function ReimbursementsClient() {
         setLoading(false);
       }
     }
-  }, [scope, search]);
+  }, [scope, search, searchParams]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -449,6 +463,12 @@ export default function ReimbursementsClient() {
   useEffect(() => {
     void fetchList();
   }, [fetchList]);
+
+  const handlePageChange = useCallback((newPage: number) => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('page', newPage.toString());
+    window.history.pushState(null, '', `?${params.toString()}`);
+  }, []);
 
   useEffect(() => {
     if (!drawerOpen || form.sourceType !== 'purchase') return;
@@ -1076,6 +1096,25 @@ export default function ReimbursementsClient() {
             </TableBody>
           </Table>
         </div>
+        
+        {/* Pagination Desktop & Mobile container */}
+        {totalItems > pageSize && (
+          <div className="surface-card mt-3 flex flex-col md:flex-row items-center justify-between gap-4 p-4 text-sm text-muted-foreground">
+            <div>
+              共 {totalItems} 条 · 第 {page} / {Math.ceil(totalItems / pageSize)} 页
+            </div>
+            <Pagination
+              currentPage={page}
+              totalPages={Math.ceil(totalItems / pageSize)}
+              onPageChange={handlePageChange}
+              pageSize={pageSize}
+              onPageSizeChange={(size) => {
+                setPageSize(size);
+                setPage(1);
+              }}
+            />
+          </div>
+        )}
       </div>
 
       <Drawer

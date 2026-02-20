@@ -9,6 +9,8 @@ import { CreatePurchaseInput } from '@/types/purchase';
 import { UserRole } from '@/types/user';
 import { parsePurchaseListParams } from './query-utils';
 import { mapPurchaseValidationError } from '@/lib/purchases/error-messages';
+import { createPurchaseSchema } from '@/lib/validations/purchase';
+import { logSystemAudit } from '@/lib/audit';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -27,6 +29,7 @@ export async function GET(request: Request) {
     const context = await requireCurrentUser();
     const permissionUser = await toPermissionUser(context.user);
     const isSuperAdmin = permissionUser.primaryRole === UserRole.SUPER_ADMIN;
+    const isFinanceDirector = permissionUser.primaryRole === UserRole.FINANCE_DIRECTOR;
     const isFinanceSchool = permissionUser.primaryRole === UserRole.FINANCE_SCHOOL;
     const isFinanceCompany = permissionUser.primaryRole === UserRole.FINANCE_COMPANY;
     
@@ -39,14 +42,20 @@ export async function GET(request: Request) {
     if (!isSuperAdmin) {
       if (scope === 'workflow_done') {
         params.relatedUserId = context.user.id;
+      } else if (scope === 'rejected_own') {
+        // 财务人员或普通员工查看自己被驳回的采购，始终按用户ID过滤
+        params.purchaserId = context.user.id;
+        params.status = 'rejected';
+      } else if (isFinanceDirector) {
+        // 财务总监可查看所有组织类型的采购
       } else if (isFinanceSchool) {
-        // School Finance sees all school purchases
+        // 学校财务仅查看学校采购
         params.organizationType = 'school';
       } else if (isFinanceCompany) {
-        // Company Finance sees all company purchases
+        // 单位财务仅查看单位采购
         params.organizationType = 'company';
       } else {
-        // Regular employees only see their own
+        // 普通员工只能查看自己的采购
         params.purchaserId = context.user.id;
       }
     }
@@ -73,21 +82,13 @@ export async function POST(request: Request) {
     if (!perm.allowed) return forbiddenResponse();
 
     const rawBody: unknown = await request.json();
-    if (!rawBody || typeof rawBody !== 'object') return badRequestResponse('请求体格式错误');
-    const body = rawBody as CreatePurchaseInput;
+    const result = createPurchaseSchema.safeParse(rawBody);
 
-    // minimal validation - DAO will assert more
-    if (
-      !body.purchaseDate ||
-      !body.organizationType ||
-      !body.itemName ||
-      typeof body.quantity !== 'number' ||
-      typeof body.unitPrice !== 'number' ||
-      typeof body.paymentMethod !== 'string' ||
-      typeof body.paymentType !== 'string'
-    ) {
-      return badRequestResponse('缺少必填字段');
+    if (!result.success) {
+      return badRequestResponse(result.error.issues[0]?.message || '请求参数格式错误');
     }
+
+    const body = result.data as CreatePurchaseInput;
 
     // const purchaserId = body.purchaserId ?? context.user.id; // Unused after removing budget check
     // const totalAmount = Number(body.quantity) * Number(body.unitPrice) + Number(body.feeAmount ?? 0);
@@ -95,6 +96,17 @@ export async function POST(request: Request) {
     // await ensureDepartmentBudgetWithinLimit({ ... });
 
     const created = await createPurchase(body, context.user.id);
+    
+    await logSystemAudit({
+      userId: context.user.id,
+      userName: context.user.display_name ?? '未知用户',
+      action: 'CREATE',
+      entityType: 'PURCHASE',
+      entityId: created.id,
+      entityName: `${body.itemName} x ${body.quantity}`,
+      newValues: body as unknown as Record<string, unknown>,
+    });
+    
     return NextResponse.json({ success: true, data: created }, { status: 201 });
   } catch (error) {
     if (error instanceof Error) {

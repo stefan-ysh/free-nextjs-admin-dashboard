@@ -176,6 +176,10 @@ export async function listInAppNotificationsByRecipient(params: {
 export async function listFinanceRecipientIds(orgType?: 'school' | 'company') {
   await ensureNotificationsSchema();
   const pool = mysqlPool();
+  const directorClause = `
+         primary_role = 'finance_director'
+         OR COALESCE(roles, '') LIKE '%"finance_director"%'
+  `;
   const schoolClause = `
          primary_role = 'finance_school'
          OR COALESCE(roles, '') LIKE '%"finance_school"%'
@@ -184,8 +188,12 @@ export async function listFinanceRecipientIds(orgType?: 'school' | 'company') {
          primary_role = 'finance_company'
          OR COALESCE(roles, '') LIKE '%"finance_company"%'
   `;
-  const bothClause = `${schoolClause} OR ${companyClause}`;
-  const scopedFinanceClause = orgType === 'school' ? schoolClause : orgType === 'company' ? companyClause : bothClause;
+  const bothClause = `${directorClause} OR ${schoolClause} OR ${companyClause}`;
+  const scopedFinanceClause = orgType === 'school'
+    ? `${directorClause} OR ${schoolClause}`
+    : orgType === 'company'
+      ? `${directorClause} OR ${companyClause}`
+      : bothClause;
   const [rows] = await pool.query<FinanceUserRow[]>(
     `SELECT id
      FROM hr_employees

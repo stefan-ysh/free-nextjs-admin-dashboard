@@ -31,7 +31,7 @@ function badRequestResponse(message: string) {
 
 function canHandleFinanceByOrg(role: UserRole, orgType: 'school' | 'company'): boolean {
   if (role === UserRole.SUPER_ADMIN) return true;
-  if (role === UserRole.FINANCE) return true;
+  if (role === UserRole.FINANCE_DIRECTOR) return true;
   if (role === UserRole.FINANCE_SCHOOL) return orgType === 'school';
   if (role === UserRole.FINANCE_COMPANY) return orgType === 'company';
   return false;

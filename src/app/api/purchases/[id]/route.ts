@@ -6,6 +6,8 @@ import { mapPurchaseValidationError } from '@/lib/purchases/error-messages';
 import { NextResponse } from 'next/server';
 
 import type { UpdatePurchaseInput } from '@/types/purchase';
+import { updatePurchaseSchema } from '@/lib/validations/purchase';
+import { logSystemAudit } from '@/lib/audit';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -64,10 +66,27 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
 
     const rawBody: unknown = await request.json();
-    if (!rawBody || typeof rawBody !== 'object') return badRequestResponse('请求体格式错误');
-    const body = rawBody as UpdatePurchaseInput;
+    const result = updatePurchaseSchema.safeParse(rawBody);
+
+    if (!result.success) {
+      return badRequestResponse(result.error.issues[0]?.message || '请求参数格式错误');
+    }
+
+    const body = result.data as UpdatePurchaseInput;
 
     const updated = await updatePurchase(id, body);
+    
+    await logSystemAudit({
+      userId: context.user.id,
+      userName: context.user.display_name ?? '未知用户',
+      action: 'UPDATE',
+      entityType: 'PURCHASE',
+      entityId: id,
+      entityName: purchase.itemName,
+      oldValues: purchase as unknown as Record<string, unknown>,
+      newValues: body as unknown as Record<string, unknown>,
+    });
+    
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     if (error instanceof Error) {
@@ -97,6 +116,17 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     }
 
     await deletePurchase(id, context.user.id);
+    
+    await logSystemAudit({
+      userId: context.user.id,
+      userName: context.user.display_name ?? '未知用户',
+      action: 'DELETE',
+      entityType: 'PURCHASE',
+      entityId: id,
+      entityName: purchase.itemName,
+      oldValues: purchase as unknown as Record<string, unknown>,
+    });
+    
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof Error) {

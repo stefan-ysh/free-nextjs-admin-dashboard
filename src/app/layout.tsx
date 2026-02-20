@@ -6,6 +6,7 @@ import { SidebarProvider } from '@/context/SidebarContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import ToastProvider from '@/components/common/ToastProvider';
 import { AuthProvider } from './auth-context';
+import ReactQueryProvider from '@/components/providers/ReactQueryProvider';
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -68,8 +69,10 @@ export default function RootLayout({
       >
         <ThemeProvider>
           <AuthProvider>
-            <SidebarProvider>{children}</SidebarProvider>
-            <ToastProvider />
+            <ReactQueryProvider>
+              <SidebarProvider>{children}</SidebarProvider>
+              <ToastProvider />
+            </ReactQueryProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

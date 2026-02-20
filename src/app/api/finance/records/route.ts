@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate') || undefined;
     const endDate = searchParams.get('endDate') || undefined;
     const requestedPage = Number.parseInt(searchParams.get('page') || '', 10);
-    const requestedLimit = Number.parseInt(searchParams.get('limit') || '', 10);
+    const requestedLimit = Number.parseInt(searchParams.get('pageSize') || searchParams.get('limit') || '', 10);
     const page = Number.isNaN(requestedPage) ? 1 : Math.max(1, requestedPage);
     const limit = Number.isNaN(requestedLimit)
       ? 20

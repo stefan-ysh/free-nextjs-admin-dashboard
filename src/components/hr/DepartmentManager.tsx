@@ -396,6 +396,8 @@ export default function DepartmentManager() {
                 currentPage={page}
                 totalPages={totalPages}
                 onPageChange={handlePageChange}
+                pageSize={pageSize}
+                onPageSizeChange={handlePageSizeChange}
               />
             </div>
           </div>

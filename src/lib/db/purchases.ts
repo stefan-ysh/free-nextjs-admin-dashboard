@@ -576,8 +576,8 @@ async function pickAutoApproverId(): Promise<string> {
       ) approver_load ON approver_load.pending_approver_id = e.id
       WHERE e.is_active = 1
         AND (
-          e.primary_role = 'finance'
-          OR COALESCE(e.roles, '') LIKE '%"finance"%'
+          e.primary_role = 'approver'
+          OR COALESCE(e.roles, '') LIKE '%"approver"%'
         )
       ORDER BY
         COALESCE(approver_load.pending_count, 0) ASC,

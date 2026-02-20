@@ -114,3 +114,39 @@ export const purchaseFormSchema = z
   });
 
 export type PurchaseFormValues = z.infer<typeof purchaseFormSchema>;
+
+export const createPurchaseSchema = z.object({
+  purchaseDate: z.string().min(1, '请选择采购日期'),
+  organizationType: purchaseOrganizationEnum,
+  itemName: z.string().trim().min(1, '物品名称不能为空'),
+  inventoryItemId: z.string().optional().nullable(),
+  specification: z.string().optional().nullable(),
+  quantity: z.coerce.number().min(0.01, '数量必须大于 0'),
+  unitPrice: z.coerce.number().min(0, '单价不能为负数'),
+  feeAmount: z.coerce.number().min(0, '手续费不能为负数').optional().default(0),
+
+  purchaseChannel: purchaseChannelEnum,
+  purchaseLocation: z.string().optional().nullable(),
+  purchaseLink: z.string().optional().nullable(),
+  purpose: z.string().trim().min(1, '采购用途不能为空'),
+
+  paymentMethod: paymentMethodEnum,
+  paymentType: paymentTypeEnum,
+  paymentChannel: z.string().optional().nullable(),
+  payerName: z.string().optional().nullable(),
+  transactionNo: z.string().optional().nullable(),
+  purchaserId: z.string().min(1, '采购申请人不能为空'),
+  
+  hasInvoice: z.boolean().default(false),
+  invoiceType: invoiceTypeEnum,
+  invoiceStatus: invoiceStatusEnum.optional(),
+  invoiceNumber: z.string().optional().nullable(),
+  invoiceIssueDate: z.string().optional().nullable(),
+  invoiceImages: z.array(z.string()).optional().default([]),
+  receiptImages: z.array(z.string()).optional().default([]),
+
+  notes: z.string().optional().nullable(),
+  attachments: z.array(z.string()).optional().default([]),
+});
+
+export const updatePurchaseSchema = createPurchaseSchema.partial().omit({ purchaserId: true });

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   type PurchaseAuditLogItem,
@@ -80,7 +81,7 @@ export default function PurchaseAuditClient() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(1);
-  const pageSize = 30;
+  const [pageSize, setPageSize] = useState(30);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +121,7 @@ export default function PurchaseAuditClient() {
     } finally {
       setLoading(false);
     }
-  }, [action, canAccess, endDate, page, permissionLoading, search, startDate]);
+  }, [action, canAccess, endDate, page, pageSize, permissionLoading, search, startDate]);
 
   useEffect(() => {
     if (!permissionLoading && canAccess) {
@@ -231,27 +232,27 @@ export default function PurchaseAuditClient() {
 
       <div className="surface-table flex-1 min-h-0 flex flex-col">
         <div className="max-h-[calc(100vh-280px)] overflow-auto custom-scrollbar">
-        <table className="w-full min-w-[980px] text-sm">
-          <thead className="sticky top-0 z-10 bg-card">
-            <tr className="border-b border-border/70 bg-muted/20 text-left text-xs text-muted-foreground">
-              <th className="px-3 py-2 font-medium">时间</th>
-              <th className="px-3 py-2 font-medium">单号</th>
-              <th className="px-3 py-2 font-medium">物品</th>
-              <th className="px-3 py-2 font-medium">动作</th>
-              <th className="px-3 py-2 font-medium">状态流转</th>
-              <th className="px-3 py-2 font-medium">操作人</th>
-              <th className="px-3 py-2 font-medium">备注</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table className="w-full min-w-[980px]">
+          <TableHeader className="sticky top-0 z-10 bg-card">
+            <TableRow className="border-b border-border/70 bg-muted/20 text-left text-xs text-muted-foreground">
+              <TableHead className="font-medium">时间</TableHead>
+              <TableHead className="font-medium">单号</TableHead>
+              <TableHead className="font-medium">物品</TableHead>
+              <TableHead className="font-medium">动作</TableHead>
+              <TableHead className="font-medium">状态流转</TableHead>
+              <TableHead className="font-medium">操作人</TableHead>
+              <TableHead className="font-medium">备注</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {groupByPurchase
               ? groupedItems.map((group) => {
                   const isExpanded = expandedPurchaseNumbers[group.purchaseNumber] ?? true;
                   return (
                     <Fragment key={`group-${group.purchaseNumber}`}>
-                      <tr className="border-b border-border/50 bg-muted/10">
-                        <td className="px-3 py-2">{toDateTime(group.latestCreatedAt)}</td>
-                        <td className="px-3 py-2">
+                      <TableRow className="border-b border-border/50 bg-muted/10">
+                        <TableCell>{toDateTime(group.latestCreatedAt)}</TableCell>
+                        <TableCell>
                           <button
                             type="button"
                             className="inline-flex items-center gap-1 font-medium hover:text-primary"
@@ -265,55 +266,69 @@ export default function PurchaseAuditClient() {
                             {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                             {group.purchaseNumber}
                           </button>
-                        </td>
-                        <td className="px-3 py-2">{group.itemName}</td>
-                        <td className="px-3 py-2">{ACTION_LABELS[group.latestAction] ?? group.latestAction}</td>
-                        <td className="px-3 py-2">共 {group.count} 条操作记录</td>
-                        <td className="px-3 py-2">-</td>
-                        <td className="px-3 py-2">点击单号展开/收起</td>
-                      </tr>
+                        </TableCell>
+                        <TableCell>{group.itemName}</TableCell>
+                        <TableCell>{ACTION_LABELS[group.latestAction] ?? group.latestAction}</TableCell>
+                        <TableCell>共 {group.count} 条操作记录</TableCell>
+                        <TableCell>-</TableCell>
+                        <TableCell>点击单号展开/收起</TableCell>
+                      </TableRow>
                       {isExpanded
                         ? group.logs.map((item) => (
-                            <tr key={item.id} className="border-b border-border/30 text-muted-foreground">
-                              <td className="px-3 py-2">{toDateTime(item.createdAt)}</td>
-                              <td className="px-3 py-2 pl-8">{item.purchaseNumber}</td>
-                              <td className="px-3 py-2">{item.itemName}</td>
-                              <td className="px-3 py-2">{ACTION_LABELS[item.action] ?? item.action}</td>
-                              <td className="px-3 py-2">
+                            <TableRow key={item.id} className="border-b border-border/30 text-muted-foreground">
+                              <TableCell>{toDateTime(item.createdAt)}</TableCell>
+                              <TableCell className="pl-8">{item.purchaseNumber}</TableCell>
+                              <TableCell>{item.itemName}</TableCell>
+                              <TableCell>{ACTION_LABELS[item.action] ?? item.action}</TableCell>
+                              <TableCell>
                                 {getPurchaseStatusText(item.fromStatus)} {'->'} {getPurchaseStatusText(item.toStatus)}
-                              </td>
-                              <td className="px-3 py-2">{item.operatorName}</td>
-                              <td className="px-3 py-2">{item.comment || '-'}</td>
-                            </tr>
+                              </TableCell>
+                              <TableCell>{item.operatorName}</TableCell>
+                              <TableCell>{item.comment || '-'}</TableCell>
+                            </TableRow>
                           ))
                         : null}
                     </Fragment>
                   );
                 })
               : items.map((item) => (
-                  <tr key={item.id} className="border-b border-border/40">
-                    <td className="px-3 py-2">{toDateTime(item.createdAt)}</td>
-                    <td className="px-3 py-2">{item.purchaseNumber}</td>
-                    <td className="px-3 py-2">{item.itemName}</td>
-                    <td className="px-3 py-2">{ACTION_LABELS[item.action] ?? item.action}</td>
-                    <td className="px-3 py-2">{getPurchaseStatusText(item.fromStatus)} {'->'} {getPurchaseStatusText(item.toStatus)}</td>
-                    <td className="px-3 py-2">{item.operatorName}</td>
-                    <td className="px-3 py-2">{item.comment || '-'}</td>
-                  </tr>
+                  <TableRow key={item.id} className="border-b border-border/40">
+                    <TableCell>{toDateTime(item.createdAt)}</TableCell>
+                    <TableCell>{item.purchaseNumber}</TableCell>
+                    <TableCell>{item.itemName}</TableCell>
+                    <TableCell>{ACTION_LABELS[item.action] ?? item.action}</TableCell>
+                    <TableCell>{getPurchaseStatusText(item.fromStatus)} {'->'} {getPurchaseStatusText(item.toStatus)}</TableCell>
+                    <TableCell>{item.operatorName}</TableCell>
+                    <TableCell>{item.comment || '-'}</TableCell>
+                  </TableRow>
                 ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
         {!loading && items.length === 0 ? <p className="p-4 text-sm text-muted-foreground">暂无审计日志</p> : null}
         </div>
       </div>
 
       <div className="flex items-center justify-between text-sm text-muted-foreground">
         <span>共 {total} 条</span>
-        <Pagination
-          currentPage={page}
-          totalPages={totalPages}
-          onPageChange={setPage}
-        />
+        <div className="flex items-center gap-3">
+          <Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setPage(1); }}>
+            <SelectTrigger className="h-9 w-[120px]">
+              <SelectValue placeholder="每页数量" />
+            </SelectTrigger>
+            <SelectContent>
+              {[10, 20, 30, 50, 100].map((size) => (
+                <SelectItem key={size} value={String(size)}>每页 {size} 条</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            pageSize={pageSize}
+            onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+          />
+        </div>
       </div>
     </div>
   );

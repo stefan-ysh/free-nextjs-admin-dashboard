@@ -14,6 +14,7 @@ import {
 import { mapReimbursementError } from '@/lib/reimbursements/error-messages';
 import { notifyReimbursementEvent } from '@/lib/notify/reimbursement';
 import { UserRole } from '@/types/user';
+import { logSystemAudit } from '@/lib/audit';
 
 type WorkflowAction = 'submit' | 'approve' | 'reject' | 'pay' | 'withdraw';
 
@@ -81,6 +82,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (!canSubmit.allowed) return forbiddenResponse();
       if (existing.applicantId !== permissionUser.id && existing.createdBy !== permissionUser.id) return forbiddenResponse();
       const updated = await submitReimbursement(id, permissionUser.id);
+      
+      await logSystemAudit({
+        userId: context.user.id,
+        userName: context.user.display_name ?? '未知用户',
+        action: 'UPDATE',
+        entityType: 'REIMBURSEMENT',
+        entityId: id,
+        entityName: `${existing.applicantName} - ${existing.amount}元`,
+        oldValues: { status: existing.status },
+        newValues: { status: updated.status },
+      });
+      
       await notifySafely('reimbursement_submitted', id);
       return NextResponse.json({ success: true, data: updated });
     }
@@ -100,6 +113,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (!canApprove.allowed) return forbiddenResponse();
       if (existing.pendingApproverId && existing.pendingApproverId !== permissionUser.id) return forbiddenResponse();
       const updated = await approveReimbursement(id, permissionUser.id, typeof comment === 'string' ? comment : null);
+      
+      await logSystemAudit({
+        userId: context.user.id,
+        userName: context.user.display_name ?? '未知用户',
+        action: 'UPDATE',
+        entityType: 'REIMBURSEMENT',
+        entityId: id,
+        entityName: `${existing.applicantName} - ${existing.amount}元`,
+        oldValues: { status: existing.status },
+        newValues: { status: updated.status, comment },
+      });
+      
       await notifySafely('reimbursement_approved', id);
       return NextResponse.json({ success: true, data: updated });
     }
@@ -117,6 +142,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
       if (typeof reason !== 'string' || !reason.trim()) return badRequestResponse('驳回原因不能为空');
       const updated = await rejectReimbursement(id, permissionUser.id, reason.trim());
+      
+      await logSystemAudit({
+        userId: context.user.id,
+        userName: context.user.display_name ?? '未知用户',
+        action: 'UPDATE',
+        entityType: 'REIMBURSEMENT',
+        entityId: id,
+        entityName: `${existing.applicantName} - ${existing.amount}元`,
+        oldValues: { status: existing.status },
+        newValues: { status: updated.status, reason: reason.trim() },
+      });
+      
       await notifySafely('reimbursement_rejected', id);
       return NextResponse.json({ success: true, data: updated });
     }
@@ -126,6 +163,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (!canPay.allowed) return forbiddenResponse();
       if (!canPayByOrg(permissionUser.primaryRole, existing.organizationType)) return forbiddenResponse();
       const updated = await payReimbursement(id, permissionUser.id, typeof note === 'string' ? note : null);
+      
+      await logSystemAudit({
+        userId: context.user.id,
+        userName: context.user.display_name ?? '未知用户',
+        action: 'UPDATE',
+        entityType: 'REIMBURSEMENT',
+        entityId: id,
+        entityName: `${existing.applicantName} - ${existing.amount}元`,
+        oldValues: { status: existing.status },
+        newValues: { status: updated.status, note },
+      });
+      
       await notifySafely('reimbursement_paid', id);
       return NextResponse.json({ success: true, data: updated });
     }

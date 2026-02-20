@@ -302,25 +302,68 @@ async function fetchMovement(queryable: Queryable, id: string): Promise<Inventor
   return row ? mapMovement(row) : null;
 }
 
-export async function listInventoryItems(): Promise<InventoryItem[]> {
+export async function listInventoryItems(params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  category?: string;
+}): Promise<{ items: InventoryItem[]; total: number }> {
   await ensureInventorySchema();
-  const [rows] = await pool.query<InventoryItemRow[]>(
-    'SELECT * FROM inventory_items WHERE is_deleted = 0 ORDER BY name ASC'
+
+  const page = Math.max(1, params?.page ?? 1);
+  const limit = Math.max(1, Math.min(100, params?.limit ?? 50));
+  const offset = (page - 1) * limit;
+
+  const conditions: string[] = ['is_deleted = 0'];
+  const values: unknown[] = [];
+
+  if (params?.search) {
+    conditions.push('(name LIKE ? OR sku LIKE ?)');
+    values.push(`%${params.search}%`, `%${params.search}%`);
+  }
+  
+  if (params?.category) {
+    conditions.push('category = ?');
+    values.push(normalizeInventoryCategory(params.category));
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const [[countRow]] = await pool.query<RowDataPacket[]>(
+    `SELECT COUNT(*) AS total FROM inventory_items ${whereClause}`,
+    values
   );
+  const total = Number(countRow?.total ?? 0);
+
+  const [rows] = await pool.query<InventoryItemRow[]>(
+    `SELECT * FROM inventory_items ${whereClause} ORDER BY name ASC LIMIT ? OFFSET ?`,
+    [...values, limit, offset]
+  );
+
+  if (rows.length === 0) {
+    return { items: [], total };
+  }
+
+  const itemIds = rows.map(r => r.id);
+  const placeholders = itemIds.map(() => '?').join(',');
 
   const [stockRows] = await pool.query<(RowDataPacket & { item_id: string; total: number })[]>(
     `SELECT item_id, SUM(quantity) as total 
      FROM inventory_stock_snapshots 
-     GROUP BY item_id`
+     WHERE item_id IN (${placeholders})
+     GROUP BY item_id`,
+     itemIds
   );
   
   const stockMap = new Map<string, number>(stockRows.map((r) => [r.item_id, Number(r.total)]));
 
-  return rows.map((row) => {
+  const items = rows.map((row) => {
     const item = mapInventoryItem(row);
     item.stockQuantity = stockMap.get(item.id) ?? 0;
     return item;
   });
+
+  return { items, total };
 }
 
 export async function listWarehouses(): Promise<Warehouse[]> {
@@ -612,9 +655,46 @@ export async function deleteWarehouse(id: string): Promise<boolean> {
   return result.affectedRows > 0;
 }
 
-export async function listMovements(limit = 50): Promise<InventoryMovement[]> {
+export interface ListMovementsParams {
+  page?: number;
+  limit?: number;
+  direction?: 'inbound' | 'outbound';
+  itemId?: string;
+  warehouseId?: string;
+}
+
+export async function listMovements(
+  params: ListMovementsParams = {}
+): Promise<{ items: InventoryMovement[]; total: number }> {
   await ensureInventorySchema();
-  const safeLimit = Math.min(Math.max(limit, 1), 200);
+  const page = Math.max(1, params.page || 1);
+  const limit = Math.min(Math.max(params.limit || 50, 1), 500);
+  const offset = (page - 1) * limit;
+
+  const conditions: string[] = ['1=1'];
+  const values: (string | number)[] = [];
+
+  if (params.direction) {
+    conditions.push('m.direction = ?');
+    values.push(params.direction);
+  }
+  if (params.itemId) {
+    conditions.push('m.item_id = ?');
+    values.push(params.itemId);
+  }
+  if (params.warehouseId) {
+    conditions.push('m.warehouse_id = ?');
+    values.push(params.warehouseId);
+  }
+
+  const whereClause = conditions.join(' AND ');
+
+  const [[countRow]] = await pool.query<RowDataPacket[]>(
+    `SELECT COUNT(*) as total FROM inventory_movements m WHERE ${whereClause}`,
+    values
+  );
+  const total = Number(countRow.total);
+
   const [rows] = await pool.query<MovementRow[]>(
     `
       SELECT
@@ -622,12 +702,13 @@ export async function listMovements(limit = 50): Promise<InventoryMovement[]> {
         COALESCE(op.display_name, op.email) AS operator_name
       FROM inventory_movements m
       LEFT JOIN hr_employees op ON op.id = m.operator_id
+      WHERE ${whereClause}
       ORDER BY m.occurred_at DESC, m.created_at DESC
-      LIMIT ?
+      LIMIT ? OFFSET ?
     `,
-    [safeLimit]
+    [...values, limit, offset]
   );
-  return rows.map(mapMovement);
+  return { items: rows.map(mapMovement), total };
 }
 
 export async function reserveStock(

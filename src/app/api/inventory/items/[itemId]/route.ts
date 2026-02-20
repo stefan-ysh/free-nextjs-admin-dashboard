@@ -9,8 +9,7 @@ import {
   INVENTORY_ERRORS,
 } from '@/lib/db/inventory';
 import { normalizeInventoryCategory } from '@/lib/inventory/catalog';
-import type { InventoryItemPayload } from '@/types/inventory';
-import { sanitizeItemPayload, validateItemPayload } from '../validator';
+import { inventoryItemUpdateSchema } from '@/lib/validations/inventory';
 
 function notFoundResponse() {
   return NextResponse.json({ error: '商品不存在' }, { status: 404 });
@@ -48,14 +47,19 @@ export async function PATCH(
 ) {
   try {
     const { itemId } = await params;
-    const raw = (await request.json()) as Partial<InventoryItemPayload>;
-    const payload = sanitizeItemPayload(raw);
+    const raw = await request.json();
+    const result = inventoryItemUpdateSchema.safeParse(raw);
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error.issues[0]?.message || '请求参数格式错误' },
+        { status: 400 }
+      );
+    }
+
+    const payload = result.data;
     if (payload.category !== undefined) {
       payload.category = normalizeInventoryCategory(String(payload.category));
-    }
-    const errorMessage = validateItemPayload(payload, { partial: true });
-    if (errorMessage) {
-      return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
 
     const data = await updateInventoryItem(itemId, payload);

@@ -1,10 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 
 import InventoryInboundForm from '@/components/inventory/InventoryInboundForm';
 import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import Pagination from '@/components/tables/Pagination';
 import {
   Drawer,
   DrawerClose,
@@ -29,10 +31,18 @@ type InboundMovementRow = InventoryMovement & {
 export default function InventoryInboundPage() {
   const searchParams = useSearchParams();
   const initialPurchaseId = searchParams.get('purchaseId')?.trim() || '';
+  const initialPage = parseInt(searchParams.get('page') || '1', 10);
+  const initialPageSize = parseInt(searchParams.get('pageSize') || '50', 10);
+  const router = useRouter();
+  const pathname = usePathname();
+
   const { hasPermission, loading } = usePermissions();
   const [inboundDrawerOpen, setInboundDrawerOpen] = useState(false);
   const [inboundMovements, setInboundMovements] = useState<InboundMovementRow[]>([]);
   const [movementsLoading, setMovementsLoading] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(initialPage);
+  const [pageSize, setPageSize] = useState(initialPageSize);
   const inboundFormId = 'inventory-inbound-page-form';
 
   const canAccess = useMemo(
@@ -42,14 +52,28 @@ export default function InventoryInboundPage() {
     [hasPermission]
   );
 
+  const syncUrl = useCallback(
+    (newPage: number, newPageSize: number) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('page', newPage.toString());
+      if (newPageSize !== 50) {
+        params.set('pageSize', newPageSize.toString());
+      } else {
+        params.delete('pageSize');
+      }
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [searchParams, pathname, router]
+  );
+
   const fetchInboundMovements = useCallback(async () => {
     setMovementsLoading(true);
     try {
       const [movementsResponse, purchasesResponse] = await Promise.all([
-        fetch('/api/inventory/movements?direction=inbound', { headers: { Accept: 'application/json' } }),
+        fetch(`/api/inventory/movements?direction=inbound&page=${page}&limit=${pageSize}`, { headers: { Accept: 'application/json' } }),
         fetch('/api/purchases?page=1&pageSize=500&sortBy=updatedAt&sortOrder=desc', { headers: { Accept: 'application/json' } }),
       ]);
-      const movementPayload = (await movementsResponse.json()) as { data?: InboundMovementRow[] };
+      const movementPayload = (await movementsResponse.json()) as { data?: InboundMovementRow[], total?: number };
       const purchasePayload = (await purchasesResponse.json()) as { data?: { items?: PurchaseRecord[] } };
       const purchaseMap = new Map((purchasePayload.data?.items ?? []).map((item) => [item.id, item.purchaseNumber]));
 
@@ -58,13 +82,15 @@ export default function InventoryInboundPage() {
         relatedPurchaseNumber: movement.relatedPurchaseId ? purchaseMap.get(movement.relatedPurchaseId) : undefined,
       }));
       setInboundMovements(rows);
+      setTotal(movementPayload.total ?? 0);
     } catch (error) {
       console.error('Failed to load inbound movements', error);
       setInboundMovements([]);
+      setTotal(0);
     } finally {
       setMovementsLoading(false);
     }
-  }, []);
+  }, [page, pageSize]);
 
   useEffect(() => {
     if (!canAccess) return;
@@ -77,6 +103,17 @@ export default function InventoryInboundPage() {
     setInboundDrawerOpen(true);
   }, [canAccess, initialPurchaseId]);
 
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    syncUrl(newPage, pageSize);
+  };
+
+  const handlePageSizeChange = (newPageSize: number) => {
+    setPageSize(newPageSize);
+    setPage(1);
+    syncUrl(1, newPageSize);
+  };
+
   if (loading) {
     return <div className="alert-box alert-info">正在校验权限...</div>;
   }
@@ -85,9 +122,11 @@ export default function InventoryInboundPage() {
     return <div className="alert-box alert-danger">当前账户无权访问入库功能。</div>;
   }
 
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
   return (
-    <div className="space-y-4">
-      <div className="surface-card p-4">
+    <div className="space-y-4 h-full flex flex-col">
+      <div className="surface-card p-4 shrink-0">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-lg font-semibold">到货入库</h1>
           <div className="flex items-center gap-2">
@@ -99,56 +138,68 @@ export default function InventoryInboundPage() {
         </div>
       </div>
 
-      <div className="surface-card p-4">
-        <div className="mb-3 flex items-center justify-between">
+      <div className="surface-card p-4 flex-1 min-h-0 flex flex-col">
+        <div className="mb-3 flex items-center justify-between shrink-0">
           <h2 className="text-base font-semibold">入库历史</h2>
-          <span className="text-xs text-muted-foreground">{inboundMovements.length} 条</span>
+          <span className="text-xs text-muted-foreground">共 {total} 条</span>
         </div>
 
-        <div className="surface-table">
+        <div className="surface-table flex-1 min-h-0 flex flex-col">
           <div className="max-h-[calc(100vh-320px)] overflow-auto custom-scrollbar">
-            <table className="min-w-full divide-y divide-border text-sm whitespace-nowrap">
-              <thead className="sticky top-0 z-10 bg-muted/60 text-xs uppercase text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 text-left">时间</th>
-                  <th className="px-3 py-2 text-left">采购单号</th>
-                  <th className="px-3 py-2 text-left">物品</th>
-                  <th className="px-3 py-2 text-left">仓库</th>
-                  <th className="px-3 py-2 text-left">入库数量</th>
-                  <th className="px-3 py-2 text-left">操作人</th>
-                  <th className="px-3 py-2 text-left">备注</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/70">
+            <Table>
+              <TableHeader className="sticky top-0 z-10 bg-muted/60 text-xs uppercase text-muted-foreground">
+                <TableRow>
+                  <TableHead>时间</TableHead>
+                  <TableHead>采购单号</TableHead>
+                  <TableHead>物品</TableHead>
+                  <TableHead>仓库</TableHead>
+                  <TableHead>入库数量</TableHead>
+                  <TableHead>操作人</TableHead>
+                  <TableHead>备注</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {movementsLoading ? (
-                  <tr>
-                    <td colSpan={7} className="px-3 py-10 text-center text-muted-foreground">
+                  <TableRow>
+                    <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                       加载中...
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : inboundMovements.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-3 py-10 text-center text-muted-foreground">
+                  <TableRow>
+                    <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                       暂无入库记录
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   inboundMovements.map((movement) => (
-                    <tr key={movement.id}>
-                      <td className="px-3 py-2">{formatDateTimeLocal(movement.occurredAt) ?? movement.occurredAt}</td>
-                      <td className="px-3 py-2">{movement.relatedPurchaseNumber ?? movement.relatedOrderId ?? '—'}</td>
-                      <td className="px-3 py-2">{movement.itemName ?? movement.itemId}</td>
-                      <td className="px-3 py-2">{movement.warehouseName ?? movement.warehouseId}</td>
-                      <td className="px-3 py-2">{movement.quantity}</td>
-                      <td className="px-3 py-2">{movement.operatorName ?? '未知用户'}</td>
-                      <td className="px-3 py-2">{movement.notes ?? '—'}</td>
-                    </tr>
+                    <TableRow key={movement.id}>
+                      <TableCell>{formatDateTimeLocal(movement.occurredAt) ?? movement.occurredAt}</TableCell>
+                      <TableCell>{movement.relatedPurchaseNumber ?? movement.relatedOrderId ?? '—'}</TableCell>
+                      <TableCell>{movement.itemName ?? movement.itemId}</TableCell>
+                      <TableCell>{movement.warehouseName ?? movement.warehouseId}</TableCell>
+                      <TableCell>{movement.quantity}</TableCell>
+                      <TableCell>{movement.operatorName ?? '未知用户'}</TableCell>
+                      <TableCell>{movement.notes ?? '—'}</TableCell>
+                    </TableRow>
                   ))
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
+
+        {totalPages > 1 && (
+          <div className="mt-4 shrink-0">
+            <Pagination 
+              currentPage={page} 
+              totalPages={totalPages} 
+              onPageChange={handlePageChange} 
+              pageSize={pageSize}
+              onPageSizeChange={handlePageSizeChange}
+            />
+          </div>
+        )}
       </div>
 
       <Drawer open={inboundDrawerOpen} onOpenChange={setInboundDrawerOpen} direction="right">

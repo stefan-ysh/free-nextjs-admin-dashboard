@@ -1303,6 +1303,8 @@ export default function EmployeeClient({
               currentPage={page}
               totalPages={totalPages}
               onPageChange={handlePageChange}
+              pageSize={pageSize}
+              onPageSizeChange={handlePageSizeChange}
             />
           </div>
         </div>

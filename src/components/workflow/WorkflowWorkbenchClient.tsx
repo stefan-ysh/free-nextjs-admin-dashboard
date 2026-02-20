@@ -174,7 +174,7 @@ export default function WorkflowWorkbenchClient({
           })
         : Promise.resolve(null),
       canCreatePurchase
-        ? fetch('/api/purchases?status=rejected&page=1&pageSize=40&sortBy=updatedAt&sortOrder=desc', {
+        ? fetch('/api/purchases?scope=rejected_own&page=1&pageSize=40&sortBy=updatedAt&sortOrder=desc', {
             headers: { Accept: 'application/json' },
           })
         : Promise.resolve(null),
@@ -218,7 +218,7 @@ export default function WorkflowWorkbenchClient({
     if (canCreatePurchase && rejectedResult.status === 'fulfilled' && rejectedResult.value) {
       const rejectedPayload = (await rejectedResult.value.json()) as PurchaseListResponse;
       if (rejectedResult.value.ok && rejectedPayload.success && rejectedPayload.data) {
-        setTodoRejected(rejectedPayload.data.items.filter((item) => item.createdBy === currentUserId || item.purchaserId === currentUserId));
+        setTodoRejected(rejectedPayload.data.items);
       } else {
         setTodoRejected([]);
       }

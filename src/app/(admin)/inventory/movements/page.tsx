@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 
 import InventoryMovementsTable, {
   type InventoryMovementRow,
@@ -9,6 +10,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import Pagination from '@/components/tables/Pagination';
 
 type RangeFilter = 'all' | '7d' | '30d';
 
@@ -19,25 +21,77 @@ const rangeOptions: { value: RangeFilter; label: string }[] = [
 ];
 
 export default function InventoryMovementsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
   const { hasPermission, loading: permissionLoading } = usePermissions();
   const canView = useMemo(() => hasPermission('INVENTORY_VIEW_ALL'), [hasPermission]);
 
   const [movements, setMovements] = useState<InventoryMovementRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [total, setTotal] = useState(0);
+
+  const initialPage = parseInt(searchParams.get('page') || '1', 10);
+  const initialPageSize = parseInt(searchParams.get('pageSize') || '50', 10);
+  const [page, setPage] = useState(initialPage);
+  const [pageSize, setPageSize] = useState(initialPageSize);
+
   const [directionFilter, setDirectionFilter] = useState<'all' | 'inbound' | 'outbound'>('all');
   const [itemFilter, setItemFilter] = useState<string>('all');
   const [warehouseFilter, setWarehouseFilter] = useState<string>('all');
   const [rangeFilter, setRangeFilter] = useState<RangeFilter>('all');
 
-  useEffect(() => {
+  // Currently, the backend API `/api/inventory/movements` accepts `page`, `limit`, `direction`, `itemId`, and `warehouseId`.
+  // Note: Local range filtering logic will still apply post-fetch on this iteration unless API handles dates.
+  // For safety and compatibility without a heavy backend refactor, we still filter the returned page contents locally for Date fields temporarily if needed, 
+  // but to properly support full page size counts without custom endpoints, we apply basic filters globally.
+
+  const syncUrl = useCallback(
+    (newPage: number, newPageSize: number) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('page', newPage.toString());
+      if (newPageSize !== 50) {
+        params.set('pageSize', newPageSize.toString());
+      } else {
+        params.delete('pageSize');
+      }
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [searchParams, pathname, router]
+  );
+
+  const fetchData = useCallback(async () => {
     if (!canView) return;
     setLoading(true);
-    fetch('/api/inventory/movements')
-      .then((res) => res.json())
-      .then((payload) => setMovements(payload.data ?? []))
-      .catch((error) => console.error('Failed to load movements', error))
-      .finally(() => setLoading(false));
-  }, [canView]);
+
+    const query = new URLSearchParams({
+      page: page.toString(),
+      limit: pageSize.toString(),
+    });
+
+    if (directionFilter !== 'all') query.set('direction', directionFilter);
+    if (itemFilter !== 'all') query.set('itemId', itemFilter);
+    if (warehouseFilter !== 'all') query.set('warehouseId', warehouseFilter);
+
+    try {
+      const res = await fetch(`/api/inventory/movements?${query.toString()}`);
+      if (!res.ok) throw new Error('API request failed');
+      const payload = await res.json();
+      setMovements(payload.data ?? []);
+      setTotal(payload.total ?? 0);
+    } catch (error) {
+      console.error('Failed to load movements', error);
+      setMovements([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [canView, page, pageSize, directionFilter, itemFilter, warehouseFilter]);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
 
   const uniqueItems = useMemo(() => {
     const map = new Map<string, string>();
@@ -66,25 +120,13 @@ export default function InventoryMovementsPage() {
       return null;
     })();
 
+    if (!rangeThreshold) return movements;
+
     return movements.filter((movement) => {
-      if (directionFilter !== 'all' && movement.direction !== directionFilter) {
-        return false;
-      }
-      if (itemFilter !== 'all' && movement.itemId !== itemFilter) {
-        return false;
-      }
-      if (warehouseFilter !== 'all' && movement.warehouseId !== warehouseFilter) {
-        return false;
-      }
-      if (rangeThreshold) {
-        const occurredAt = new Date(movement.occurredAt).getTime();
-        if (Number.isFinite(occurredAt) && occurredAt < rangeThreshold) {
-          return false;
-        }
-      }
-      return true;
+      const occurredAt = new Date(movement.occurredAt).getTime();
+      return !(Number.isFinite(occurredAt) && occurredAt < rangeThreshold);
     });
-  }, [movements, directionFilter, itemFilter, warehouseFilter, rangeFilter]);
+  }, [movements, rangeFilter]);
 
   const summary = useMemo(() => {
     return filteredMovements.reduce(
@@ -115,6 +157,17 @@ export default function InventoryMovementsPage() {
     alert('CSV 导出功能将于下一阶段提供');
   };
 
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    syncUrl(newPage, pageSize);
+  };
+
+  const handlePageSizeChange = (newPageSize: number) => {
+    setPageSize(newPageSize);
+    setPage(1);
+    syncUrl(1, newPageSize);
+  };
+
   if (permissionLoading) {
     return (
       <div className="space-y-6">
@@ -134,6 +187,8 @@ export default function InventoryMovementsPage() {
       </div>
     );
   }
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden">
@@ -231,6 +286,17 @@ export default function InventoryMovementsPage() {
           loading={loading}
           emptyHint="暂无流水数据"
         />
+        {totalPages > 1 && (
+          <div className="mt-4 shrink-0 px-4 pb-4">
+            <Pagination 
+              currentPage={page} 
+              totalPages={totalPages} 
+              onPageChange={handlePageChange} 
+              pageSize={pageSize}
+              onPageSizeChange={handlePageSizeChange}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

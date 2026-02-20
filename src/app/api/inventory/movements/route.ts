@@ -9,22 +9,23 @@ export async function GET(request: NextRequest) {
     const direction =
       directionParam === 'inbound' || directionParam === 'outbound'
         ? directionParam
-        : null;
+        : undefined;
 
-    const [movements, items, warehouses] = await Promise.all([
-      listMovements(),
-      listInventoryItems(),
+    const page = parseInt(url.searchParams.get('page') || '1', 10);
+    const limit = parseInt(url.searchParams.get('pageSize') || url.searchParams.get('limit') || '50', 10);
+    const itemId = url.searchParams.get('itemId') || undefined;
+    const warehouseId = url.searchParams.get('warehouseId') || undefined;
+
+    const [movementsResult, itemsRes, warehouses] = await Promise.all([
+      listMovements({ page, limit, direction, itemId, warehouseId }),
+      listInventoryItems({ limit: 10000 }), // Fetch all items for mapping
       listWarehouses(),
     ]);
 
-    const itemMap = new Map(items.map((item) => [item.id, item]));
+    const itemMap = new Map(itemsRes.items.map((item) => [item.id, item]));
     const warehouseMap = new Map(warehouses.map((warehouse) => [warehouse.id, warehouse]));
 
-    const filtered = direction
-      ? movements.filter((movement) => movement.direction === direction)
-      : movements;
-
-    const data = filtered.map((movement) => {
+    const data = movementsResult.items.map((movement) => {
       const item = itemMap.get(movement.itemId);
       const specSummary = item?.specFields?.length
         ? item.specFields
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ data, total: movementsResult.total, page, limit });
   } catch (error) {
     console.error('[inventory.movements] failed to load movements', error);
     return NextResponse.json({ error: '获取库存流水失败' }, { status: 500 });

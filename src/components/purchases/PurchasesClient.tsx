@@ -1185,6 +1185,10 @@ export default function PurchasesClient() {
                 currentPage={page}
                 totalPages={totalPages}
                 onPageChange={handlePageChange}
+                pageSize={pageSize}
+                onPageSizeChange={(size) => {
+                  handlePageSizeChange(size);
+                }}
               />
             </div>
           )}

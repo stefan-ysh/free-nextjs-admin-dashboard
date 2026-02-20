@@ -12,11 +12,6 @@ import type { InventoryItem } from '@/types/inventory';
 
 const PAGE_SIZE = 50;
 
-type InventoryItemDetailResponse = {
-  success: boolean;
-  data?: InventoryItem;
-  error?: string;
-};
 
 type InventoryItemSelectorProps = {
   value: string;
@@ -63,8 +58,8 @@ export default function InventoryItemSelector({
   const resolveItem = useCallback(async (id: string) => {
     if (!id) return null;
     const response = await fetch(`/api/inventory/items/${id}`, { cache: 'no-store' });
-    const payload = (await response.json()) as InventoryItemDetailResponse;
-    if (!response.ok || !payload.success) {
+    const payload = (await response.json()) as { data?: InventoryItem; error?: string };
+    if (!response.ok) {
       throw new Error(payload.error ?? '无法加载库存商品');
     }
     return payload.data ?? null;

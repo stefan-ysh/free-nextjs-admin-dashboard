@@ -71,7 +71,7 @@ export default function PaymentQueueClient() {
   const [reimbursementTotal, setReimbursementTotal] = useState(0);
 
 
-  const [pageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(20);
   const [reloadToken, setReloadToken] = useState(0);
 
   const canPay = hasPermission('REIMBURSEMENT_PAY');
@@ -323,12 +323,17 @@ export default function PaymentQueueClient() {
         )}
       </div>
 
-      {totalPages > 1 ? (
+      {totalPages > 1 || pageSize !== 20 ? (
         <div className="surface-card px-4 py-3 border-0 shadow-sm">
           <Pagination
             currentPage={reimbursementPage}
             totalPages={totalPages}
             onPageChange={setReimbursementPage}
+            pageSize={pageSize}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setReimbursementPage(1);
+            }}
           />
         </div>
       ) : null}

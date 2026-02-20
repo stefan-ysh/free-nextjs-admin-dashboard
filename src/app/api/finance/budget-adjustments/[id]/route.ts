@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { toPermissionUser } from '@/lib/auth/permission-user';
 import { updateBudgetAdjustment } from '@/lib/db/finance';
 import { checkPermission, Permissions } from '@/lib/permissions';
 import { UserRole } from '@/types/user';
+import { budgetAdjustmentSchema } from '@/lib/validations/finance';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -16,6 +18,11 @@ function forbiddenResponse() {
 
 function badRequestResponse(message: string) {
   return NextResponse.json({ success: false, error: message }, { status: 400 });
+}
+
+function badRequestWithZodErrors(errors: z.ZodError) {
+  const fieldErrors = errors.errors.map((e) => `${e.path.join('.')}: ${e.message}`);
+  return NextResponse.json({ success: false, error: '校验失败', details: fieldErrors }, { status: 400 });
 }
 
 function resolveFinanceOrgByRole(role: UserRole): 'school' | 'company' | undefined {
@@ -35,33 +42,21 @@ export async function PATCH(
     if (!canManage.allowed) return forbiddenResponse();
 
     const { id } = await params;
-    const body = (await request.json()) as {
-      organizationType?: string;
-      adjustmentType?: string;
-      amount?: number;
-      title?: string;
-      note?: string | null;
-      occurredAt?: string;
-    };
+    const rawBody = await request.json();
+    const parseResult = budgetAdjustmentSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return badRequestWithZodErrors(parseResult.error);
+    }
 
-    const organizationType = body.organizationType === 'school' || body.organizationType === 'company'
-      ? body.organizationType
-      : resolveFinanceOrgByRole(permissionUser.primaryRole) ?? 'company';
-    const adjustmentType = body.adjustmentType === 'decrease' ? 'decrease' : 'increase';
-    const amount = Number(body.amount ?? 0);
-    const title = String(body.title ?? '').trim();
-    const occurredAt = String(body.occurredAt ?? '');
-
-    if (!title) return badRequestResponse('调整标题不能为空');
-    if (!Number.isFinite(amount) || amount <= 0) return badRequestResponse('调整金额必须大于 0');
-    if (!occurredAt) return badRequestResponse('调整日期不能为空');
+    const { organizationType, adjustmentType, amount, title, note, occurredAt } = parseResult.data;
+    const resolvedOrgType = organizationType ?? resolveFinanceOrgByRole(permissionUser.primaryRole) ?? 'company';
 
     const updated = await updateBudgetAdjustment(id, {
-      organizationType,
+      organizationType: resolvedOrgType,
       adjustmentType,
       amount,
       title,
-      note: body.note ?? null,
+      note,
       occurredAt,
     });
     if (!updated) {
@@ -70,11 +65,6 @@ export async function PATCH(
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHENTICATED') return unauthorizedResponse();
-    if (error instanceof Error) {
-      if (error.message === 'INVALID_DATE') return badRequestResponse('调整日期格式不正确');
-      if (error.message === 'INVALID_BUDGET_ADJUSTMENT_AMOUNT') return badRequestResponse('调整金额必须大于 0');
-      if (error.message === 'BUDGET_ADJUSTMENT_TITLE_REQUIRED') return badRequestResponse('调整标题不能为空');
-    }
     console.error('更新预算调整失败', error);
     return NextResponse.json({ success: false, error: '服务器错误' }, { status: 500 });
   }

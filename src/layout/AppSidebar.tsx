@@ -153,15 +153,25 @@ const navItems: NavItem[] = [
     path: "/employees",
     requiredPermission: "USER_VIEW_ALL",
   },
+  {
+    name: "系统设置",
+    icon: <OrgIcon />,
+    subItems: [
+      {
+        name: "操作日志",
+        path: "/audit/logs",
+        requiredPermission: "USER_VIEW_ALL",
+      },
+    ],
+  },
 
 ];
 
-import type { PurchaseListResponse } from "@/types/purchase";
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
-  const { hasPermission, loading: permissionLoading, user } = usePermissions();
+  const { hasPermission, loading: permissionLoading } = usePermissions();
   const [todoCount, setTodoCount] = useState(0);
 
   const filterNavItems = useCallback(
@@ -304,7 +314,7 @@ const AppSidebar: React.FC = () => {
         ? fetch("/api/purchases?status=pending_inbound&page=1&pageSize=1", { headers: { Accept: "application/json" } })
         : Promise.resolve(null),
       canPurchaseCreate
-        ? fetch("/api/purchases?status=rejected&page=1&pageSize=1", { headers: { Accept: "application/json" } })
+        ? fetch("/api/purchases?scope=rejected_own&page=1&pageSize=1", { headers: { Accept: "application/json" } })
         : Promise.resolve(null),
       showReimbursementApprovals
         ? fetch("/api/reimbursements?scope=approval&page=1&pageSize=1", { headers: { Accept: "application/json" } })
@@ -339,12 +349,11 @@ const AppSidebar: React.FC = () => {
 
     let rejected = 0;
     if (canPurchaseCreate && rejectedRes.status === "fulfilled" && rejectedRes.value) {
-      const payload = (await rejectedRes.value.json().catch(() => null)) as PurchaseListResponse;
-      if (rejectedRes.value.ok && payload?.success && payload.data) {
-        // Only count my rejected items
-        rejected = payload.data.items.filter(
-          (item) => item.createdBy === user?.id || item.purchaserId === user?.id
-        ).length;
+      const payload = (await rejectedRes.value.json().catch(() => null)) as
+        | { success?: boolean; data?: { total?: number } }
+        | null;
+      if (rejectedRes.value.ok && payload?.success) {
+        rejected = Number(payload.data?.total ?? 0);
       }
     }
 

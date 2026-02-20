@@ -17,19 +17,23 @@ import { cn } from '@/lib/utils';
 const ROLE_CAPABILITIES: Partial<Record<UserRole, { menus: string; actions: string }>> = {
   super_admin: {
     menus: '全部模块',
-    actions: '审批、转审、驳回、打款、人员管理、配置',
+    actions: '全局只读、人员管理、配置',
   },
-  finance: {
+  approver: {
     menus: '工作台、采购中心',
-    actions: '采购审批、转审、驳回',
+    actions: '采购审批、转审、驳回、用户管理',
+  },
+  finance_director: {
+    menus: '工作台、财务中心、采购中心、库存管理',
+    actions: '报销审批与打款（学校+单位）、收支管理、库存操作',
   },
   finance_school: {
-    menus: '工作台、财务中心、采购中心',
-    actions: '学校组织打款与异常处理',
+    menus: '工作台、财务中心、采购中心、库存管理',
+    actions: '学校组织报销审批与打款、收支管理、库存操作',
   },
   finance_company: {
-    menus: '工作台、财务中心、采购中心',
-    actions: '单位组织打款与异常处理',
+    menus: '工作台、财务中心、采购中心、库存管理',
+    actions: '单位组织报销审批与打款、收支管理、库存操作',
   },
   employee: {
     menus: '工作台、采购中心、个人中心',

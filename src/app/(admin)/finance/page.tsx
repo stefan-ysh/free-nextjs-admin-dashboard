@@ -17,7 +17,7 @@ export default async function FinancePage({
 
   const params = await searchParams;
   const page = Number(params.page) || 1;
-  const limit = Number(params.limit) || 10;
+  const limit = Number(params.pageSize ?? params.limit) || 10;
   const startDate = params.startDate as string | undefined;
   const endDate = params.endDate as string | undefined;
   const typeParam = params.type as string | undefined;

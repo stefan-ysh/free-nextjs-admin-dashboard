@@ -6,6 +6,7 @@ import { createInboundRecord, INVENTORY_ERRORS } from '@/lib/db/inventory';
 import { findPurchaseById } from '@/lib/db/purchases';
 import { checkPermission, Permissions } from '@/lib/permissions';
 import type { InventoryInboundPayload } from '@/types/inventory';
+import { logSystemAudit } from '@/lib/audit';
 
 function unauthorizedResponse() {
   return NextResponse.json({ error: '未登录' }, { status: 401 });
@@ -61,6 +62,17 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await createInboundRecord(payload, permissionUser.id);
+    
+    await logSystemAudit({
+      userId: context.user.id,
+      userName: context.user.display_name ?? '未知用户',
+      action: 'CREATE',
+      entityType: 'INVENTORY_MOVEMENT',
+      entityId: data.id,
+      entityName: `入库: ${payload.quantity} x ${payload.itemId}`,
+      newValues: payload as unknown as Record<string, unknown>,
+    });
+    
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
     console.error('[inventory.inbound] failed to create inbound record', error);
