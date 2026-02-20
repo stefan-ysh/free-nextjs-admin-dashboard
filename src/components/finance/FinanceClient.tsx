@@ -27,7 +27,7 @@ import DatePicker from '@/components/ui/DatePicker';
 import { getCategoryGroups, getPinnedCategoryLabels } from '@/constants/finance-categories';
 import UserSelect from '@/components/common/UserSelect';
 import { formatDateOnly } from '@/lib/dates';
-
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 interface FinanceClientProps {
     records: FinanceRecord[];
     stats: FinanceStats;
@@ -433,6 +433,22 @@ export default function FinanceClient({
             setBudgetSubmitting(false);
         }
     };
+
+    useKeyboardShortcuts({
+        onEnter: () => {
+            if (isBudgetDrawerOpen && !budgetSubmitting) {
+                void handleBudgetSubmit();
+            }
+        },
+        onEscape: () => {
+            if (isBudgetDrawerOpen && !budgetSubmitting) {
+                setIsBudgetDrawerOpen(false);
+            } else if (filterDrawerOpen) {
+                setFilterDrawerOpen(false);
+            }
+        },
+        enabled: isBudgetDrawerOpen || filterDrawerOpen,
+    });
 
     if (!permissions.canView) {
         return (

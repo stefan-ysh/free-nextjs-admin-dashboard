@@ -31,6 +31,7 @@ import RejectionReasonDialog from '@/components/purchases/RejectionReasonDialog'
 import PaymentConfirmDialog from './PaymentConfirmDialog';
 import ReimbursementDetailDrawer from './ReimbursementDetailDrawer';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { formatDateOnly } from '@/lib/dates';
 import type {
   CreateReimbursementInput,
@@ -866,8 +867,26 @@ export default function ReimbursementsClient() {
   
 
 
-
-
+  useKeyboardShortcuts({
+    onEnter: () => {
+      if (
+        drawerOpen &&
+        !submitting &&
+        !isReadOnlyView &&
+        !(form.sourceType === 'purchase' && eligibility != null && !eligibility.eligible)
+      ) {
+        void submitForm('submit');
+      }
+    },
+    onEscape: () => {
+      if (drawerOpen && !submitting) {
+        setDrawerOpen(false);
+      } else if (detailDrawerOpen) {
+        setDetailDrawerOpen(false);
+      }
+    },
+    enabled: drawerOpen || detailDrawerOpen,
+  });
 
   return (
     <section className="space-y-4">

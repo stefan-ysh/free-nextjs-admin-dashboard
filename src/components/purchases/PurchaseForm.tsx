@@ -18,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { formatDateOnly } from '@/lib/dates';
 import { purchaseFormSchema, type PurchaseFormValues } from '@/lib/validations/purchase';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 import {
   INVOICE_TYPES,
@@ -191,6 +192,8 @@ export default function PurchaseForm({
     }
   };
 
+// ... (in imports)
+
   const handleSubmit = form.handleSubmit(async (data) => {
     try {
       const inventoryItemId = data.inventoryItemId?.trim() ?? '';
@@ -249,6 +252,19 @@ export default function PurchaseForm({
       console.error('保存采购信息失败', error);
       toast.error(error instanceof Error ? error.message : '保存失败，请稍后再试');
     }
+  });
+
+  useKeyboardShortcuts({
+    onEnter: () => {
+      if (!isSubmitting) {
+        void handleSubmit();
+      }
+    },
+    onEscape: () => {
+      if (onCancel && !isSubmitting) {
+        onCancel();
+      }
+    },
   });
 
   return (
