@@ -880,24 +880,15 @@ export default function PurchasesClient() {
           {/* Filters Group */}
           <div className="flex flex-wrap items-center gap-2">
             {permissions.canViewAll && permissions.canCreate && (
-              <div className="flex rounded-md border border-border p-0.5 bg-muted/50 h-10">
-                <Button
-                  variant={filters.scope === 'all' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-full rounded-sm px-3 shadow-none text-xs"
-                  onClick={() => handleFilterChange({ scope: 'all' })}
-                >
-                  全部申请
-                </Button>
-                <Button
-                  variant={filters.scope === 'mine' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-full rounded-sm px-3 shadow-none text-xs"
-                  onClick={() => handleFilterChange({ scope: 'mine' })}
-                >
-                  我的申请
-                </Button>
-              </div>
+              <Select value={filters.scope} onValueChange={(value) => handleFilterChange({ scope: value as 'all' | 'mine' })}>
+                <SelectTrigger className="w-[140px] h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mine">我的申请</SelectItem>
+                  <SelectItem value="all">全部申请</SelectItem>
+                </SelectContent>
+              </Select>
             )}
             
             {permissions.canViewAll && filters.scope !== 'mine' && (
