@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 
 import FileUpload from '@/components/common/FileUpload';
 import { SearchableEntitySelect } from '@/components/common/SearchableEntitySelect';
@@ -158,20 +159,18 @@ function hasReimbursementEvidence(row: Pick<ReimbursementRecord, 'invoiceImages'
 }
 
 export default function ReimbursementsClient() {
-  const { user, hasPermission } = usePermissions();
+  const { user, hasPermission, loading: permissionLoading } = usePermissions();
   const searchParams = useSearchParams();
-  const [records, setRecords] = useState<ReimbursementRecord[]>([]);
+  const queryClient = useQueryClient();
 
   // Pagination state
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [totalItems, setTotalItems] = useState(0);
+  const [page, setPage] = useState(() => parseInt(searchParams.get('page') || '1', 10));
+  const [pageSize, setPageSize] = useState(() => parseInt(searchParams.get('pageSize') || '20', 10));
 
   // Dialog states
   const [deleteTarget, setDeleteTarget] = useState<ReimbursementRecord | null>(null);
   const [rejectTarget, setRejectTarget] = useState<ReimbursementRecord | null>(null);
   const [payTarget, setPayTarget] = useState<ReimbursementRecord | null>(null);
-  const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [scope, setScope] = useState<'mine' | 'approval' | 'pay' | 'all'>('mine');
   const [search, setSearch] = useState('');
@@ -246,62 +245,40 @@ export default function ReimbursementsClient() {
     [isOwner]
   );
 
-  const fetchList = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const qPage = searchParams.get('page') || '1';
-      const qPageSize = searchParams.get('pageSize') || '20';
-      const parsedPage = parseInt(qPage, 10) || 1;
-      const parsedPageSize = parseInt(qPageSize, 10) || 20;
-
+  const {
+    data: listData,
+    isLoading: isListLoading,
+    isFetching: isListFetching,
+  } = useQuery({
+    queryKey: ['reimbursements', 'list', scope, search, page, pageSize],
+    queryFn: async () => {
       const params = new URLSearchParams();
       params.set('scope', scope);
-      params.set('page', parsedPage.toString());
-      params.set('pageSize', parsedPageSize.toString());
+      params.set('page', page.toString());
+      params.set('pageSize', pageSize.toString());
       if (search.trim()) params.set('search', search.trim());
       
       const response = await fetch(`/api/reimbursements?${params.toString()}`, { 
         headers: { Accept: 'application/json' },
-        signal
       });
       
       const payload = (await response.json()) as ListResponse;
       if (!response.ok || !payload.success || !payload.data) {
         throw new Error(payload.error ?? '加载报销列表失败');
       }
-      if (!signal?.aborted) {
-        setRecords(payload.data.items);
-        setPage(payload.data.page);
-        setPageSize(payload.data.pageSize);
-        setTotalItems(payload.data.total);
-      }
-    } catch (error) {
-      if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('AbortError'))) return;
-      // Ignore abort errors from signal
-      if (signal?.aborted) return;
-      
-      console.error('Fetch error:', error);
-      toast.error(error instanceof Error ? error.message : '加载报销列表失败');
-    } finally {
-      if (!signal?.aborted) {
-        setLoading(false);
-      }
-    }
-  }, [scope, search, searchParams]);
+      return payload.data;
+    },
+    placeholderData: keepPreviousData,
+    enabled: !permissionLoading,
+  });
 
-  useEffect(() => {
-    const controller = new AbortController();
-    
-    // Debounce the fetch to avoid rapid duplicate calls (e.g. strict mode or rapid scope changes)
-    const timer = setTimeout(() => {
-      void fetchList(controller.signal);
-    }, 50);
+  const records = useMemo(() => listData?.items ?? [], [listData?.items]);
+  const totalItems = listData?.total ?? 0;
+  const loading = isListLoading || isListFetching;
 
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [fetchList]);
+  const fetchList = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['reimbursements', 'list'] });
+  }, [queryClient]);
 
   const handleExport = useCallback(async () => {
     if (loading) return;
@@ -446,14 +423,8 @@ export default function ReimbursementsClient() {
   );
   const purchaseMap = useMemo(() => new Map(purchaseOptions.map((item) => [item.id, item])), [purchaseOptions]);
 
-  useEffect(() => {
-    void fetchList();
-  }, [fetchList]);
-
   const handlePageChange = useCallback((newPage: number) => {
-    const params = new URLSearchParams(window.location.search);
-    params.set('page', newPage.toString());
-    window.history.pushState(null, '', `?${params.toString()}`);
+    setPage(newPage);
   }, []);
 
   useEffect(() => {
