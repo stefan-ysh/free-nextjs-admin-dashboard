@@ -39,10 +39,24 @@ export async function PUT(request: Request) {
     }
 
     await updateUserPassword(context.user.id, newPassword);
+    
+    // Auth audit (legacy/internal table)
     await logAuthAudit({
       actorId: context.user.id,
       targetId: context.user.id,
       action: 'password.change',
+    });
+
+    // System audit (visible in main UI)
+    const { logSystemAudit } = await import('@/lib/audit');
+    await logSystemAudit({
+      userId: context.user.id,
+      userName: context.user.display_name ?? '未知用户',
+      action: 'UPDATE',
+      entityType: 'EMPLOYEE',
+      entityId: context.user.id,
+      entityName: context.user.display_name ?? undefined,
+      description: `${context.user.display_name ?? '未知用户'} 修改了系统登录密码`,
     });
 
     return NextResponse.json({ success: true });

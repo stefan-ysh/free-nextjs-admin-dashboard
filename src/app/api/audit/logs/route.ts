@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { toPermissionUser } from '@/lib/auth/permission-user';
 import { checkPermission, Permissions } from '@/lib/permissions';
-import { querySystemAuditLogs, AuditAction, AuditEntityType } from '@/lib/audit';
+import { querySystemAuditLogs, AuditAction, AuditEntityType, logSystemAudit } from '@/lib/audit';
 
 function unauthorizedResponse() {
   return NextResponse.json({ success: false, error: '未登录' }, { status: 401 });
@@ -41,6 +41,17 @@ export async function GET(request: NextRequest) {
       endDate,
       page,
       pageSize,
+    });
+
+    // 个人隐私合规要求：审计人员查询审计日志也应被审计
+    await logSystemAudit({
+      userId: context.user.id,
+      userName: context.user.display_name ?? '系统管理员',
+      action: 'QUERY',
+      entityType: 'SYSTEM',
+      entityId: 'AUDIT_LOGS',
+      entityName: '审计日志列表',
+      newValues: { page, pageSize, entityType, action, startDate, endDate }
     });
 
     return NextResponse.json({ success: true, data: result });

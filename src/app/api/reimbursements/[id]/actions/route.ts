@@ -86,10 +86,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       await logSystemAudit({
         userId: context.user.id,
         userName: context.user.display_name ?? '未知用户',
-        action: 'UPDATE',
+        action: 'SUBMIT',
         entityType: 'REIMBURSEMENT',
         entityId: id,
-        entityName: `${existing.applicantName} - ${existing.amount}元`,
+        entityName: `${existing.reimbursementNumber} - ${existing.title} (${existing.amount}元)`,
         oldValues: { status: existing.status },
         newValues: { status: updated.status },
       });
@@ -117,10 +117,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       await logSystemAudit({
         userId: context.user.id,
         userName: context.user.display_name ?? '未知用户',
-        action: 'UPDATE',
+        action: 'APPROVE',
         entityType: 'REIMBURSEMENT',
         entityId: id,
-        entityName: `${existing.applicantName} - ${existing.amount}元`,
+        entityName: `${existing.reimbursementNumber} - ${existing.title} (${existing.amount}元)`,
         oldValues: { status: existing.status },
         newValues: { status: updated.status, comment },
       });
@@ -146,10 +146,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       await logSystemAudit({
         userId: context.user.id,
         userName: context.user.display_name ?? '未知用户',
-        action: 'UPDATE',
+        action: 'REJECT',
         entityType: 'REIMBURSEMENT',
         entityId: id,
-        entityName: `${existing.applicantName} - ${existing.amount}元`,
+        entityName: `${existing.reimbursementNumber} - ${existing.title} (${existing.amount}元)`,
         oldValues: { status: existing.status },
         newValues: { status: updated.status, reason: reason.trim() },
       });
@@ -167,10 +167,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       await logSystemAudit({
         userId: context.user.id,
         userName: context.user.display_name ?? '未知用户',
-        action: 'UPDATE',
+        action: 'PAY',
         entityType: 'REIMBURSEMENT',
         entityId: id,
-        entityName: `${existing.applicantName} - ${existing.amount}元`,
+        entityName: `${existing.reimbursementNumber} - ${existing.title} (${existing.amount}元)`,
         oldValues: { status: existing.status },
         newValues: { status: updated.status, note },
       });

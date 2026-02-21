@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useCallback, useMemo, useState, useTransition } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useMemo, useState, useTransition, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 
@@ -188,6 +188,8 @@ export default function PurchasesClient() {
   const [sortBy, setSortBy] = useState<SortField>('updatedAt');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [page, setPage] = useState(1);
+  const searchParams = useSearchParams();
+  const handledFocusRef = useRef<string | null>(null);
   const [pageSize, setPageSize] = useState(20);
   const [selectedPurchase, setSelectedPurchase] = useState<PurchaseDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -451,6 +453,26 @@ export default function PurchasesClient() {
       setShowAdvancedFilters(false);
     });
   };
+
+  useEffect(() => {
+    const focusId = searchParams.get('focus');
+    const queryScope = searchParams.get('scope');
+    
+    // 如果有焦点，且具备查看全部权限，则自动切换到全部视图
+    if (focusId && permissions.canViewAll && queryScope === 'all' && filters.scope !== 'all') {
+      handleFilterChange({ scope: 'all' });
+      return;
+    }
+    
+    if (!focusId || records.length === 0) return;
+    if (handledFocusRef.current === focusId) return;
+    
+    const target = records.find((item) => item.id === focusId);
+    if (target) {
+      handleView(target);
+      handledFocusRef.current = focusId;
+    }
+  }, [records, searchParams, permissions.canViewAll, filters.scope, handleFilterChange, handleView]);
 
   const handleManualRefresh = () => {
     void queryClient.invalidateQueries({ queryKey: ['purchases'] });

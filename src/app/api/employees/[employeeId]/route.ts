@@ -106,16 +106,70 @@ export async function PUT(
       return notFoundResponse();
     }
 
-    await logSystemAudit({
-      userId: context.user.id,
-      userName: context.user.display_name ?? '未知用户',
-      action: 'UPDATE',
-      entityType: 'EMPLOYEE',
-      entityId: employeeId,
-      entityName: existingRecord.displayName ?? undefined,
-      oldValues: existingRecord as unknown as Record<string, unknown>,
-      newValues: body as unknown as Record<string, unknown>,
-    });
+    // --- Strict Audit Diffing Logic ---
+    const auditOldValues: Record<string, unknown> = {};
+    const auditNewValues: Record<string, unknown> = {};
+    const isNullish = (v: unknown) => v === null || v === undefined || v === '';
+
+    const compareKeyMapping: Record<string, string> = {
+      roles: 'userRoles',
+      primaryRole: 'userPrimaryRole',
+    };
+
+    for (const payloadKey of Object.keys(payload)) {
+      const recordKey = compareKeyMapping[payloadKey] || payloadKey;
+      
+      const newVal = (payload as Record<string, unknown>)[payloadKey];
+      const oldVal = (existingRecord as Record<string, unknown>)[recordKey];
+
+      let nvStr = isNullish(newVal) ? '' : String(newVal);
+      let ovStr = isNullish(oldVal) ? '' : String(oldVal);
+
+      if (typeof newVal === 'object' && newVal !== null && !Array.isArray(newVal)) {
+        nvStr = JSON.stringify(newVal);
+      }
+      if (typeof oldVal === 'object' && oldVal !== null && !Array.isArray(oldVal)) {
+        ovStr = JSON.stringify(oldVal);
+      }
+
+      let isArrayMatch = false;
+      if (Array.isArray(newVal) && Array.isArray(oldVal)) {
+        const sortedNew = [...newVal].map(String).sort();
+        const sortedOld = [...oldVal].map(String).sort();
+        isArrayMatch = JSON.stringify(sortedNew) === JSON.stringify(sortedOld);
+      }
+
+      const isBothEmptyArrayAndNullish = 
+        (Array.isArray(newVal) && newVal.length === 0 && isNullish(oldVal)) ||
+        (Array.isArray(oldVal) && oldVal.length === 0 && isNullish(newVal));
+
+      if (nvStr !== ovStr && !isArrayMatch && !isBothEmptyArrayAndNullish) {
+        // Special case for dates (e.g. "2024-01-01" vs "2024-01-01 00:00:00")
+        if (nvStr && ovStr && ovStr.startsWith(nvStr)) {
+          const remainder = ovStr.substring(nvStr.length);
+          if (remainder === ' 00:00:00' || remainder === 'T00:00:00.000Z') {
+            continue;
+          }
+        }
+
+        auditOldValues[payloadKey] = oldVal;
+        auditNewValues[payloadKey] = newVal;
+      }
+    }
+
+    if (Object.keys(auditNewValues).length > 0) {
+      await logSystemAudit({
+        userId: context.user.id,
+        userName: context.user.display_name ?? '未知用户',
+        action: 'UPDATE',
+        entityType: 'EMPLOYEE',
+        entityId: employeeId,
+        entityName: existingRecord.displayName ?? undefined,
+        oldValues: auditOldValues,
+        newValues: auditNewValues,
+      });
+    }
+    // -----------------------------------
 
     let finalRecord = updated;
     if (!finalRecord.userId) {

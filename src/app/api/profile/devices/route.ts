@@ -58,6 +58,18 @@ export async function DELETE(request: Request) {
 
     await revokeSessionById(sessionId, context.user.id);
 
+    // System audit
+    const { logSystemAudit } = await import('@/lib/audit');
+    await logSystemAudit({
+      userId: context.user.id,
+      userName: context.user.display_name ?? '未知用户',
+      action: 'REVOKE',
+      entityType: 'AUTH',
+      entityId: sessionId,
+      entityName: '登录设备/会话',
+      description: `${context.user.display_name ?? '未知用户'} 移除了一个登录设备/会话`,
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('移除登录设备失败', error);

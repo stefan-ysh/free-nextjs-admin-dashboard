@@ -10,6 +10,7 @@ import {
   recordFailedLoginAttempt,
   updateLastLogin,
 } from '@/lib/auth/user';
+import { logSystemAudit } from '@/lib/audit';
 
 export async function POST(request: Request) {
   try {
@@ -106,6 +107,22 @@ export async function POST(request: Request) {
     }
 
     response.cookies.set(cookieConfig);
+
+    try {
+      await logSystemAudit({
+        userId: user.id,
+        userName: user.display_name ?? user.email ?? '未知用户',
+        action: 'LOGIN',
+        entityType: 'AUTH',
+        entityId: user.id,
+        entityName: user.display_name ?? user.email ?? '未知用户',
+        description: `${user.display_name || user.email} 登录了系统 (IP: ${request.headers.get('x-forwarded-for') || '未知'})`,
+        ipAddress: request.headers.get('x-forwarded-for') || undefined,
+        userAgent: request.headers.get('user-agent') || undefined,
+      });
+    } catch (e) {
+      console.error('Audit log failed', e);
+    }
 
     return response;
   } catch (error) {

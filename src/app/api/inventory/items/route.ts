@@ -84,6 +84,7 @@ export async function POST(request: NextRequest) {
         entityType: 'INVENTORY_ITEM',
         entityId: data.id,
         entityName: finalPayload.name,
+        description: `${context.user.display_name} 创建了新物品: ${finalPayload.name} (SKU: ${finalPayload.sku})`,
         newValues: { sku: finalPayload.sku, name: finalPayload.name, category: finalPayload.category },
       });
     } catch { /* 审计写入不阻塞主流程 */ }

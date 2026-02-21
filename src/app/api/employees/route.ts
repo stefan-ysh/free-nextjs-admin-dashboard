@@ -72,6 +72,24 @@ export async function GET(request: Request) {
       sortOrder,
     });
 
+    // 记录查询审计日志
+    await logSystemAudit({
+      userId: context.user.id,
+      userName: context.user.display_name ?? '未知用户',
+      action: 'QUERY',
+      entityType: 'EMPLOYEE',
+      entityId: 'LIST',
+      entityName: '员工列表',
+      newValues: {
+        page: Number.isNaN(page) ? 1 : page,
+        pageSize: Number.isNaN(pageSize) ? 20 : pageSize,
+        search,
+        status,
+        sortBy,
+        sortOrder
+      }
+    });
+
     return NextResponse.json({ success: true, data: result });
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHENTICATED') {

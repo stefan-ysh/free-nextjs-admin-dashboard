@@ -63,6 +63,24 @@ export async function GET(request: Request) {
     }
 
     const result = await listPurchases(params);
+
+    // 记录查询审计日志
+    await logSystemAudit({
+      userId: context.user.id,
+      userName: context.user.display_name ?? '未知用户',
+      action: 'QUERY',
+      entityType: 'PURCHASE',
+      entityId: 'LIST',
+      entityName: '采购列表',
+      newValues: {
+        page: params.page ?? 1,
+        pageSize: params.pageSize ?? 20,
+        search: params.search,
+        status: params.status,
+        scope
+      }
+    });
+
     return NextResponse.json({ success: true, data: result });
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHENTICATED') {
@@ -105,7 +123,7 @@ export async function POST(request: Request) {
       action: 'CREATE',
       entityType: 'PURCHASE',
       entityId: created.id,
-      entityName: `${body.itemName} x ${body.quantity}`,
+      entityName: `${created.purchaseNumber} - ${body.itemName} (${(Number(created.totalAmount) || 0).toLocaleString()}元)`,
       newValues: body as unknown as Record<string, unknown>,
     });
     

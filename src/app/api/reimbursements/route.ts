@@ -69,6 +69,24 @@ export async function GET(request: Request) {
       financeOrgType: resolveFinanceOrgByRole(permissionUser.primaryRole),
     });
 
+    // 记录查询审计日志
+    await logSystemAudit({
+      userId: context.user.id,
+      userName: context.user.display_name ?? '未知用户',
+      action: 'QUERY',
+      entityType: 'REIMBURSEMENT',
+      entityId: 'LIST',
+      entityName: '报销列表',
+      newValues: {
+        page: Number(searchParams.get('page') ?? 1),
+        pageSize: Number(searchParams.get('pageSize') ?? 20),
+        search: searchParams.get('search') ?? undefined,
+        status: statusParam,
+        scope,
+        organizationType: orgTypeParam
+      }
+    });
+
     return NextResponse.json({ success: true, data });
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHENTICATED') return unauthorizedResponse();

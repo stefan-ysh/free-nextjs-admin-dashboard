@@ -160,10 +160,11 @@ export async function handlePurchaseWorkflowAction(
         await logSystemAudit({
           userId: context.user.id,
           userName: context.user.display_name ?? '未知用户',
-          action: 'CREATE',
+          action: 'SUBMIT',
           entityType: 'PURCHASE',
           entityId: id,
-          entityName: purchase.itemName,
+          entityName: `${purchase.purchaseNumber} - ${purchase.itemName} (${(Number(purchase.totalAmount) || 0).toLocaleString()}元)`,
+          description: `${context.user.display_name} 提交了采购申请: ${purchase.itemName}`,
           newValues: { status: 'pending_approval' },
         });
         
@@ -187,10 +188,11 @@ export async function handlePurchaseWorkflowAction(
         await logSystemAudit({
           userId: context.user.id,
           userName: context.user.display_name ?? '未知用户',
-          action: 'UPDATE',
+          action: 'APPROVE',
           entityType: 'PURCHASE',
           entityId: id,
-          entityName: purchase.itemName,
+          entityName: `${purchase.purchaseNumber} - ${purchase.itemName} (${(Number(purchase.totalAmount) || 0).toLocaleString()}元)`,
+          description: `${context.user.display_name} 审批通过了采购申请: ${purchase.itemName}${comment ? ` (备注: ${comment})` : ''}`,
           oldValues: { status: purchase.status },
           newValues: { status: updated.status, comment },
         });
@@ -219,10 +221,11 @@ export async function handlePurchaseWorkflowAction(
         await logSystemAudit({
           userId: context.user.id,
           userName: context.user.display_name ?? '未知用户',
-          action: 'UPDATE',
+          action: 'REJECT',
           entityType: 'PURCHASE',
           entityId: id,
-          entityName: purchase.itemName,
+          entityName: `${purchase.purchaseNumber} - ${purchase.itemName} (${(Number(purchase.totalAmount) || 0).toLocaleString()}元)`,
+          description: `${context.user.display_name} 驳回了采购申请: ${purchase.itemName} (原因: ${reason})`,
           oldValues: { status: purchase.status },
           newValues: { status: 'rejected', reason },
         });
@@ -271,6 +274,18 @@ export async function handlePurchaseWorkflowAction(
 
         const note = typeof options.note === 'string' ? options.note.trim() : undefined;
         await payPurchase(id, context.user.id, note);
+        
+        await logSystemAudit({
+          userId: context.user.id,
+          userName: context.user.display_name ?? '未知用户',
+          action: 'PAY',
+          entityType: 'PURCHASE',
+          entityId: id,
+          entityName: `${purchase.purchaseNumber} - ${purchase.itemName} (${(Number(purchase.totalAmount) || 0).toLocaleString()}元)`,
+          oldValues: { status: purchase.status },
+          newValues: { status: 'paid', note },
+        });
+
         await notifySafely('purchase_paid', id);
         return respondWithDetail(id);
       }
@@ -301,6 +316,21 @@ export async function handlePurchaseWorkflowAction(
         const reason = options.reason?.trim();
         if (!reason) return badRequestResponse('撤回原因不能为空');
         await withdrawPurchase(id, context.user.id, reason);
+        
+        try {
+          await logSystemAudit({
+            userId: context.user.id,
+            userName: context.user.display_name ?? '未知用户',
+            action: 'REVOKE',
+            entityType: 'PURCHASE',
+            entityId: id,
+            entityName: `${purchase.purchaseNumber} - ${purchase.itemName} (${(Number(purchase.totalAmount) || 0).toLocaleString()}元)`,
+            description: `${context.user.display_name} 撤回了采购申请: ${purchase.itemName} (原因: ${reason})`,
+            oldValues: { status: purchase.status },
+            newValues: { status: 'withdrawn', reason },
+          });
+        } catch { /* ignore */ }
+
         return respondWithDetail(id);
       }
       case 'duplicate': {
