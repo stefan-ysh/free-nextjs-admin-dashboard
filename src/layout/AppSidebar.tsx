@@ -162,6 +162,11 @@ const navItems: NavItem[] = [
         path: "/audit/logs",
         requiredPermission: "USER_VIEW_ALL",
       },
+      {
+        name: "审批流配置",
+        path: "/settings/workflows",
+        requiredPermission: "USER_VIEW_ALL",
+      },
     ],
   },
 

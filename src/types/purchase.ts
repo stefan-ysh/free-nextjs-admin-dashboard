@@ -141,6 +141,8 @@ export interface PurchaseRecord {
   
   // 状态流程
   status: PurchaseStatus;
+  workflowCurrentNodeId?: string | null;
+  workflowNodes?: any | null; // Will store the JSON snapshot of WorkflowDefinitionJson
   reimbursementStatus: ReimbursementStatus;
   reimbursementSubmittedAt: string | null;
   reimbursementSubmittedBy: string | null;

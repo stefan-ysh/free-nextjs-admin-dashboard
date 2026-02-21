@@ -5,6 +5,7 @@ import type { PoolConnection } from 'mysql2/promise';
 import { mysqlPool, withTransaction } from '@/lib/mysql';
 import { ensureReimbursementsSchema } from '@/lib/schema/reimbursements';
 import { ensureInventorySchema } from '@/lib/schema/inventory';
+import { ensureWorkflowConfigsSchema } from '@/lib/schema/workflows';
 import { ensureBusinessUserRecord } from '@/lib/users';
 import { formatDateOnly, normalizeDateInput } from '@/lib/dates';
 import { findPurchaseById } from '@/lib/db/purchases';
@@ -51,6 +52,8 @@ type RawReimbursementRow = RowDataPacket & {
   receipt_images: string | null;
   attachments: string | null;
   status: string;
+  workflow_current_node_id: string | null;
+  workflow_nodes: string | null;
   pending_approver_id: string | null;
   submitted_at: string | null;
   approved_at: string | null;
@@ -296,36 +299,14 @@ async function generateReimbursementNumber(): Promise<string> {
   return `${prefix}${String(seq).padStart(4, '0')}`;
 }
 
-async function pickAutoApproverId(orgType: ReimbursementOrganizationType): Promise<string> {
-  const role = orgType === 'school' ? 'finance_school' : 'finance_company';
-  const [rows] = await pool.query<Array<RowDataPacket & { id: string }>>(
-    `
-      SELECT e.id
-      FROM hr_employees e
-      LEFT JOIN (
-        SELECT pending_approver_id, COUNT(*) AS pending_count
-        FROM reimbursements
-        WHERE is_deleted = 0
-          AND status = 'pending_approval'
-          AND pending_approver_id IS NOT NULL
-        GROUP BY pending_approver_id
-      ) approver_load ON approver_load.pending_approver_id = e.id
-      WHERE e.is_active = 1
-        AND (
-          e.primary_role = ?
-          OR COALESCE(e.roles, '') LIKE CONCAT('%"', ?, '"%')
-        )
-      ORDER BY
-        COALESCE(approver_load.pending_count, 0) ASC,
-        e.updated_at DESC,
-        e.id ASC
-      LIMIT 1
-    `,
-    [role, role]
+async function fallbackSuperAdminId(): Promise<string> {
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT id FROM hr_employees WHERE is_active = 1 AND primary_role = 'super_admin' LIMIT 1`
   );
-  const id = rows[0]?.id?.trim();
-  if (!id) throw new Error('APPROVER_NOT_FOUND');
-  return id;
+  if (rows.length > 0 && rows[0].id) {
+    return String(rows[0].id);
+  }
+  return 'fallback-admin-id';
 }
 
 async function assertLinkedPurchaseInboundReady(sourcePurchaseId: string) {
@@ -743,26 +724,105 @@ export async function submitReimbursement(id: string, operatorId: string): Promi
     } else if (!hasEvidence(existing)) {
       throw new Error('INVOICE_FILES_REQUIRED');
     }
-    const approverId = await pickAutoApproverId(existing.organizationType);
+    const { WorkflowEngine } = await import('@/lib/workflow/engine');
+    await ensureWorkflowConfigsSchema();
 
-    await connection.query(
-      `
-        UPDATE reimbursements
-        SET status = 'pending_approval',
-            pending_approver_id = ?,
-            submitted_at = NOW(),
-            approved_at = NULL,
-            approved_by = NULL,
-            rejected_at = NULL,
-            rejected_by = NULL,
-            rejection_reason = NULL,
-            updated_at = NOW()
-        WHERE id = ?
-      `,
-      [approverId, id]
+    const [configRows] = await connection.query<RowDataPacket[]>(
+      `SELECT workflow_nodes FROM system_workflow_configs 
+       WHERE module_name = 'reimbursement' AND organization_type = ? AND is_published = 1 
+       LIMIT 1`,
+      [existing.organizationType]
     );
 
-    await insertWorkflowLog(id, 'submit', existing.status, 'pending_approval', operatorId, '提交报销审批', connection);
+    let workflowNodesJson = { nodes: [], edges: [] };
+    if (configRows.length > 0 && configRows[0].workflow_nodes) {
+      try {
+        workflowNodesJson = typeof configRows[0].workflow_nodes === 'string'
+          ? JSON.parse(configRows[0].workflow_nodes)
+          : configRows[0].workflow_nodes;
+      } catch (e) {
+        console.error('Failed to parse published workflow config:', e);
+      }
+    }
+
+    const engine = new WorkflowEngine(workflowNodesJson);
+    const { nextNode, passedCcNodes } = engine.calculateNextStep(null);
+    const workflowNodesString = JSON.stringify(workflowNodesJson);
+
+    if (passedCcNodes.length > 0) {
+      console.log(`[Workflow Engine] Passed ${passedCcNodes.length} CC nodes on submit.`);
+    }
+
+    if (!nextNode) {
+      console.warn(`[Workflow Engine] No valid step found for reimbursement ${id}. Fallback to auto-approver.`);
+      const approverId = await fallbackSuperAdminId();
+      await connection.query(
+        `
+          UPDATE reimbursements
+          SET status = 'pending_approval',
+              pending_approver_id = ?,
+              submitted_at = NOW(),
+              approved_at = NULL,
+              approved_by = NULL,
+              rejected_at = NULL,
+              rejected_by = NULL,
+              rejection_reason = NULL,
+              workflow_current_node_id = NULL,
+              workflow_nodes = ?,
+              updated_at = NOW()
+          WHERE id = ?
+        `,
+        [approverId, workflowNodesString, id]
+      );
+      await insertWorkflowLog(id, 'submit', existing.status, 'pending_approval', operatorId, '提交报销审批', connection);
+    } else if (nextNode.type === 'APPROVAL') {
+      let candidateUsers = nextNode.users || [];
+      if (candidateUsers.length === 0) {
+         candidateUsers = [await fallbackSuperAdminId()];
+      }
+      const assignedApproverId = candidateUsers[0];
+
+      await connection.query(
+        `
+          UPDATE reimbursements
+          SET status = 'pending_approval',
+              pending_approver_id = ?,
+              submitted_at = NOW(),
+              approved_at = NULL,
+              approved_by = NULL,
+              rejected_at = NULL,
+              rejected_by = NULL,
+              rejection_reason = NULL,
+              workflow_current_node_id = ?,
+              workflow_nodes = ?,
+              updated_at = NOW()
+          WHERE id = ?
+        `,
+        [assignedApproverId, nextNode.id, workflowNodesString, id]
+      );
+      await insertWorkflowLog(id, 'submit', existing.status, 'pending_approval', operatorId, '提交报销审批', connection);
+    } else if (nextNode.type === 'END') {
+      await connection.query(
+        `
+          UPDATE reimbursements
+          SET status = 'approved',
+              pending_approver_id = NULL,
+              submitted_at = NOW(),
+              approved_at = NOW(),
+              approved_by = ?,
+              rejected_at = NULL,
+              rejected_by = NULL,
+              rejection_reason = NULL,
+              workflow_current_node_id = ?,
+              workflow_nodes = ?,
+              updated_at = NOW()
+          WHERE id = ?
+        `,
+        [operatorId, nextNode.id, workflowNodesString, id]
+      );
+      await insertWorkflowLog(id, 'submit', existing.status, 'approved', operatorId, '提交报销审批（自动流转至结束）', connection);
+    }
+
     return (await getReimbursementById(id, connection))!;
   });
 }
@@ -775,25 +835,60 @@ export async function approveReimbursement(id: string, operatorId: string, comme
     if (!existing) throw new Error('REIMBURSEMENT_NOT_FOUND');
     if (existing.status !== 'pending_approval') throw new Error('REIMBURSEMENT_NOT_APPROVABLE');
 
-    await connection.query(
-      `
-        UPDATE reimbursements
-        SET status = 'approved',
-            approved_at = NOW(),
-            approved_by = ?,
-            pending_approver_id = NULL,
-            updated_at = NOW()
-        WHERE id = ?
-      `,
-      [operatorId, id]
-    );
+    const { WorkflowEngine } = await import('@/lib/workflow/engine');
+    const engine = new WorkflowEngine(existing.workflowNodes);
+    const { nextNode, passedCcNodes } = engine.calculateNextStep(existing.workflowCurrentNodeId ?? null, 'APPROVED');
 
-    await insertWorkflowLog(id, 'approve', 'pending_approval', 'approved', operatorId, comment ?? '审批通过', connection);
+    if (passedCcNodes.length > 0) {
+      console.log(`[Workflow Engine] Passed ${passedCcNodes.length} CC nodes on approve.`);
+    }
+
+    if (!nextNode || nextNode.type === 'END') {
+      await connection.query(
+        `
+          UPDATE reimbursements
+          SET status = 'approved',
+              approved_at = NOW(),
+              approved_by = ?,
+              pending_approver_id = NULL,
+              workflow_current_node_id = ?,
+              updated_at = NOW()
+          WHERE id = ?
+        `,
+        [operatorId, nextNode?.id || existing.workflowCurrentNodeId, id]
+      );
+      await insertWorkflowLog(id, 'approve', 'pending_approval', 'approved', operatorId, comment ?? '审批通过', connection);
+    } else if (nextNode.type === 'APPROVAL') {
+      let candidateUsers = nextNode.users || [];
+      if (candidateUsers.length === 0) {
+         candidateUsers = [await fallbackSuperAdminId()];
+      }
+      
+      const assignedApproverId = candidateUsers[0];
+
+      await connection.query(
+        `
+          UPDATE reimbursements
+          SET pending_approver_id = ?,
+              workflow_current_node_id = ?,
+              updated_at = NOW()
+          WHERE id = ?
+        `,
+        [assignedApproverId, nextNode.id, id]
+      );
+      await insertWorkflowLog(id, 'approve', 'pending_approval', 'pending_approval', operatorId, comment ?? '审批通过，流转至下一节点', connection);
+    }
+
     return (await getReimbursementById(id, connection))!;
   });
 }
 
-export async function rejectReimbursement(id: string, operatorId: string, reason: string): Promise<ReimbursementRecord> {
+export async function rejectReimbursement(
+  id: string,
+  operatorId: string,
+  reason: string,
+  targetNodeId?: string | null
+): Promise<ReimbursementRecord> {
   await ensureReimbursementsSchema();
   
   return withTransaction(async (connection) => {
@@ -803,23 +898,58 @@ export async function rejectReimbursement(id: string, operatorId: string, reason
     if (!reason.trim()) throw new Error('REIMBURSEMENT_REJECT_REASON_REQUIRED');
     const fromStatus = existing.status;
 
-    await connection.query(
-      `
-        UPDATE reimbursements
-        SET status = 'rejected',
-            approved_at = NULL,
-            approved_by = NULL,
-            rejected_at = NOW(),
-            rejected_by = ?,
-            rejection_reason = ?,
-            pending_approver_id = NULL,
-            updated_at = NOW()
-        WHERE id = ?
-      `,
-      [operatorId, reason.trim(), id]
-    );
+    if (!targetNodeId || targetNodeId === 'applicant') {
+      await connection.query(
+        `
+          UPDATE reimbursements
+          SET status = 'rejected',
+              approved_at = NULL,
+              approved_by = NULL,
+              rejected_at = NOW(),
+              rejected_by = ?,
+              rejection_reason = ?,
+              pending_approver_id = NULL,
+              workflow_current_node_id = NULL,
+              updated_at = NOW()
+          WHERE id = ?
+        `,
+        [operatorId, reason.trim(), id]
+      );
+      await insertWorkflowLog(id, 'reject', fromStatus, 'rejected', operatorId, reason.trim(), connection);
+    } else {
+      const nodes = Array.isArray(existing.workflowNodes?.nodes) ? existing.workflowNodes.nodes : [];
+      const targetNode = nodes.find((n: Record<string, unknown>) => n.id === targetNodeId) as Record<string, unknown> | undefined;
 
-    await insertWorkflowLog(id, 'reject', fromStatus, 'rejected', operatorId, reason.trim(), connection);
+      let candidateUsers: string[] = [];
+      if (targetNode && targetNode.type === 'APPROVAL') {
+        candidateUsers = Array.isArray(targetNode.users) ? targetNode.users.map(String) : [];
+      }
+      if (candidateUsers.length === 0) {
+         candidateUsers = [await fallbackSuperAdminId()];
+      }
+      const assignedApproverId = candidateUsers[0];
+
+      await connection.query(
+        `
+          UPDATE reimbursements
+          SET status = 'pending_approval',
+              rejected_at = NULL,
+              rejected_by = NULL,
+              rejection_reason = NULL,
+              approved_at = NULL,
+              approved_by = NULL,
+              pending_approver_id = ?,
+              workflow_current_node_id = ?,
+              updated_at = NOW()
+          WHERE id = ?
+        `,
+        [assignedApproverId, targetNodeId, id]
+      );
+      
+      const targetNodeName = targetNode ? targetNode.name : '指定节点';
+      await insertWorkflowLog(id, 'reject', fromStatus, 'pending_approval', operatorId, `退回至 [${targetNodeName}]: ${reason.trim()}`, connection);
+    }
+
     return (await getReimbursementById(id, connection))!;
   });
 }

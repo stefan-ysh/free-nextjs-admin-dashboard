@@ -4,6 +4,7 @@ import type { PoolConnection } from 'mysql2/promise';
 
 import { mysqlPool, mysqlQuery, withTransaction } from '@/lib/mysql';
 import { ensurePurchasesSchema } from '@/lib/schema/purchases';
+import { ensureWorkflowConfigsSchema } from '@/lib/schema/workflows';
 import {
   PurchaseRecord,
   PurchaseDetail,
@@ -168,6 +169,8 @@ type RawPurchaseRow = RowDataPacket & {
   invoice_images: string | null;
   receipt_images: string | null;
   status: string;
+  workflow_current_node_id: string | null;
+  workflow_nodes: string | null;
   submitted_at: string | null;
   pending_approver_id: string | null;
 
@@ -257,9 +260,7 @@ type RawMonitorStuckRow = RowDataPacket & {
   due_amount: number | null;
 };
 
-type RawAutoApproverRow = RowDataPacket & {
-  id: string;
-};
+// Removed RawAutoApproverRow
 
 function parseJsonArray(value: unknown): string[] {
   if (!value) return [];
@@ -363,6 +364,8 @@ function mapPurchase(row: RawPurchaseRow | undefined): PurchaseRecord | null {
     invoiceImages: parseJsonArray(row.invoice_images),
     receiptImages: parseJsonArray(row.receipt_images),
     status: normalizePurchaseStatus(row.status),
+    workflowCurrentNodeId: row.workflow_current_node_id ?? null,
+    workflowNodes: row.workflow_nodes ? (typeof row.workflow_nodes === 'string' ? JSON.parse(row.workflow_nodes) : row.workflow_nodes) : null,
     pendingApproverId: row.pending_approver_id ?? null,
     pendingApproverName: row.pending_approver_name ?? null,
 
@@ -566,35 +569,15 @@ async function generatePurchaseNumber(): Promise<string> {
   return `${prefix}${String(seq).padStart(4, '0')}`;
 }
 
-async function pickAutoApproverId(): Promise<string> {
-  const [rows] = await pool.query<RawAutoApproverRow[]>(
-    `
-      SELECT e.id
-      FROM hr_employees e
-      LEFT JOIN (
-        SELECT pending_approver_id, COUNT(*) AS pending_count
-        FROM purchases
-        WHERE is_deleted = 0
-          AND status = 'pending_approval'
-          AND pending_approver_id IS NOT NULL
-        GROUP BY pending_approver_id
-      ) approver_load ON approver_load.pending_approver_id = e.id
-      WHERE e.is_active = 1
-        AND (
-          e.primary_role = 'approver'
-          OR COALESCE(e.roles, '') LIKE '%"approver"%'
-        )
-      ORDER BY
-        COALESCE(approver_load.pending_count, 0) ASC,
-        e.updated_at DESC,
-        e.id ASC
-      LIMIT 1
-    `
+async function fallbackSuperAdminId(): Promise<string> {
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT id FROM hr_employees WHERE is_active = 1 AND primary_role = 'super_admin' LIMIT 1`
   );
-
-  const approverId = rows[0]?.id?.trim();
-  if (!approverId) throw new Error('APPROVER_NOT_FOUND');
-  return approverId;
+  if (rows.length > 0 && rows[0].id) {
+    return String(rows[0].id);
+  }
+  // Ultimate fallback if no super admin
+  return 'fallback-admin-id';
 }
 
 async function insertLog(
@@ -1330,31 +1313,115 @@ export async function updatePurchase(id: string, input: UpdatePurchaseInput): Pr
 // submit purchase (draft/rejected -> pending_approval)
 export async function submitPurchase(purchaseId: string, operatorId: string): Promise<PurchaseRecord> {
   await ensurePurchasesSchema();
+  await ensureWorkflowConfigsSchema();
   
   return withTransaction(async (connection) => {
     const existing = await findPurchaseById(purchaseId, connection);
     if (!existing) throw new Error('PURCHASE_NOT_FOUND');
     if (!(existing.status === 'draft' || existing.status === 'rejected')) throw new Error('NOT_SUBMITTABLE');
 
-    const approverId = await pickAutoApproverId(); // Uses pool, but fine for now (reading employees/load)
-    
-    await connection.query(
-      `UPDATE purchases
-       SET status = 'pending_approval',
-           submitted_at = NOW(),
-           approved_at = NULL,
-           approved_by = NULL,
-           rejected_at = NULL,
-           rejected_by = NULL,
-           rejection_reason = NULL,
-           pending_approver_id = ?,
-           workflow_step_index = NULL,
-           workflow_nodes = NULL,
-           updated_at = NOW()
-       WHERE id = ?`,
-      [approverId, purchaseId]
+    // 1. Fetch published workflow config
+    const [configRows] = await connection.query<RowDataPacket[]>(
+      `SELECT workflow_nodes FROM system_workflow_configs 
+       WHERE module_name = 'purchase' AND organization_type = ? AND is_published = 1 
+       LIMIT 1`,
+      [existing.organizationType]
     );
-    await insertLog(purchaseId, 'submit', existing.status, 'pending_approval', operatorId, '提交进入审批流程', connection);
+
+    let workflowNodesJson = { nodes: [], edges: [] };
+    if (configRows.length > 0 && configRows[0].workflow_nodes) {
+      try {
+        workflowNodesJson = typeof configRows[0].workflow_nodes === 'string'
+          ? JSON.parse(configRows[0].workflow_nodes)
+          : configRows[0].workflow_nodes;
+      } catch (e) {
+        console.error('Failed to parse published workflow config:', e);
+      }
+    }
+
+    // 2. Instantiate engine
+    const { WorkflowEngine } = await import('@/lib/workflow/engine');
+    const engine = new WorkflowEngine(workflowNodesJson);
+    
+    // 3. Calculate next step (from Start)
+    const { nextNode, passedCcNodes } = engine.calculateNextStep(null);
+    const workflowNodesString = JSON.stringify(workflowNodesJson);
+    
+    // TODO: Handle CC nodes (e.g. notifications) that were passed immediately
+    if (passedCcNodes.length > 0) {
+      console.log(`[Workflow Engine] Passed ${passedCcNodes.length} CC nodes on submit.`);
+    }
+    
+    if (!nextNode) {
+      // Empty or Corrupted Workflow: Fallback to super admin
+      // In a real app we'd fetch a super admin ID. For now, we fallback to a known super admin if possible or pickAutoApproverId
+      console.warn(`[Workflow Engine] No valid step found for purchase ${purchaseId}. Fallback to auto-approver.`);
+      const approverId = await fallbackSuperAdminId();
+      await connection.query(
+        `UPDATE purchases
+         SET status = 'pending_approval',
+             submitted_at = NOW(),
+             approved_at = NULL,
+             approved_by = NULL,
+             rejected_at = NULL,
+             rejected_by = NULL,
+             rejection_reason = NULL,
+             pending_approver_id = ?,
+             workflow_current_node_id = NULL,
+             workflow_nodes = ?,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [approverId, workflowNodesString, purchaseId]
+      );
+    } else if (nextNode.type === 'APPROVAL') {
+      // Find optimal approver from the node's user list
+      let candidateUsers = nextNode.users || [];
+      if (candidateUsers.length === 0) {
+         // Fallback
+         candidateUsers = [await fallbackSuperAdminId()];
+      }
+      
+      // Basic assignment: Pick the first candidate (or randomly). Load balancing can be added later.
+      const assignedApproverId = candidateUsers[0];
+
+      await connection.query(
+        `UPDATE purchases
+         SET status = 'pending_approval',
+             submitted_at = NOW(),
+             approved_at = NULL,
+             approved_by = NULL,
+             rejected_at = NULL,
+             rejected_by = NULL,
+             rejection_reason = NULL,
+             pending_approver_id = ?,
+             workflow_current_node_id = ?,
+             workflow_nodes = ?,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [assignedApproverId, nextNode.id, workflowNodesString, purchaseId]
+      );
+    } else if (nextNode.type === 'END') {
+      // Workflow finishes immediately (Auto-approve)
+      await connection.query(
+        `UPDATE purchases
+         SET status = 'pending_inbound',
+             reimbursement_status = ?,
+             submitted_at = NOW(),
+             approved_at = NOW(),
+             approved_by = ?,
+             rejected_at = NULL,
+             rejected_by = NULL,
+             rejection_reason = NULL,
+             pending_approver_id = NULL,
+             workflow_current_node_id = ?,
+             workflow_nodes = ?,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [existing.paymentMethod === 'corporate_transfer' ? 'none' : 'invoice_pending', operatorId, nextNode.id, workflowNodesString, purchaseId]
+      );
+    }
+    
+    await insertLog(purchaseId, 'submit', existing.status, nextNode?.type === 'END' ? 'pending_inbound' : 'pending_approval', operatorId, '提交进入审批流程', connection);
     return (await findPurchaseById(purchaseId, connection))!;
   });
 }
@@ -1372,37 +1439,73 @@ export async function approvePurchase(
     if (!existing) throw new Error('PURCHASE_NOT_FOUND');
     if (existing.status !== 'pending_approval') throw new Error('NOT_APPROVABLE');
 
-    const approvedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    const dueAmount = Number(existing.totalAmount ?? 0) + Number(existing.feeAmount ?? 0);
-    const nextReimbursementStatus = existing.paymentMethod === 'corporate_transfer' ? 'none' : 'invoice_pending';
+    const { WorkflowEngine } = await import('@/lib/workflow/engine');
+    const engine = new WorkflowEngine(existing.workflowNodes);
+    
+    // Calculate the next step from the current node
+    const { nextNode, passedCcNodes } = engine.calculateNextStep(existing.workflowCurrentNodeId ?? null, 'APPROVED');
+    
+    // TODO: Send notifications for passedCcNodes
+    if (passedCcNodes.length > 0) {
+      console.log(`[Workflow Engine] Passed ${passedCcNodes.length} CC nodes on approve.`);
+    }
 
-    // Single-step payment policy: approval implies payment is complete,
-    // but workflow status enters pending_inbound until applicant finishes inbound.
+    if (!nextNode) {
+      // No next node, or corrupted state. Fallback to Super Admin or just finish it.
+      // Usually signifies the end if it's not explicitly END or if the graph is broken.
+      // For safety, let's treat it as END.
+    }
 
-    await connection.query(
-      `UPDATE purchases
-       SET status = 'pending_inbound',
-           reimbursement_status = ?,
-           reimbursement_submitted_at = NULL,
-           reimbursement_submitted_by = NULL,
-           reimbursement_rejected_at = NULL,
-           reimbursement_rejected_by = NULL,
-           reimbursement_rejected_reason = NULL,
-           approved_by = ?,
-           approved_at = ?,
-           paid_by = ?,
-           paid_at = ?,
-           pending_approver_id = NULL,
-           workflow_step_index = NULL,
-           workflow_nodes = NULL,
-           updated_at = NOW(3)
-       WHERE id = ?`,
-      [nextReimbursementStatus, operatorId, approvedAt, operatorId, approvedAt, purchaseId]
-    );
+    if (!nextNode || nextNode.type === 'END') {
+      const approvedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const dueAmount = Number(existing.totalAmount ?? 0) + Number(existing.feeAmount ?? 0);
+      const nextReimbursementStatus = existing.paymentMethod === 'corporate_transfer' ? 'none' : 'invoice_pending';
 
-    const approveComment =
-      comment?.trim() || `审批通过，进入待入库（已默认完成付款）：${dueAmount.toFixed(2)} 元`;
-    await insertLog(purchaseId, 'approve', existing.status, 'pending_inbound', operatorId, approveComment, connection);
+      await connection.query(
+        `UPDATE purchases
+         SET status = 'pending_inbound',
+             reimbursement_status = ?,
+             reimbursement_submitted_at = NULL,
+             reimbursement_submitted_by = NULL,
+             reimbursement_rejected_at = NULL,
+             reimbursement_rejected_by = NULL,
+             reimbursement_rejected_reason = NULL,
+             approved_by = ?,
+             approved_at = ?,
+             paid_by = ?,
+             paid_at = ?,
+             pending_approver_id = NULL,
+             workflow_current_node_id = ?,
+             updated_at = NOW(3)
+         WHERE id = ?`,
+        [nextReimbursementStatus, operatorId, approvedAt, operatorId, approvedAt, nextNode?.id || existing.workflowCurrentNodeId, purchaseId]
+      );
+
+      const approveComment =
+        comment?.trim() || `审批通过，进入待入库（已默认完成付款）：${dueAmount.toFixed(2)} 元`;
+      await insertLog(purchaseId, 'approve', existing.status, 'pending_inbound', operatorId, approveComment, connection);
+    } else if (nextNode.type === 'APPROVAL') {
+      // Continue to next approver
+      let candidateUsers = nextNode.users || [];
+      if (candidateUsers.length === 0) {
+         // Fallback
+         candidateUsers = [await fallbackSuperAdminId()];
+      }
+      
+      const assignedApproverId = candidateUsers[0]; // Simple assignment
+
+      await connection.query(
+        `UPDATE purchases
+         SET pending_approver_id = ?,
+             workflow_current_node_id = ?,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [assignedApproverId, nextNode.id, purchaseId]
+      );
+
+      const approveComment = comment?.trim() || `审批通过，流转至下一节点`;
+      await insertLog(purchaseId, 'approve', existing.status, 'pending_approval', operatorId, approveComment, connection);
+    }
 
     return (await findPurchaseById(purchaseId, connection))!;
   });
@@ -1433,21 +1536,64 @@ export async function transferPurchaseApprover(
 }
 
 // reject purchase
-export async function rejectPurchase(purchaseId: string, operatorId: string, reason: string): Promise<PurchaseRecord> {
+export async function rejectPurchase(
+  purchaseId: string,
+  operatorId: string,
+  reason: string,
+  targetNodeId?: string | null
+): Promise<PurchaseRecord> {
   await ensurePurchasesSchema();
 
   return withTransaction(async (connection) => {
     const existing = await findPurchaseById(purchaseId, connection);
     if (!existing) throw new Error('PURCHASE_NOT_FOUND');
-    if (existing.status !== 'pending_approval') throw new Error('NOT_REJECTABLE');
+    if (existing.status !== 'pending_approval' && existing.status !== 'approved') {
+      throw new Error('NOT_REJECTABLE');
+    }
+    if (!reason.trim()) throw new Error('REJECT_REASON_REQUIRED');
 
-    await connection.query(
-      `UPDATE purchases
-       SET status = 'rejected', rejected_at = NOW(), rejected_by = ?, rejection_reason = ?, pending_approver_id = NULL, workflow_step_index = NULL, updated_at = NOW()
-       WHERE id = ?`,
-      [operatorId, reason, purchaseId]
-    );
-    await insertLog(purchaseId, 'reject', 'pending_approval', 'rejected', operatorId, reason, connection);
+    const fromStatus = existing.status;
+
+    if (!targetNodeId || targetNodeId === 'applicant') {
+      await connection.query(
+        `UPDATE purchases
+         SET status = 'rejected', rejected_at = NOW(), rejected_by = ?, rejection_reason = ?, pending_approver_id = NULL, workflow_current_node_id = NULL, updated_at = NOW()
+         WHERE id = ?`,
+        [operatorId, reason, purchaseId]
+      );
+      await insertLog(purchaseId, 'reject', fromStatus, 'rejected', operatorId, reason, connection);
+    } else {
+      const nodes = Array.isArray(existing.workflowNodes?.nodes) ? existing.workflowNodes.nodes : [];
+      const targetNode = nodes.find((n: Record<string, unknown>) => n.id === targetNodeId) as any;
+
+      let candidateUsers: string[] = [];
+      if (targetNode && targetNode.type === 'APPROVAL') {
+        candidateUsers = targetNode.users || [];
+      }
+      if (candidateUsers.length === 0) {
+         candidateUsers = [await fallbackSuperAdminId()];
+      }
+      const assignedApproverId = candidateUsers[0];
+
+      await connection.query(
+        `UPDATE purchases
+         SET status = 'pending_approval',
+             rejected_at = NULL,
+             rejected_by = NULL,
+             rejection_reason = NULL,
+             approved_at = NULL,
+             approved_by = NULL,
+             pending_approver_id = ?,
+             workflow_current_node_id = ?,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [assignedApproverId, targetNodeId, purchaseId]
+      );
+      
+      const targetNodeName = targetNode ? targetNode.name : '指定节点';
+      await insertLog(purchaseId, 'reject', fromStatus, 'pending_approval', operatorId, `退回至 [${targetNodeName}]: ${reason}`, connection);
+    }
+
     return (await findPurchaseById(purchaseId, connection))!;
   });
 }
@@ -1514,7 +1660,7 @@ export async function withdrawPurchase(
 
     await connection.query(
       `UPDATE purchases
-       SET status = 'cancelled', pending_approver_id = NULL, workflow_step_index = NULL, updated_at = NOW()
+       SET status = 'cancelled', pending_approver_id = NULL, workflow_current_node_id = NULL, updated_at = NOW()
        WHERE id = ?`,
       [purchaseId]
     );

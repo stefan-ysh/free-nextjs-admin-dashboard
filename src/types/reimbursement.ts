@@ -115,6 +115,8 @@ export interface ReimbursementRecord {
   receiptImages: string[];
   attachments: string[];
   status: ReimbursementStatus;
+  workflowCurrentNodeId?: string | null;
+  workflowNodes?: any | null;
   pendingApproverId: string | null;
   submittedAt: string | null;
   approvedAt: string | null;
