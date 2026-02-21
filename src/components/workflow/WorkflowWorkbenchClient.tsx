@@ -164,161 +164,59 @@ export default function WorkflowWorkbenchClient({
   }, []);
 
   const loadTodo = useCallback(async () => {
-    const [approvalResult, inboundResult, rejectedResult, reimbursementApprovalResult, reimbursementPayResult, reimbursementRejectedResult] = await Promise.allSettled([
-      canHandleApprovalTasks
-        ? fetch('/api/purchases/approvals?page=1&pageSize=40', { headers: { Accept: 'application/json' } })
-        : Promise.resolve(null),
-      canHandleInboundTasks
-        ? fetch('/api/purchases?status=pending_inbound&page=1&pageSize=40&sortBy=updatedAt&sortOrder=desc', {
-            headers: { Accept: 'application/json' },
-          })
-        : Promise.resolve(null),
-      canCreatePurchase
-        ? fetch('/api/purchases?scope=rejected_own&page=1&pageSize=40&sortBy=updatedAt&sortOrder=desc', {
-            headers: { Accept: 'application/json' },
-          })
-        : Promise.resolve(null),
-      showReimbursementApprovalTasks
-        ? fetch('/api/reimbursements?scope=approval&page=1&pageSize=40', { headers: { Accept: 'application/json' } })
-        : Promise.resolve(null),
-      canReimbursementPay
-        ? fetch('/api/reimbursements?scope=pay&page=1&pageSize=40', { headers: { Accept: 'application/json' } })
-        : Promise.resolve(null),
-      canCreateReimbursement
-        ? fetch('/api/reimbursements?scope=mine&status=rejected&page=1&pageSize=40', { headers: { Accept: 'application/json' } })
-        : Promise.resolve(null),
-    ]);
-
-    if (canHandleApprovalTasks && approvalResult.status === 'fulfilled' && approvalResult.value) {
-      const approvalPayload = (await approvalResult.value.json()) as PurchaseListResponse;
-      if (approvalResult.value.ok && approvalPayload.success && approvalPayload.data) {
-        setTodoApprovals(approvalPayload.data.items);
-      } else if (approvalResult.value.status === 403) {
-        setTodoApprovals([]);
-      } else {
-        throw new Error(approvalPayload.error || '加载待办失败');
-      }
-    } else if (canHandleApprovalTasks) {
-      throw new Error('加载待办失败');
+    const response = await fetch('/api/workflow/todos', { headers: { Accept: 'application/json' } });
+    const payload = await response.json().catch(() => null);
+    
+    if (response.ok && payload?.success && payload.data) {
+      setTodoApprovals(payload.data.purchaseApprovals || []);
+      setTodoInbound(payload.data.purchaseInbound || []);
+      setTodoRejected(payload.data.purchaseRejected || []);
+      setTodoReimbursementApprovals(payload.data.reimbursementApprovals || []);
+      setTodoReimbursementPays(payload.data.reimbursementPays || []);
+      setTodoReimbursementRejected(payload.data.reimbursementRejected || []);
     } else {
       setTodoApprovals([]);
-    }
-
-    if (canHandleInboundTasks && inboundResult.status === 'fulfilled' && inboundResult.value) {
-      const inboundPayload = (await inboundResult.value.json()) as PurchaseListResponse;
-      if (inboundResult.value.ok && inboundPayload.success && inboundPayload.data) {
-        setTodoInbound(inboundPayload.data.items);
-      } else {
-        setTodoInbound([]);
-      }
-    } else {
       setTodoInbound([]);
-    }
-
-    if (canCreatePurchase && rejectedResult.status === 'fulfilled' && rejectedResult.value) {
-      const rejectedPayload = (await rejectedResult.value.json()) as PurchaseListResponse;
-      if (rejectedResult.value.ok && rejectedPayload.success && rejectedPayload.data) {
-        setTodoRejected(rejectedPayload.data.items);
-      } else {
-        setTodoRejected([]);
-      }
-    } else {
       setTodoRejected([]);
-    }
-
-    if (showReimbursementApprovalTasks && reimbursementApprovalResult.status === 'fulfilled' && reimbursementApprovalResult.value) {
-      const payload = (await reimbursementApprovalResult.value.json()) as ReimbursementListResponse;
-      if (reimbursementApprovalResult.value.ok && payload.success && payload.data) {
-        setTodoReimbursementApprovals(payload.data.items);
-      } else {
-        setTodoReimbursementApprovals([]);
-      }
-    } else {
       setTodoReimbursementApprovals([]);
-    }
-
-    if (canReimbursementPay && reimbursementPayResult.status === 'fulfilled' && reimbursementPayResult.value) {
-      const payload = (await reimbursementPayResult.value.json()) as ReimbursementListResponse;
-      if (reimbursementPayResult.value.ok && payload.success && payload.data) {
-        setTodoReimbursementPays(payload.data.items);
-      } else {
-        setTodoReimbursementPays([]);
-      }
-    } else {
       setTodoReimbursementPays([]);
-    }
-
-    if (canCreateReimbursement && reimbursementRejectedResult.status === 'fulfilled' && reimbursementRejectedResult.value) {
-      const payload = (await reimbursementRejectedResult.value.json()) as ReimbursementListResponse;
-      if (reimbursementRejectedResult.value.ok && payload.success && payload.data) {
-        setTodoReimbursementRejected(
-          payload.data.items.filter((item) => item.applicantId === currentUserId || item.createdBy === currentUserId)
-        );
-      } else {
-        setTodoReimbursementRejected([]);
-      }
-    } else {
       setTodoReimbursementRejected([]);
+      throw new Error(payload?.error || '加载待办失败');
     }
-  }, [
-    canHandleApprovalTasks,
-    canHandleInboundTasks,
-    canCreatePurchase,
-    showReimbursementApprovalTasks,
-    canReimbursementPay,
-    canCreateReimbursement,
-    currentUserId,
-  ]);
+  }, []);
 
   const loadDone = useCallback(async () => {
-    const [purchaseResponse, reimbursementDoneResponse] = await Promise.all([
-      fetch('/api/purchases?scope=workflow_done&page=1&pageSize=80&sortBy=updatedAt&sortOrder=desc', {
-        headers: { Accept: 'application/json' },
-      }),
-      canReimbursementPay
-        ? fetch('/api/reimbursements?scope=all&page=1&pageSize=120', {
-            headers: { Accept: 'application/json' },
-          })
-        : fetch('/api/reimbursements?scope=mine&page=1&pageSize=120', {
-            headers: { Accept: 'application/json' },
-          }),
-    ]);
-
-    const purchasePayload = (await purchaseResponse.json()) as PurchaseListResponse;
-    if (!purchaseResponse.ok || !purchasePayload.success || !purchasePayload.data) {
-      throw new Error(purchasePayload.error || '加载已办失败');
+    const response = await fetch('/api/workflow/done', { headers: { Accept: 'application/json' } });
+    const payload = await response.json().catch(() => null);
+    
+    if (!response.ok || !payload?.success || !payload.data) {
+      throw new Error(payload?.error || '加载已办失败');
     }
 
-    const filteredPurchases = purchasePayload.data.items.filter((item) => {
+    const { purchases = [], reimbursements = [] } = payload.data;
+
+    const filteredPurchases = purchases.filter((item: PurchaseRecord) => {
       const requesterRelated = item.createdBy === currentUserId || item.purchaserId === currentUserId;
       const approverRelated = item.approvedBy === currentUserId || item.rejectedBy === currentUserId;
       const requesterDone = item.status !== 'draft';
 
-      // 当前角色已执行过操作后即计入已办：
-      // 申请人（提交/撤回/重提等）按非草稿计入。
       if (requesterRelated && requesterDone) return true;
-      // 审批人视角：自己完成审批/驳回后计入已办。
       if (approverRelated && item.status !== 'pending_approval') return true;
       return false;
     });
     setDonePurchases(filteredPurchases);
 
-    const reimbursementPayload = (await reimbursementDoneResponse.json()) as ReimbursementListResponse;
-    if (reimbursementDoneResponse.ok && reimbursementPayload.success && reimbursementPayload.data) {
-      const filteredReimbursements = reimbursementPayload.data.items.filter((item) => {
-        const applicantRelated = item.applicantId === currentUserId || item.createdBy === currentUserId;
-        const financeRelated =
-          item.paidBy === currentUserId || item.approvedBy === currentUserId || item.rejectedBy === currentUserId;
+    const filteredReimbursements = reimbursements.filter((item: ReimbursementRecord) => {
+      const applicantRelated = item.applicantId === currentUserId || item.createdBy === currentUserId;
+      const financeRelated =
+        item.paidBy === currentUserId || item.approvedBy === currentUserId || item.rejectedBy === currentUserId;
 
-        if (applicantRelated && item.status !== 'draft' && item.status !== 'rejected') return true;
-        if (financeRelated && item.status !== 'pending_approval') return true;
-        return false;
-      });
-      setDoneReimbursements(filteredReimbursements);
-    } else {
-      setDoneReimbursements([]);
-    }
-  }, [canReimbursementPay, currentUserId]);
+      if (applicantRelated && item.status !== 'draft' && item.status !== 'rejected') return true;
+      if (financeRelated && item.status !== 'pending_approval') return true;
+      return false;
+    });
+    setDoneReimbursements(filteredReimbursements);
+  }, [currentUserId]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
